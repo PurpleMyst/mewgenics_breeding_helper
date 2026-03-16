@@ -15,14 +15,14 @@ def build_ui(state: AppState):
         build_toolbar(state)
 
         with dpg.group(horizontal=True):
-            with dpg.group(width=450):
+            with dpg.child_window(width=450, border=False):
                 build_saves_section(state)
                 build_room_config_section(state)
                 build_params_section(state)
                 build_traits_section(state)
                 build_optimize_button(state)
 
-            with dpg.group():
+            with dpg.child_window(border=False):
                 build_results_section(state)
                 build_details_section(state)
 
