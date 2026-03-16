@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 from mewgenics_parser import Cat
+from mewgenics_parser.gpak import GameData
 from mewgenics_room_optimizer import (
     OptimizationResult,
     RoomConfig,
@@ -16,6 +17,24 @@ from mewgenics_room_optimizer import (
 
 CONFIG_DIR = Path.home() / ".mewgenics_room_optimizer"
 CONFIG_FILE = CONFIG_DIR / "config.json"
+
+
+def _find_gpak_path() -> str:
+    """Find resources.gpak from common paths."""
+    candidates = [
+        "resources.gpak",
+        os.path.join(os.getcwd(), "resources.gpak"),
+        r"C:\Program Files (x86)\Steam\steamapps\common\Mewgenics\resources.gpak",
+        os.path.expanduser("~/Mewgenics/resources.gpak"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return ""
+
+
+# Load game data once at module import
+_GAME_DATA = GameData.from_gpak(_find_gpak_path())
 
 
 def _ensure_config_dir():
@@ -89,8 +108,9 @@ class AppState:
     cats: list[Cat] = field(default_factory=list)
     room_configs: list[RoomConfig] = field(default_factory=list)
     results: OptimizationResult | None = None
-    selected_room_key: str | None = None
+    selected_result_room_key: str | None = None
     last_save_path: str | None = None
+    game_data: GameData = field(default_factory=lambda: _GAME_DATA)
 
     min_stats: int = 0
     max_risk: float = 20.0
@@ -166,3 +186,8 @@ class AppState:
     @property
     def has_results(self) -> bool:
         return self.results is not None
+
+    @property
+    def alive_cats(self) -> list[Cat]:
+        """Return only cats with In House status."""
+        return [c for c in self.cats if c.status == "In House"]

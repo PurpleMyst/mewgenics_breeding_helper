@@ -185,7 +185,7 @@ def build_results_section(state: AppState):
 
 def build_details_section(state: AppState):
     """Build the selected room details section."""
-    with dpg.child_window(height=150, border=True, tag="details_section"):
+    with dpg.child_window(height=250, border=True, tag="details_section"):
         dpg.add_text("Selected Room Details")
         dpg.add_separator()
         dpg.add_text(
@@ -231,7 +231,10 @@ def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
             dpg.set_value(
                 "status_text", f"Loaded: {newest.split('\\')[-1].split('/')[-1]}"
             )
-            dpg.set_value("cat_count_text", f"Cats: {len(state.cats)}")
+            alive = len(state.alive_cats)
+            dpg.set_value(
+                "cat_count_text", f"Cats: {len(state.cats)} ({alive} in house)"
+            )
             rebuild_room_config_table(state)
             clear_results_table()
         except Exception as e:
@@ -260,7 +263,10 @@ def on_save_selected(sender, app_data, user_data: AppState):
         user_data.set_rooms_from_cats()
 
         dpg.set_value("status_text", f"Loaded: {selected_name}")
-        dpg.set_value("cat_count_text", f"Cats: {len(user_data.cats)}")
+        alive = len(user_data.alive_cats)
+        dpg.set_value(
+            "cat_count_text", f"Cats: {len(user_data.cats)} ({alive} in house)"
+        )
         rebuild_room_config_table(user_data)
         clear_results_table()
     except Exception as e:
@@ -393,6 +399,7 @@ def update_results_table(results, state):
                 span_columns=True,
                 callback=on_room_selected,
                 user_data=(room.room.key, state),
+                tag=f"row_selectable_{room.room.key}",
             )
             dpg.add_text(str(len(room.cats)))
             dpg.add_text(str(len(room.pairs)))
@@ -424,6 +431,18 @@ def on_room_selected(sender, app_data, user_data):
     """Handle room selection in results table."""
     selected_key, state = user_data
 
+    # Deselect old selection visually
+    if (
+        state.selected_result_room_key
+        and state.selected_result_room_key != selected_key
+    ):
+        old_item = f"row_selectable_{state.selected_result_room_key}"
+        if dpg.does_item_exist(old_item):
+            dpg.set_value(old_item, False)
+
+    # Update state
+    state.selected_result_room_key = selected_key
+
     if not state.results:
         return
 
@@ -437,39 +456,69 @@ def on_room_selected(sender, app_data, user_data):
         return
 
     clear_details_section()
+    build_details_tabs(selected_room, state)
 
+
+def build_details_tabs(selected_room, state):
+    """Build the tabbed details view for a selected room."""
+    # Header
     dpg.add_text(f"Room: {selected_room.room.display_name}", parent="details_section")
     dpg.add_separator(parent="details_section")
 
-    if selected_room.pairs:
-        dpg.add_text("Breeding Pairs:", parent="details_section")
-        for pair in selected_room.pairs:
-            stats_a = sum(pair.cat_a.stat_base)
-            stats_b = sum(pair.cat_b.stat_base)
-            dpg.add_text(
-                f"  {pair.cat_a.name or 'Unnamed'} (S:{stats_a}) + {pair.cat_b.name or 'Unnamed'} (S:{stats_b})",
-                parent="details_section",
-            )
-        dpg.add_separator(parent="details_section")
+    # Tab bar
+    dpg.add_tab_bar(parent="details_section", tag="details_tab_bar")
 
-    if selected_room.cats:
-        dpg.add_text(
-            f"Unpaired Cats ({len(selected_room.cats)}):", parent="details_section"
-        )
-        for cat in selected_room.cats:
-            stats = sum(cat.stat_base)
-            stat_str = "/".join(str(s) for s in cat.stat_base)
-            abilities = ", ".join(cat.abilities or [])
-            mutations = ", ".join(cat.mutations or [])
-            dpg.add_text(
-                f"  {cat.name or 'Unnamed'} [{cat.gender}] S:{stats}",
-                parent="details_section",
-            )
-            dpg.add_text(
-                f"    Stats: {stat_str}",
-                parent="details_section",
-            )
-            if abilities:
-                dpg.add_text(f"    Abilities: {abilities}", parent="details_section")
-            if mutations:
-                dpg.add_text(f"    Mutations: {mutations}", parent="details_section")
+    # Pairs tab
+    with dpg.tab(label="Pairs", parent="details_tab_bar"):
+        if selected_room.pairs:
+            for pair in selected_room.pairs:
+                stats_a = sum(pair.cat_a.stat_base)
+                stats_b = sum(pair.cat_b.stat_base)
+                dpg.add_text(
+                    f"{pair.cat_a.name or 'Unnamed'} (S:{stats_a}) + {pair.cat_b.name or 'Unnamed'} (S:{stats_b})"
+                )
+        else:
+            dpg.add_text("No breeding pairs in this room")
+
+    # Cats tab
+    with dpg.tab(label="Cats", parent="details_tab_bar"):
+        if selected_room.cats:
+            # Build cats table
+            with dpg.table(
+                header_row=True,
+                borders_innerH=True,
+                row_background=True,
+            ):
+                dpg.add_table_column(label="Name")
+                dpg.add_table_column(label="Age")
+                dpg.add_table_column(label="Location")
+                dpg.add_table_column(label="Abilities")
+
+                for cat in selected_room.cats:
+                    with dpg.table_row():
+                        dpg.add_text(cat.name or "Unnamed")
+                        dpg.add_text(str(cat.age) if cat.age else "Unknown")
+                        dpg.add_text(cat.room or "Unknown")
+
+                        # Abilities with tooltips
+                        all_abilities = (cat.abilities or []) + (
+                            cat.passive_abilities or []
+                        )
+                        if all_abilities:
+                            ability_text = ", ".join(all_abilities)
+                            ability_id = f"ability_{cat.db_key}_{all_abilities[0]}"
+                            dpg.add_text(ability_text, tag=ability_id)
+
+                            # Tooltip with description
+                            for ab in all_abilities:
+                                desc = state.game_data.ability_descriptions.get(ab, "")
+                                if desc:
+                                    with dpg.tooltip(parent=ability_id):
+                                        dpg.add_text(desc)
+                                        dpg.add_text(
+                                            f"({ab})", color=(150, 150, 150, 255)
+                                        )
+                        else:
+                            dpg.add_text("None")
+        else:
+            dpg.add_text("No unpaired cats in this room")
