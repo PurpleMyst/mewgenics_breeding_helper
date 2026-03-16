@@ -1277,7 +1277,10 @@ def show_cat_detail_window(cat, state):
                     if lover is None:
                         lover_names.append("Unknown")
                     else:
-                        lover_names.append(lover.name or "Unnamed")
+                        name = lover.name or "Unnamed"
+                        if lover.status and lover.status != "In House":
+                            name = f"{name} ({lover.status})"
+                        lover_names.append(name)
                 lovers_str = ", ".join(lover_names) if lover_names else "-"
 
                 hater_names = []
@@ -1285,7 +1288,10 @@ def show_cat_detail_window(cat, state):
                     if hater is None:
                         hater_names.append("Unknown")
                     else:
-                        hater_names.append(hater.name or "Unnamed")
+                        name = hater.name or "Unnamed"
+                        if hater.status and hater.status != "In House":
+                            name = f"{name} ({hater.status})"
+                        hater_names.append(name)
                 haters_str = ", ".join(hater_names) if hater_names else "-"
 
                 dpg.add_text(f"Name: {cat.name or 'Unnamed'}")
