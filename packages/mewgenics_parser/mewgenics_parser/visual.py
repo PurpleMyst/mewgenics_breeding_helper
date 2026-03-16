@@ -1,4 +1,5 @@
 """Visual mutation parsing utilities."""
+
 from __future__ import annotations
 
 import re
@@ -54,17 +55,11 @@ _VISUAL_MUTATION_PART_LABELS = {
 }
 
 
-def _resolve_game_string(value: str, game_strings: dict[str, str]) -> str:
-    """Resolve a game string reference chain."""
-    resolved = value
-    seen: set[str] = set()
-    while resolved in game_strings and resolved not in seen:
-        seen.add(resolved)
-        nxt = game_strings[resolved].strip()
-        if not nxt:
-            break
-        resolved = nxt
-    return resolved
+def _get_resolve_game_string():
+    """Lazy import to avoid circular dependency."""
+    from .gpak import _resolve_game_string
+
+    return _resolve_game_string
 
 
 def _parse_mutation_gon(
@@ -79,33 +74,39 @@ def _parse_mutation_gon(
     csv_prefix = f"MUTATION_{category.upper()}_"
     idx = 0
     while idx < len(content):
-        match = re.search(r'(?<!\w)(\d{3,})\s*\{', content[idx:])
+        match = re.search(r"(?<!\w)(\d{3,})\s*\{", content[idx:])
         if not match:
             break
         slot_id = int(match.group(1))
         block_start = idx + match.end()
         depth, block_end = 1, block_start
         while block_end < len(content) and depth > 0:
-            if content[block_end] == '{':
+            if content[block_end] == "{":
                 depth += 1
-            elif content[block_end] == '}':
+            elif content[block_end] == "}":
                 depth -= 1
             block_end += 1
-        block = content[block_start:block_end - 1]
+        block = content[block_start : block_end - 1]
         idx = block_end
         if slot_id < 300:
             continue
 
-        name_match = re.search(r'//\s*(.+)', block)
-        raw_name = name_match.group(1).strip().title() if name_match else f"Mutation {slot_id}"
+        name_match = re.search(r"//\s*(.+)", block)
+        raw_name = (
+            name_match.group(1).strip().title() if name_match else f"Mutation {slot_id}"
+        )
         csv_key = f"{csv_prefix}{slot_id}_DESC"
         if csv_key in game_strings:
-            stat_desc = _resolve_game_string(game_strings[csv_key], game_strings).strip().rstrip(".")
+            stat_desc = (
+                _get_resolve_game_string()(game_strings[csv_key], game_strings)
+                .strip()
+                .rstrip(".")
+            )
         else:
-            header = block.split('{')[0]
+            header = block.split("{")[0]
             stats: list[str] = []
             for key, label in _STAT_LABELS.items():
-                stat_match = re.search(rf'(?<!\w){re.escape(key)}\s+(-?\d+)', header)
+                stat_match = re.search(rf"(?<!\w){re.escape(key)}\s+(-?\d+)", header)
                 if stat_match:
                     value = int(stat_match.group(1))
                     stats.append(f"{'+' if value > 0 else ''}{value} {label}")
@@ -119,7 +120,7 @@ def _read_visual_mutation_entries(
     gpak_data: dict[str, dict[int, tuple[str, str]]] | None = None,
 ) -> list[dict[str, object]]:
     """Read visual mutation entries from a table.
-    
+
     Args:
         table: The visual mutation table (list of mutation IDs)
         gpak_data: Optional GPAK data for mutations. If not provided, uses fallback names.
@@ -128,7 +129,14 @@ def _read_visual_mutation_entries(
         gpak_data = {}
     fallback_names = load_visual_mutation_names()
     entries: list[dict[str, object]] = []
-    for slot_key, table_index, group_key, gpak_category, fallback_part, slot_label in _VISUAL_MUTATION_FIELDS:
+    for (
+        slot_key,
+        table_index,
+        group_key,
+        gpak_category,
+        fallback_part,
+        slot_label,
+    ) in _VISUAL_MUTATION_FIELDS:
         mutation_id = table[table_index] if table_index < len(table) else 0
         if mutation_id in (0, 0xFFFF_FFFF):
             continue
@@ -138,7 +146,7 @@ def _read_visual_mutation_entries(
         gpak_info = gpak_data.get(gpak_category, {}).get(mutation_id)
         if gpak_info:
             raw_name, stat_desc = gpak_info
-            if re.match(r'^Mutation \d+$', raw_name):
+            if re.match(r"^Mutation \d+$", raw_name):
                 display_name = f"{_VISUAL_MUTATION_PART_LABELS.get(group_key, slot_label)} Mutation"
             else:
                 display_name = raw_name
@@ -152,19 +160,23 @@ def _read_visual_mutation_entries(
             display_name = fallback_name
 
         display_name = str(display_name).strip() or f"{slot_label} {mutation_id}"
-        entries.append({
-            "slot_key": slot_key,
-            "slot_label": slot_label,
-            "group_key": group_key,
-            "part_label": _VISUAL_MUTATION_PART_LABELS.get(group_key, slot_label),
-            "mutation_id": mutation_id,
-            "name": display_name,
-            "detail": str(detail).strip(),
-        })
+        entries.append(
+            {
+                "slot_key": slot_key,
+                "slot_label": slot_label,
+                "group_key": group_key,
+                "part_label": _VISUAL_MUTATION_PART_LABELS.get(group_key, slot_label),
+                "mutation_id": mutation_id,
+                "name": display_name,
+                "detail": str(detail).strip(),
+            }
+        )
     return entries
 
 
-def _visual_mutation_chip_items(entries: list[dict[str, object]]) -> list[tuple[str, str]]:
+def _visual_mutation_chip_items(
+    entries: list[dict[str, object]],
+) -> list[tuple[str, str]]:
     """Convert visual mutation entries into chip items with tooltips."""
     grouped: dict[tuple[str, int], list[dict[str, object]]] = {}
     order: list[tuple[str, int]] = []
@@ -183,17 +195,21 @@ def _visual_mutation_chip_items(entries: list[dict[str, object]]) -> list[tuple[
         mutation_id = int(items[0]["mutation_id"])
         part_label = str(items[0]["part_label"])
         detail = str(items[0]["detail"]).strip()
-        title_label = part_label if len(slot_labels) > 1 else str(items[0]["slot_label"])
+        title_label = (
+            part_label if len(slot_labels) > 1 else str(items[0]["slot_label"])
+        )
         tooltip = f"{title_label} Mutation (ID {mutation_id})\n{name}"
         if detail:
             tooltip = f"{tooltip}\n{detail}"
         if len(slot_labels) > 1:
             tooltip = f"{tooltip}\nAffects: {', '.join(slot_labels)}"
-        groups.append({
-            "text": name,
-            "tooltip": tooltip,
-            "slot_labels": slot_labels,
-        })
+        groups.append(
+            {
+                "text": name,
+                "tooltip": tooltip,
+                "slot_labels": slot_labels,
+            }
+        )
 
     text_counts: dict[str, int] = {}
     for group in groups:
