@@ -4,7 +4,11 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "dearpygui>=2.2",
+    "mewgenics_parser"
 ]
+
+[tool.uv.sources]
+mewgenics_parser = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
