@@ -24,7 +24,7 @@ def _has_eternalyouth(cat: Cat) -> bool:
     return any(p.lower() == "eternalyouth" for p in (cat.passive_abilities or []))
 
 
-def _can_pair_gay(cat_a: Cat, cat_b: Cat, gay_flags: dict[int, bool]) -> bool:
+def can_pair_gay(cat_a: Cat, cat_b: Cat, gay_flags: dict[int, bool]) -> bool:
     """Check if gay cats can breed based on gender restrictions."""
     is_a_gay = gay_flags.get(cat_a.db_key, False)
     is_b_gay = gay_flags.get(cat_b.db_key, False)
@@ -69,11 +69,12 @@ def _generate_pairs(
     return pairs
 
 
-def _score_pair(
+def score_pair(
     cat_a: Cat,
     cat_b: Cat,
     ancestor_contribs: dict[int, dict[Cat, float]],
     params: OptimizationParams,
+    skip_risk_check: bool = False,
 ) -> ScoredPair | None:
     """Score a pair, returning None if they can't be paired."""
     if not can_breed(cat_a, cat_b):
@@ -85,7 +86,7 @@ def _score_pair(
     if is_lover_conflict(cat_a, cat_b, params.avoid_lovers):
         return None
 
-    if not _can_pair_gay(cat_a, cat_b, params.gay_flags):
+    if not can_pair_gay(cat_a, cat_b, params.gay_flags):
         return None
 
     factors = calculate_pair_factors(
@@ -97,7 +98,7 @@ def _score_pair(
         planner_traits=params.planner_traits,
     )
 
-    if factors.risk_percent > params.max_risk:
+    if not skip_risk_check and factors.risk_percent > params.max_risk:
         return None
 
     quality = _calculate_quality(factors, params)
@@ -211,7 +212,7 @@ def optimize(
 
     scored_pairs: list[ScoredPair] = []
     for cat_a, cat_b in pairs:
-        scored = _score_pair(cat_a, cat_b, ancestor_contribs, params)
+        scored = score_pair(cat_a, cat_b, ancestor_contribs, params)
         if scored is not None:
             scored_pairs.append(scored)
 

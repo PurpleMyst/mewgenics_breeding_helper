@@ -763,6 +763,8 @@ def on_room_selected(sender, app_data, user_data):
 
     # Update state
     state.selected_result_room_key = selected_key
+    state.sim_cat_a_key = None
+    state.sim_cat_b_key = None
 
     # Clear inspector when room is selected
     clear_inspector()
@@ -854,6 +856,39 @@ def build_details_tabs(selected_room, state):
                 )
         else:
             dpg.add_text("No unpaired cats in this room")
+
+    # Sandbox tab - simulate breeding pairs
+    with dpg.tab(label="Sandbox", parent="details_tab_bar"):
+        dpg.add_text("Manually test breeding combinations for this room.")
+        dpg.add_separator()
+
+        cat_options = [
+            f"{c.name or 'Unnamed'} (ID:{c.db_key})" for c in selected_room.cats
+        ]
+
+        if not cat_options:
+            dpg.add_text("No cats in this room to simulate.")
+        else:
+            with dpg.group(horizontal=True):
+                dpg.add_combo(
+                    items=cat_options,
+                    label="Parent A",
+                    width=200,
+                    callback=on_sandbox_changed,
+                    user_data=(selected_room, state, "A"),
+                    tag="sandbox_combo_a",
+                )
+                dpg.add_combo(
+                    items=cat_options,
+                    label="Parent B",
+                    width=200,
+                    callback=on_sandbox_changed,
+                    user_data=(selected_room, state, "B"),
+                    tag="sandbox_combo_b",
+                )
+
+            dpg.add_separator()
+            dpg.add_group(tag="sandbox_results_container")
 
 
 def on_cat_selected(sender, app_data, user_data):
@@ -966,3 +1001,153 @@ def show_cat_detail_window(cat, state):
                 color = (100, 255, 100, 255) if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{mut}", color=color)
+
+
+def on_sandbox_changed(sender, app_data, user_data):
+    """Handle sandbox dropdown changes."""
+    import re
+    from mewgenics_scorer import (
+        can_breed,
+        is_hater_conflict,
+        is_lover_conflict,
+        build_ancestor_contribs,
+    )
+    from mewgenics_room_optimizer import score_pair, can_pair_gay
+    from mewgenics_room_optimizer.types import OptimizationParams
+
+    selected_room, state, parent_slot = user_data
+    container = "sandbox_results_container"
+
+    if not app_data:
+        return
+
+    match = re.search(r"\(ID:(\d+)\)", app_data)
+    if not match:
+        return
+
+    db_key = int(match.group(1))
+
+    if parent_slot == "A":
+        state.sim_cat_a_key = db_key
+    else:
+        state.sim_cat_b_key = db_key
+
+    if state.sim_cat_a_key is None or state.sim_cat_b_key is None:
+        return
+
+    dpg.delete_item(container, children_only=True)
+
+    cat_a = next(
+        (c for c in selected_room.cats if c.db_key == state.sim_cat_a_key), None
+    )
+    cat_b = next(
+        (c for c in selected_room.cats if c.db_key == state.sim_cat_b_key), None
+    )
+
+    if not cat_a or not cat_b:
+        return
+
+    with dpg.group(parent=container):
+        if cat_a.db_key == cat_b.db_key:
+            dpg.add_text("Cannot breed a cat with itself.", color=(255, 100, 100, 255))
+            return
+
+        if not can_breed(cat_a, cat_b):
+            dpg.add_text(
+                "Incompatible pairing (Gender mismatch).",
+                color=(255, 100, 100, 255),
+            )
+            return
+
+        if is_hater_conflict(cat_a, cat_b):
+            dpg.add_text(
+                "Hater conflict - these cats refuse to breed.",
+                color=(255, 100, 100, 255),
+            )
+            return
+
+        if is_lover_conflict(cat_a, cat_b, state.avoid_lovers):
+            dpg.add_text(
+                "Lover conflict - pair excluded by settings.",
+                color=(255, 100, 100, 255),
+            )
+            return
+
+        is_a_gay = state.gay_flags.get(cat_a.db_key, False)
+        is_b_gay = state.gay_flags.get(cat_b.db_key, False)
+        if is_a_gay and cat_b.gender.lower() != "female":
+            dpg.add_text(
+                "Gay cat can only breed with female partners.",
+                color=(255, 100, 100, 255),
+            )
+            return
+        if is_b_gay and cat_a.gender.lower() != "female":
+            dpg.add_text(
+                "Gay cat can only breed with female partners.",
+                color=(255, 100, 100, 255),
+            )
+            return
+
+        ancestor_contribs = build_ancestor_contribs(state.cats)
+
+        params = OptimizationParams(
+            min_stats=state.min_stats,
+            max_risk=state.max_risk,
+            minimize_variance=state.minimize_variance,
+            avoid_lovers=state.avoid_lovers,
+            prefer_low_aggression=state.prefer_low_aggression,
+            prefer_high_libido=state.prefer_high_libido,
+            prefer_high_charisma=state.prefer_high_charisma,
+            planner_traits=state.planner_traits,
+            gay_flags=state.gay_flags,
+        )
+
+        pair_result = score_pair(
+            cat_a, cat_b, ancestor_contribs, params, skip_risk_check=True
+        )
+
+        if not pair_result:
+            dpg.add_text("Could not score this pair.", color=(255, 100, 100, 255))
+            return
+
+        risk_color = (
+            (255, 100, 100, 255)
+            if pair_result.factors.risk_percent > 15
+            else (100, 255, 100, 255)
+        )
+        dpg.add_text(
+            f"Expected Quality: {pair_result.quality:.1f} | Risk: {pair_result.factors.risk_percent:.0f}%",
+            color=risk_color,
+        )
+
+        with dpg.group(horizontal=True):
+            if pair_result.factors.mutual_lovers:
+                dpg.add_text("[<3 Lovers]", color=(255, 150, 150, 255))
+            if pair_result.factors.libido_factor > 0.6:
+                dpg.add_text("[+ Libido]", color=(255, 200, 100, 255))
+            if pair_result.factors.aggression_factor > 0.6:
+                dpg.add_text("[- Aggro]", color=(100, 200, 255, 255))
+            if pair_result.factors.risk_percent > 10:
+                dpg.add_text("[! Inbred]", color=(255, 100, 100, 255))
+            if pair_result.factors.risk_percent > state.max_risk:
+                dpg.add_text(
+                    f"[! High Risk (>{state.max_risk}%)]",
+                    color=(255, 100, 100, 255),
+                )
+
+        if state.planner_traits:
+            combined_traits = set()
+            for cat in (cat_a, cat_b):
+                combined_traits.update(t.lower() for t in (cat.mutations or []))
+                combined_traits.update(t.lower() for t in (cat.passive_abilities or []))
+                combined_traits.update(t.lower() for t in (cat.abilities or []))
+
+            hits = sum(
+                1 for pt in state.planner_traits if pt.key.lower() in combined_traits
+            )
+            total = len(state.planner_traits)
+
+            if hits > 0:
+                dpg.add_text(
+                    f"[* {hits}/{total} Favorable Traits]", color=(100, 255, 100, 255)
+                )

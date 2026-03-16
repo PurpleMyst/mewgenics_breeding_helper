@@ -151,6 +151,9 @@ class AppState:
     planner_traits: list[TraitRequirement] = field(default_factory=list)
     gay_flags: dict[int, bool] = field(default_factory=dict)
 
+    sim_cat_a_key: int | None = None
+    sim_cat_b_key: int | None = None
+
     is_loading: bool = False
 
     @classmethod
