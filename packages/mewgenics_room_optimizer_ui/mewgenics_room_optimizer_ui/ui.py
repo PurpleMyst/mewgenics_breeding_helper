@@ -65,7 +65,7 @@ def build_toolbar(state: AppState):
 
 def build_room_config_section(state: AppState):
     """Build the room configuration section."""
-    with dpg.child_window(height=150, border=True, tag="room_config_section"):
+    with dpg.child_window(height=180, border=True, tag="room_config_section"):
         dpg.add_text("Room Configuration")
         dpg.add_separator()
         with dpg.table(
@@ -79,14 +79,35 @@ def build_room_config_section(state: AppState):
             dpg.add_table_column(label="Type")
             dpg.add_table_column(label="Max Cats")
 
-            for room in state.room_configs:
-                with dpg.table_row():
-                    dpg.add_text(room.key)
-                    dpg.add_text(room.display_name)
-                    dpg.add_text(room.room_type.value)
-                    dpg.add_text(
-                        "Unlimited" if room.max_cats is None else str(room.max_cats)
-                    )
+        room_types = ["breeding", "fighting", "general", "none"]
+        for room in state.room_configs:
+            with dpg.table_row(parent="room_config_table"):
+                dpg.add_text(room.key, tag=f"room_key_{room.key}")
+                dpg.add_input_text(
+                    default_value=room.display_name,
+                    tag=f"room_name_{room.key}",
+                    width=150,
+                )
+                dpg.add_combo(
+                    room_types,
+                    default_value=room.room_type.value,
+                    tag=f"room_type_{room.key}",
+                    width=100,
+                )
+                max_cats_val = "" if room.max_cats is None else str(room.max_cats)
+                dpg.add_input_text(
+                    default_value=max_cats_val,
+                    tag=f"room_max_{room.key}",
+                    width=60,
+                    hint="empty=unlimited",
+                )
+
+        dpg.add_button(
+            label="Update Rooms",
+            tag="update_rooms_button",
+            callback=on_update_rooms,
+            user_data=state,
+        )
 
 
 def build_params_section(state: AppState):
@@ -247,6 +268,38 @@ def save_config_callback(sender, app_data, user_data: AppState):
     user_data.save()
 
 
+def on_update_rooms(sender, app_data, user_data: AppState):
+    """Handle update rooms button click."""
+    from mewgenics_room_optimizer import RoomConfig, RoomType
+
+    new_configs = []
+    for room in user_data.room_configs:
+        new_name = dpg.get_value(f"room_name_{room.key}")
+        new_type_str = dpg.get_value(f"room_type_{room.key}")
+        new_max_str = dpg.get_value(f"room_max_{room.key}")
+
+        new_max = None
+        if new_max_str.strip():
+            try:
+                new_max = int(new_max_str)
+            except ValueError:
+                pass
+
+        new_configs.append(
+            RoomConfig(
+                key=room.key,
+                display_name=new_name,
+                room_type=RoomType(new_type_str),
+                max_cats=new_max,
+            )
+        )
+
+    user_data.room_configs = new_configs
+    user_data.results = None
+    clear_results_table()
+    dpg.set_value("status_text", "Rooms updated. Run optimization to apply.")
+
+
 def exit_callback(sender, app_data, user_data):
     """Exit the application."""
     dpg.destroy_context()
@@ -320,7 +373,66 @@ def clear_results_table():
                 dpg.delete_item(row)
 
 
+def clear_details_section():
+    """Clear the details section."""
+    section = "details_section"
+    if dpg.does_item_exist(section):
+        children = dpg.get_item_children(section)
+        if children and 1 in children:
+            for child in children[1]:
+                dpg.delete_item(child)
+
+
 def on_room_selected(sender, app_data, user_data):
     """Handle room selection in results table."""
     selected_key = user_data
-    print(f"Selected room: {selected_key}")
+    state = user_data
+
+    if not state.results:
+        return
+
+    selected_room = None
+    for room in state.results.rooms:
+        if room.room.key == selected_key:
+            selected_room = room
+            break
+
+    if not selected_room:
+        return
+
+    clear_details_section()
+
+    details = dpg.get_item("details_section")
+    dpg.add_text(f"Room: {selected_room.room.display_name}", parent=details)
+    dpg.add_separator(parent=details)
+
+    if selected_room.pairs:
+        dpg.add_text("Breeding Pairs:", parent=details)
+        for pair in selected_room.pairs:
+            stats_a = sum(pair.cat_a.stat_base)
+            stats_b = sum(pair.cat_b.stat_base)
+            dpg.add_text(
+                f"  {pair.cat_a.name or 'Unnamed'} (S:{stats_a}) + {pair.cat_b.name or 'Unnamed'} (S:{stats_b})",
+                parent=details,
+            )
+        dpg.add_separator(parent=details)
+
+    if selected_room.cats:
+        dpg.add_text(f"Unpaired Cats ({len(selected_room.cats)}):", parent=details)
+        for cat in selected_room.cats:
+            stats = sum(cat.stat_base)
+            stat_str = "/".join(str(s) for s in cat.stat_base)
+            abilities = ", ".join(cat.abilities or [])
+            mutations = ", ".join(cat.mutations or [])
+            dpg.add_text(
+                f"  {cat.name or 'Unnamed'} [{cat.gender}] S:{stats}",
+                parent=details,
+            )
+            dpg.add_text(
+                f"    Stats: {stat_str}",
+                parent=details,
+            )
+            if abilities:
+                dpg.add_text(f"    Abilities: {abilities}", parent=details)
+            if mutations:
+                dpg.add_text(f"    Mutations: {mutations}", parent=details)
