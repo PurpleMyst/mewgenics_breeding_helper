@@ -1,6 +1,7 @@
 """Pytest configuration and shared fixtures."""
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,8 @@ def gpak_path(request):
     path = request.config.getoption("--gpak-path")
     if path is None:
         path = os.environ.get("MEWGENICS_GPAK_PATH")
+    if not path and sys.platform == "win32":
+        path = r"C:\Program Files (x86)\Steam\steamapps\common\Mewgenics\resources.gpak"
 
     if path and Path(path).exists():
         return path

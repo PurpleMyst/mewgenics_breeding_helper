@@ -11,6 +11,11 @@ from dataclasses import dataclass
 from .visual import _parse_mutation_gon
 
 
+# Pre-compiled regexes for performance
+_BLOCK_RE = re.compile(r"^([A-Za-z]\w*)\s*\{", re.MULTILINE)
+_DESC_RE = re.compile(r'^\s*desc\s+"([^"]*)"', re.MULTILINE)
+
+
 def _resolve_game_string(value: str, game_strings: dict[str, str]) -> str:
     """Resolve a game string reference chain."""
     resolved = value
@@ -54,11 +59,8 @@ def _read_gpak_header(path: str) -> dict[str, tuple[int, int]]:
 
 def _parse_gon_abilities(content: str, game_strings: dict[str, str]) -> dict[str, str]:
     """Parse ability GON content into {ability_id: description}."""
-    block_re = re.compile(r"^([A-Za-z]\w*)\s*\{", re.MULTILINE)
-    desc_re = re.compile(r'^\s*desc\s+"([^"]*)"', re.MULTILINE)
-
     result: dict[str, str] = {}
-    for bm in block_re.finditer(content):
+    for bm in _BLOCK_RE.finditer(content):
         ability_id = bm.group(1)
         block_start = bm.end()
         depth, idx = 1, block_start
@@ -69,7 +71,7 @@ def _parse_gon_abilities(content: str, game_strings: dict[str, str]) -> dict[str
                 depth -= 1
             idx += 1
         block = content[block_start : idx - 1]
-        dm = desc_re.search(block)
+        dm = _DESC_RE.search(block)
         if not dm:
             continue
         desc_val = dm.group(1)
@@ -107,24 +109,27 @@ def load_ability_descriptions(gpak_path: str) -> dict[str, str]:
         return {}
     try:
         file_offsets = _read_gpak_header(gpak_path)
+
+        # Read all .gon files into memory once
+        gon_contents: dict[str, str] = {}
         with open(gpak_path, "rb") as f:
             game_strings = load_gpak_text_strings(f, file_offsets)
-
-        result: dict[str, str] = {}
-        for fname in file_offsets:
-            if not (
-                (
+            for fname in file_offsets:
+                if not (
                     fname.startswith("data/abilities/")
                     or fname.startswith("data/passives/")
-                )
-                and fname.endswith(".gon")
-            ):
-                continue
-            foff, fsz = file_offsets[fname]
-            with open(gpak_path, "rb") as f:
+                ) and not fname.endswith(".gon"):
+                    continue
+                if not fname.endswith(".gon"):
+                    continue
+                foff, fsz = file_offsets[fname]
                 f.seek(foff)
-                content = f.read(fsz).decode("utf-8", errors="replace")
-                result.update(_parse_gon_abilities(content, game_strings))
+                gon_contents[fname] = f.read(fsz).decode("utf-8", errors="replace")
+
+        # Process all contents (no more file I/O)
+        result: dict[str, str] = {}
+        for content in gon_contents.values():
+            result.update(_parse_gon_abilities(content, game_strings))
         return result
     except Exception:
         return {}
@@ -139,19 +144,25 @@ def load_visual_mut_data(gpak_path: str) -> dict[str, dict[int, tuple[str, str]]
         return {}
     try:
         file_offsets = _read_gpak_header(gpak_path)
+
+        # Read all .gon files into memory once
+        gon_contents: dict[str, str] = {}
         with open(gpak_path, "rb") as f:
             game_strings = load_gpak_text_strings(f, file_offsets)
-
-        result: dict[str, dict[int, tuple[str, str]]] = {}
-        for fname in file_offsets:
-            if not (fname.startswith("data/mutations/") and fname.endswith(".gon")):
-                continue
-            category = fname.split("/")[-1].replace(".gon", "")
-            foff, fsz = file_offsets[fname]
-            with open(gpak_path, "rb") as f:
+            for fname in file_offsets:
+                if not fname.startswith("data/mutations/") or not fname.endswith(
+                    ".gon"
+                ):
+                    continue
+                foff, fsz = file_offsets[fname]
                 f.seek(foff)
-                content = f.read(fsz).decode("utf-8", errors="replace")
-                result[category] = _parse_mutation_gon(content, game_strings, category)
+                gon_contents[fname] = f.read(fsz).decode("utf-8", errors="replace")
+
+        # Process all contents (no more file I/O)
+        result: dict[str, dict[int, tuple[str, str]]] = {}
+        for fname, content in gon_contents.items():
+            category = fname.split("/")[-1].replace(".gon", "")
+            result[category] = _parse_mutation_gon(content, game_strings, category)
         return result
     except Exception:
         return {}
@@ -177,36 +188,33 @@ class GameData:
 
         try:
             file_offsets = _read_gpak_header(gpak_path)
+
+            # Read all .gon files into memory once
+            gon_contents: dict[str, str] = {}
             with open(gpak_path, "rb") as f:
                 game_strings = load_gpak_text_strings(f, file_offsets)
-
-            ability_descriptions: dict[str, str] = {}
-            for fname in file_offsets:
-                if not (
-                    (
-                        fname.startswith("data/abilities/")
-                        or fname.startswith("data/passives/")
-                    )
-                    and fname.endswith(".gon")
-                ):
-                    continue
-                foff, fsz = file_offsets[fname]
-                with open(gpak_path, "rb") as f:
+                for fname in file_offsets:
+                    if not fname.endswith(".gon"):
+                        continue
+                    foff, fsz = file_offsets[fname]
                     f.seek(foff)
-                    content = f.read(fsz).decode("utf-8", errors="replace")
+                    gon_contents[fname] = f.read(fsz).decode("utf-8", errors="replace")
+
+            # Process abilities (no more file I/O)
+            ability_descriptions: dict[str, str] = {}
+            for fname, content in gon_contents.items():
+                if fname.startswith("data/abilities/") or fname.startswith(
+                    "data/passives/"
+                ):
                     ability_descriptions.update(
                         _parse_gon_abilities(content, game_strings)
                     )
 
+            # Process visual mutations (no more file I/O)
             visual_mutations: dict[str, dict[int, tuple[str, str]]] = {}
-            for fname in file_offsets:
-                if not (fname.startswith("data/mutations/") and fname.endswith(".gon")):
-                    continue
-                category = fname.split("/")[-1].replace(".gon", "")
-                foff, fsz = file_offsets[fname]
-                with open(gpak_path, "rb") as f:
-                    f.seek(foff)
-                    content = f.read(fsz).decode("utf-8", errors="replace")
+            for fname, content in gon_contents.items():
+                if fname.startswith("data/mutations/"):
+                    category = fname.split("/")[-1].replace(".gon", "")
                     visual_mutations[category] = _parse_mutation_gon(
                         content, game_strings, category
                     )

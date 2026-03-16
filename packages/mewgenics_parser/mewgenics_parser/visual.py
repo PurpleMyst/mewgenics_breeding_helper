@@ -11,6 +11,33 @@ if TYPE_CHECKING:
 from .data.visual_names import load_visual_mutation_names
 
 
+# Pre-compiled regexes for performance
+_MUTATION_ID_RE = re.compile(r"(?<!\w)(\d{3,})\s*\{")
+_COMMENT_RE = re.compile(r"//\s*(.+)")
+
+
+def _make_stat_re(key: str):
+    """Create a pre-compiled regex for matching stat values."""
+    return re.compile(rf"(?<!\w){re.escape(key)}\s+(-?\d+)")
+
+
+# Pre-compiled stat regexes for all known stat keys
+_STAT_REGEXES: dict[str, re.Pattern] = {
+    key: _make_stat_re(key)
+    for key in (
+        "str",
+        "con",
+        "int",
+        "dex",
+        "spd",
+        "lck",
+        "cha",
+        "shield",
+        "divine_shield",
+    )
+}
+
+
 _STAT_LABELS = {
     "str": "STR",
     "con": "CON",
@@ -70,11 +97,15 @@ def _parse_mutation_gon(
     """Parse a mutation GON file into {slot_id: (display_name, stat_desc)}."""
     if game_strings is None:
         game_strings = {}
+
+    # Call lazy import once at function start
+    resolve_game_string = _get_resolve_game_string()
+
     result: dict[int, tuple[str, str]] = {}
     csv_prefix = f"MUTATION_{category.upper()}_"
     idx = 0
     while idx < len(content):
-        match = re.search(r"(?<!\w)(\d{3,})\s*\{", content[idx:])
+        match = _MUTATION_ID_RE.search(content[idx:])
         if not match:
             break
         slot_id = int(match.group(1))
@@ -91,14 +122,14 @@ def _parse_mutation_gon(
         if slot_id < 300:
             continue
 
-        name_match = re.search(r"//\s*(.+)", block)
+        name_match = _COMMENT_RE.search(block)
         raw_name = (
             name_match.group(1).strip().title() if name_match else f"Mutation {slot_id}"
         )
         csv_key = f"{csv_prefix}{slot_id}_DESC"
         if csv_key in game_strings:
             stat_desc = (
-                _get_resolve_game_string()(game_strings[csv_key], game_strings)
+                resolve_game_string(game_strings[csv_key], game_strings)
                 .strip()
                 .rstrip(".")
             )
@@ -106,7 +137,7 @@ def _parse_mutation_gon(
             header = block.split("{")[0]
             stats: list[str] = []
             for key, label in _STAT_LABELS.items():
-                stat_match = re.search(rf"(?<!\w){re.escape(key)}\s+(-?\d+)", header)
+                stat_match = _STAT_REGEXES[key].search(header)
                 if stat_match:
                     value = int(stat_match.group(1))
                     stats.append(f"{'+' if value > 0 else ''}{value} {label}")
