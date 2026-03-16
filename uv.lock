@@ -7,6 +7,7 @@ members = [
     "mewgenics-breeding-helper",
     "mewgenics-parser",
     "mewgenics-room-optimizer",
+    "mewgenics-room-optimizer-ui",
     "mewgenics-scorer",
 ]
 
@@ -126,6 +127,7 @@ dependencies = [
     { name = "dearpygui" },
     { name = "mewgenics-parser" },
     { name = "mewgenics-room-optimizer" },
+    { name = "mewgenics-room-optimizer-ui" },
     { name = "mewgenics-scorer" },
 ]
 
@@ -134,6 +136,7 @@ requires-dist = [
     { name = "dearpygui", specifier = ">=2.2" },
     { name = "mewgenics-parser", editable = "packages/mewgenics_parser" },
     { name = "mewgenics-room-optimizer", editable = "packages/mewgenics_room_optimizer" },
+    { name = "mewgenics-room-optimizer-ui", editable = "packages/mewgenics_room_optimizer_ui" },
     { name = "mewgenics-scorer", editable = "packages/mewgenics_scorer" },
 ]
 
@@ -186,6 +189,25 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14" },
 ]
 provides-extras = ["test"]
+
+[[package]]
+name = "mewgenics-room-optimizer-ui"
+version = "0.1.0"
+source = { editable = "packages/mewgenics_room_optimizer_ui" }
+dependencies = [
+    { name = "dearpygui" },
+    { name = "mewgenics-parser" },
+    { name = "mewgenics-room-optimizer" },
+    { name = "mewgenics-scorer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dearpygui", specifier = ">=1.6" },
+    { name = "mewgenics-parser", editable = "packages/mewgenics_parser" },
+    { name = "mewgenics-room-optimizer", editable = "packages/mewgenics_room_optimizer" },
+    { name = "mewgenics-scorer", editable = "packages/mewgenics_scorer" },
+]
 
 [[package]]
 name = "mewgenics-scorer"

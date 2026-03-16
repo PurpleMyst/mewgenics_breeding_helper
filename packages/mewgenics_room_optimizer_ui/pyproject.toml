@@ -1,0 +1,14 @@
+[project]
+name = "mewgenics_room_optimizer_ui"
+version = "0.1.0"
+description = "DearPyGui UI for room optimization"
+requires-python = ">=3.14"
+dependencies = [
+    "mewgenics_parser",
+    "mewgenics_scorer",
+    "mewgenics_room_optimizer",
+    "dearpygui>=1.6",
+]
+
+[project.scripts]
+room-optimizer = "mewgenics_room_optimizer_ui.app:main"
