@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 from .data.visual_names import VISUAL_MUTATION_NAMES
+from .utils import _resolve_game_string
 
 
 # Pre-compiled regexes for performance
 _MUTATION_ID_RE = re.compile(r"(?<!\w)(\d{3,})\s*\{")
 _COMMENT_RE = re.compile(r"//\s*(.+)")
+_MUTATION_NUM_RE = re.compile(r"^Mutation \d+$")
 
 
 def _make_stat_re(key: str):
@@ -82,13 +80,6 @@ _VISUAL_MUTATION_PART_LABELS = {
 }
 
 
-def _get_resolve_game_string():
-    """Lazy import to avoid circular dependency."""
-    from .gpak import _resolve_game_string
-
-    return _resolve_game_string
-
-
 def _parse_mutation_gon(
     content: str,
     game_strings: dict[str, str] | None = None,
@@ -97,9 +88,6 @@ def _parse_mutation_gon(
     """Parse a mutation GON file into {slot_id: (display_name, stat_desc)}."""
     if game_strings is None:
         game_strings = {}
-
-    # Call lazy import once at function start
-    resolve_game_string = _get_resolve_game_string()
 
     result: dict[int, tuple[str, str]] = {}
     csv_prefix = f"MUTATION_{category.upper()}_"
@@ -129,7 +117,7 @@ def _parse_mutation_gon(
         csv_key = f"{csv_prefix}{slot_id}_DESC"
         if csv_key in game_strings:
             stat_desc = (
-                resolve_game_string(game_strings[csv_key], game_strings)
+                _resolve_game_string(game_strings[csv_key], game_strings)
                 .strip()
                 .rstrip(".")
             )
@@ -177,7 +165,7 @@ def _read_visual_mutation_entries(
         gpak_info = gpak_data.get(gpak_category, {}).get(mutation_id)
         if gpak_info:
             raw_name, stat_desc = gpak_info
-            if re.match(r"^Mutation \d+$", raw_name):
+            if _MUTATION_NUM_RE.match(raw_name):
                 display_name = f"{_VISUAL_MUTATION_PART_LABELS.get(group_key, slot_label)} Mutation"
             else:
                 display_name = raw_name

@@ -99,7 +99,6 @@ class Cat:
     name_tag: str
 
     # Private attributes (not included in dataclass repr)
-    _raw: bytes = field(repr=False, default=b"")
     _uid_int: int = field(repr=False, default=0)
     _parent_uid_a: int = field(repr=False, default=0)
     _parent_uid_b: int = field(repr=False, default=0)
@@ -117,7 +116,6 @@ class Cat:
         uncomp_size = struct.unpack("<I", blob[:4])[0]
         raw = lz4.block.decompress(blob[4:], uncompressed_size=uncomp_size)
         r = BinaryReader(raw)
-        self._raw = raw  # kept for parent-UID blob scan in parse_save
 
         self.db_key = cat_key
 

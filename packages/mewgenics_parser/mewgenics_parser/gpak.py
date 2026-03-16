@@ -8,6 +8,7 @@ import re
 import struct
 from dataclasses import dataclass
 
+from .utils import _resolve_game_string
 from .visual import _parse_mutation_gon
 
 
@@ -15,26 +16,19 @@ from .visual import _parse_mutation_gon
 _BLOCK_RE = re.compile(r"^([A-Za-z]\w*)\s*\{", re.MULTILINE)
 _DESC_RE = re.compile(r'^\s*desc\s+"([^"]*)"', re.MULTILINE)
 
-
-def _resolve_game_string(value: str, game_strings: dict[str, str]) -> str:
-    """Resolve a game string reference chain."""
-    resolved = value
-    seen: set[str] = set()
-    while resolved in game_strings and resolved not in seen:
-        seen.add(resolved)
-        nxt = game_strings[resolved].strip()
-        if not nxt:
-            break
-        resolved = nxt
-    return resolved
+# Pre-compiled regexes for _clean_game_text
+_IMG_RE = re.compile(r"\[img:[^\]]+\]")
+_SIZE_RE = re.compile(r"\[s:[^\]]*\]|\[/s\]")
+_COLOR_RE = re.compile(r"\[c:[^\]]*\]|\[/c\]")
+_WS_RE = re.compile(r"\s+")
 
 
 def _clean_game_text(text: str) -> str:
     """Clean formatting tags from game text strings."""
-    text = re.sub(r"\[img:[^\]]+\]", "", text)
-    text = re.sub(r"\[s:[^\]]*\]|\[/s\]", "", text)
-    text = re.sub(r"\[c:[^\]]*\]|\[/c\]", "", text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = _IMG_RE.sub("", text)
+    text = _SIZE_RE.sub("", text)
+    text = _COLOR_RE.sub("", text)
+    return _WS_RE.sub(" ", text).strip()
 
 
 def _read_gpak_header(path: str) -> dict[str, tuple[int, int]]:
