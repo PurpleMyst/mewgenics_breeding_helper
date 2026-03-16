@@ -357,10 +357,20 @@ class Cat:
                     # Valid creation_day should be between 0 and current_day
                     if 0 <= creation_day <= current_day:
                         age = current_day - creation_day
-                        # Accept if age is reasonable (0-500 for older cats)
-                        if 0 <= age <= 500:
-                            self.age = age
-                            break
+                        # Check if cat has EternalYouth
+                        has_ey = any(
+                            p.lower() == "eternalyouth"
+                            for p in (self.passive_abilities or [])
+                        )
+                        # Cap age at 100 unless cat has EternalYouth
+                        if has_ey:
+                            if 0 <= age <= 500:
+                                self.age = age
+                                break
+                        else:
+                            if 0 <= age <= 100:
+                                self.age = age
+                                break
             except Exception:
                 pass
 

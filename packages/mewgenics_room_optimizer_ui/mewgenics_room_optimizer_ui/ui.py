@@ -143,6 +143,8 @@ def build_params_section(state: AppState):
                     tag="min_stats",
                     default_value=state.min_stats,
                     width=100,
+                    callback=on_param_changed,
+                    user_data=state,
                 )
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
@@ -154,6 +156,8 @@ def build_params_section(state: AppState):
                     default_value=state.max_risk,
                     max_value=100.0,
                     width=200,
+                    callback=on_param_changed,
+                    user_data=state,
                 )
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
@@ -164,6 +168,8 @@ def build_params_section(state: AppState):
                     label="Minimize Variance",
                     tag="minimize_variance",
                     default_value=state.minimize_variance,
+                    callback=on_param_changed,
+                    user_data=state,
                 )
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
@@ -173,6 +179,8 @@ def build_params_section(state: AppState):
                     label="Avoid Lovers",
                     tag="avoid_lovers",
                     default_value=state.avoid_lovers,
+                    callback=on_param_changed,
+                    user_data=state,
                 )
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
@@ -183,6 +191,8 @@ def build_params_section(state: AppState):
                     label="Prefer High Libido",
                     tag="prefer_high_libido",
                     default_value=state.prefer_high_libido,
+                    callback=on_param_changed,
+                    user_data=state,
                 )
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
@@ -192,11 +202,35 @@ def build_params_section(state: AppState):
                     label="Prefer High Charisma",
                     tag="prefer_high_charisma",
                     default_value=state.prefer_high_charisma,
+                    callback=on_param_changed,
+                    user_data=state,
                 )
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
                         "Favors pairs with higher combined charisma for better breeding odds."
                     )
+
+
+def on_param_changed(sender, app_data, user_data: AppState):
+    """Handle parameter change - update state and auto-save."""
+    tag = dpg.get_item_alias(sender) or dpg.get_item_label(sender)
+    if not tag:
+        tag = sender
+
+    if tag == "min_stats":
+        user_data.min_stats = app_data
+    elif tag == "max_risk":
+        user_data.max_risk = app_data
+    elif tag == "minimize_variance":
+        user_data.minimize_variance = app_data
+    elif tag == "avoid_lovers":
+        user_data.avoid_lovers = app_data
+    elif tag == "prefer_high_libido":
+        user_data.prefer_high_libido = app_data
+    elif tag == "prefer_high_charisma":
+        user_data.prefer_high_charisma = app_data
+
+    user_data.save()
 
 
 def build_traits_section(state: AppState):
@@ -735,6 +769,8 @@ def run_optimization(sender, app_data, user_data: AppState):
 def update_results_table(results, state):
     """Update the results table with optimization results."""
     clear_results_table()
+    clear_details_section()
+    clear_inspector()
     dpg.hide_item("results_placeholder")
 
     for i, room in enumerate(results.rooms):
@@ -911,7 +947,8 @@ def build_details_tabs(selected_room, state):
 
     # Cats tab - high-density table
     with dpg.tab(label="Cats", parent="details_tab_bar"):
-        if selected_room.cats:
+        all_cats = list(selected_room.cats) + list(selected_room.eternal_youth_cats)
+        if all_cats:
             with dpg.table(
                 tag="cats_detail_table",
                 header_row=True,
@@ -923,10 +960,16 @@ def build_details_tabs(selected_room, state):
                 dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(label="Stats", width_fixed=True)
 
-                for cat in selected_room.cats:
+                for cat in all_cats:
+                    is_ey = cat in selected_room.eternal_youth_cats
                     cat_name = cat.name or "Unnamed"
+                    if is_ey:
+                        cat_name = f"{cat_name} [EY]"
                     total_stats = sum(cat.stat_base)
                     age = cat.age if cat.age is not None else "-"
+                    name_color = (
+                        (0, 255, 255, 255) if is_ey else (255, 255, 255, 255)
+                    )  # Teal for EY
 
                     with dpg.table_row():
                         dpg.add_selectable(
