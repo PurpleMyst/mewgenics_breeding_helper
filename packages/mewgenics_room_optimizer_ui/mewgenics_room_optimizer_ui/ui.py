@@ -40,15 +40,14 @@ def build_menu_bar(state: AppState):
 
 def build_saves_section(state: AppState):
     """Build the saves selection section."""
-    with dpg.child_window(height=120, border=True, tag="saves_section"):
-        dpg.add_text("Available Saves")
-        dpg.add_separator()
-        dpg.add_listbox(
-            tag="saves_listbox",
-            callback=on_save_selected,
-            user_data=state,
-            width=-1,
-        )
+    with dpg.collapsing_header(label="Available Saves", default_open=True):
+        with dpg.child_window(height=100, border=True, tag="saves_section"):
+            dpg.add_listbox(
+                tag="saves_listbox",
+                callback=on_save_selected,
+                user_data=state,
+                width=-1,
+            )
 
 
 def build_toolbar(state: AppState):
@@ -65,92 +64,90 @@ def build_toolbar(state: AppState):
 
 def build_room_config_section(state: AppState):
     """Build the room configuration section."""
-    with dpg.child_window(height=180, border=True, tag="room_config_section"):
-        dpg.add_text("Room Configuration")
-        dpg.add_separator()
-        with dpg.table(
-            tag="room_config_table",
-            header_row=True,
-            borders_innerH=True,
-            row_background=True,
-        ):
-            dpg.add_table_column(label="Room Key")
-            dpg.add_table_column(label="Display Name")
-            dpg.add_table_column(label="Type")
-            dpg.add_table_column(label="Max Cats")
+    with dpg.collapsing_header(label="Room Configuration", default_open=True):
+        with dpg.child_window(height=180, border=True, tag="room_config_section"):
+            with dpg.table(
+                tag="room_config_table",
+                header_row=True,
+                borders_innerH=True,
+                row_background=True,
+            ):
+                dpg.add_table_column(label="Room Key")
+                dpg.add_table_column(label="Display Name")
+                dpg.add_table_column(label="Type")
+                dpg.add_table_column(label="Max Cats")
 
-        room_types = ["breeding", "fighting", "general", "none"]
-        for room in state.room_configs:
-            with dpg.table_row(parent="room_config_table"):
-                dpg.add_text(room.key, tag=f"room_key_{room.key}")
-                dpg.add_input_text(
-                    default_value=room.display_name,
-                    tag=f"room_name_{room.key}",
-                    width=150,
-                )
-                dpg.add_combo(
-                    room_types,
-                    default_value=room.room_type.value,
-                    tag=f"room_type_{room.key}",
-                    width=100,
-                )
-                max_cats_val = "" if room.max_cats is None else str(room.max_cats)
-                dpg.add_input_text(
-                    default_value=max_cats_val,
-                    tag=f"room_max_{room.key}",
-                    width=100,
-                    hint="empty=unlimited",
-                )
+            room_types = ["breeding", "fighting", "general", "none"]
+            for room in state.room_configs:
+                with dpg.table_row(parent="room_config_table"):
+                    dpg.add_text(room.key, tag=f"room_key_{room.key}")
+                    dpg.add_input_text(
+                        default_value=room.display_name,
+                        tag=f"room_name_{room.key}",
+                        width=150,
+                    )
+                    dpg.add_combo(
+                        room_types,
+                        default_value=room.room_type.value,
+                        tag=f"room_type_{room.key}",
+                        width=100,
+                    )
+                    max_cats_val = "" if room.max_cats is None else str(room.max_cats)
+                    dpg.add_input_text(
+                        default_value=max_cats_val,
+                        tag=f"room_max_{room.key}",
+                        width=100,
+                        hint="empty=unlimited",
+                    )
 
-        dpg.add_button(
-            label="Update Rooms",
-            tag="update_rooms_button",
-            callback=on_update_rooms,
-            user_data=state,
-        )
+            dpg.add_button(
+                label="Update Rooms",
+                tag="update_rooms_button",
+                callback=on_update_rooms,
+                user_data=state,
+            )
 
 
 def build_params_section(state: AppState):
     """Build the optimization parameters section."""
-    with dpg.child_window(height=160, border=True, tag="params_section"):
-        dpg.add_text("Optimization Parameters")
-        dpg.add_separator()
-        with dpg.group(horizontal=True):
-            dpg.add_input_int(
-                label="Min Stats",
-                tag="min_stats",
-                default_value=state.min_stats,
-                width=100,
-            )
-            dpg.add_slider_float(
-                label="Max Risk %",
-                tag="max_risk",
-                default_value=state.max_risk,
-                max_value=100.0,
-                width=200,
-            )
-        with dpg.group(horizontal=True):
-            dpg.add_checkbox(
-                label="Minimize Variance",
-                tag="minimize_variance",
-                default_value=state.minimize_variance,
-            )
-            dpg.add_checkbox(
-                label="Avoid Lovers",
-                tag="avoid_lovers",
-                default_value=state.avoid_lovers,
-            )
-        with dpg.group(horizontal=True):
-            dpg.add_checkbox(
-                label="Prefer Low Aggression",
-                tag="prefer_low_aggression",
-                default_value=state.prefer_low_aggression,
-            )
-            dpg.add_checkbox(
-                label="Prefer High Libido",
-                tag="prefer_high_libido",
-                default_value=state.prefer_high_libido,
-            )
+    with dpg.collapsing_header(label="Optimization Parameters", default_open=True):
+        with dpg.child_window(height=160, border=True, tag="params_section"):
+            with dpg.group(horizontal=True):
+                dpg.add_input_int(
+                    label="Min Stats",
+                    tag="min_stats",
+                    default_value=state.min_stats,
+                    width=100,
+                )
+                dpg.add_slider_float(
+                    label="Max Risk %",
+                    tag="max_risk",
+                    default_value=state.max_risk,
+                    max_value=100.0,
+                    width=200,
+                )
+            with dpg.group(horizontal=True):
+                dpg.add_checkbox(
+                    label="Minimize Variance",
+                    tag="minimize_variance",
+                    default_value=state.minimize_variance,
+                )
+                dpg.add_checkbox(
+                    label="Avoid Lovers",
+                    tag="avoid_lovers",
+                    default_value=state.avoid_lovers,
+                )
+            with dpg.group(horizontal=True):
+                dpg.add_checkbox(
+                    label="Prefer Low Aggression",
+                    tag="prefer_low_aggression",
+                    default_value=state.prefer_low_aggression,
+                )
+                dpg.add_checkbox(
+                    label="Prefer High Libido",
+                    tag="prefer_high_libido",
+                    default_value=state.prefer_high_libido,
+                )
 
 
 def build_optimize_button(state: AppState):
@@ -165,32 +162,30 @@ def build_optimize_button(state: AppState):
 
 def build_results_section(state: AppState):
     """Build the results section."""
-    with dpg.child_window(height=200, border=True, tag="results_section"):
-        dpg.add_text("Results")
-        dpg.add_separator()
-        with dpg.table(
-            tag="results_table",
-            header_row=True,
-            borders_innerH=True,
-            row_background=True,
-        ):
-            dpg.add_table_column(label="Room")
-            dpg.add_table_column(label="Cats")
-            dpg.add_table_column(label="Pairs")
-            dpg.add_table_column(label="Avg Stats")
-            dpg.add_table_column(label="Risk %")
+    with dpg.collapsing_header(label="Results", default_open=True):
+        with dpg.child_window(height=200, border=True, tag="results_section"):
+            with dpg.table(
+                tag="results_table",
+                header_row=True,
+                borders_innerH=True,
+                row_background=True,
+            ):
+                dpg.add_table_column(label="Room")
+                dpg.add_table_column(label="Cats")
+                dpg.add_table_column(label="Pairs")
+                dpg.add_table_column(label="Avg Stats")
+                dpg.add_table_column(label="Risk %")
 
-        dpg.add_text("Run optimization to see results", tag="results_placeholder")
+            dpg.add_text("Run optimization to see results", tag="results_placeholder")
 
 
 def build_details_section(state: AppState):
     """Build the selected room details section."""
-    with dpg.child_window(height=250, border=True, tag="details_section"):
-        dpg.add_text("Selected Room Details")
-        dpg.add_separator()
-        dpg.add_text(
-            "Select a room from results to see details", tag="details_placeholder"
-        )
+    with dpg.collapsing_header(label="Selected Room Details", default_open=True):
+        with dpg.child_window(height=250, border=True, tag="details_section"):
+            dpg.add_text(
+                "Select a room from results to see details", tag="details_placeholder"
+            )
 
 
 def build_themes():
@@ -530,7 +525,9 @@ def show_cat_detail_window(cat, state):
         # Abilities
         dpg.add_text("Active Abilities:")
         for ab in cat.abilities or []:
-            desc = state.game_data.ability_descriptions.get(ab, "No description")
+            desc = state.game_data.ability_descriptions.get(
+                ab.lower(), "No description"
+            )
             dpg.add_text(f"  {ab}")
             if desc:
                 dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
@@ -540,7 +537,9 @@ def show_cat_detail_window(cat, state):
         # Passive Abilities
         dpg.add_text("Passive Abilities:")
         for ab in cat.passive_abilities or []:
-            desc = state.game_data.ability_descriptions.get(ab, "No description")
+            desc = state.game_data.ability_descriptions.get(
+                ab.lower(), "No description"
+            )
             dpg.add_text(f"  {ab}")
             if desc:
                 dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
