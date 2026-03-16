@@ -166,6 +166,7 @@ def build_file_dialogs(state: AppState):
         tag="load_file_dialog",
         width=600,
         height=400,
+        user_data=state,
     ):
         dpg.add_file_extension(".*")
         dpg.add_file_extension(".sav", color=(0, 255, 0, 255))
@@ -174,7 +175,7 @@ def build_file_dialogs(state: AppState):
 def build_themes():
     """Build application themes."""
     with dpg.theme() as global_theme:
-        with dpg.theme_component(dpg.mvAllItems):
+        with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (25, 25, 35, 255))
             dpg.add_theme_color(dpg.mvThemeCol_Text, (200, 200, 200, 255))
             dpg.add_theme_color(dpg.mvThemeCol_Button, (60, 120, 200, 255))
@@ -276,11 +277,12 @@ def update_results_table(results):
 
 def clear_results_table():
     """Clear the results table."""
-    table = dpg.get_item("results_table")
-    children = dpg.get_item_children(table)
-    if children and 1 in children:
-        for row in children[1]:
-            dpg.delete_item(row)
+    table = "results_table"
+    if dpg.does_item_exist(table):
+        children = dpg.get_item_children(table)
+        if children and 1 in children:
+            for row in children[1]:
+                dpg.delete_item(row)
 
 
 def on_room_selected(sender, app_data, user_data):
