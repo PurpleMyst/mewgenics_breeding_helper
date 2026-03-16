@@ -767,6 +767,7 @@ def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
             dpg.configure_item("optimize_button", enabled=True)
             clear_results_table()
             init_traits_lists(state)
+            update_all_cats_table(state)
         except Exception as e:
             print(f"Error loading save: {e}")
     else:
