@@ -6,11 +6,13 @@ dependencies = [
     "dearpygui>=2.2",
     "mewgenics_parser",
     "mewgenics_scorer",
+    "mewgenics_room_optimizer",
 ]
 
 [tool.uv.sources]
 mewgenics_parser = { workspace = true }
 mewgenics_scorer = { workspace = true }
+mewgenics_room_optimizer = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -19,4 +21,5 @@ members = ["packages/*"]
 pythonpath = [
     "packages/mewgenics_scorer",
     "packages/mewgenics_parser",
+    "packages/mewgenics_room_optimizer",
 ]
