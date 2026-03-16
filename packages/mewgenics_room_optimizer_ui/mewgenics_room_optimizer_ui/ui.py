@@ -254,8 +254,9 @@ def exit_callback(sender, app_data, user_data):
 
 def run_optimization(sender, app_data, user_data: AppState):
     """Run the optimization."""
-    from mewgenics_room_optimizer import optimize, build_ancestor_contribs
+    from mewgenics_room_optimizer import optimize
     from mewgenics_room_optimizer.types import OptimizationParams
+    from mewgenics_scorer import build_ancestor_contribs
 
     if not user_data.cats:
         return
