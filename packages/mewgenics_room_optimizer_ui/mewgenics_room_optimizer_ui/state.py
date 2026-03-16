@@ -139,28 +139,21 @@ class AppState:
         }
 
     def set_rooms_from_cats(self):
-        """Extract unique rooms from cats and create room configs."""
+        """Extract unique rooms from cats and add to existing room configs."""
         room_keys = set()
         for cat in self.cats:
             if cat.room:
                 room_keys.add(cat.room)
 
         if not room_keys:
-            self.room_configs = list(DEFAULT_ROOM_CONFIGS)
             return
 
         existing_keys = {r.key for r in self.room_configs}
-        new_configs = []
 
         for key in sorted(room_keys):
-            existing = next((r for r in self.room_configs if r.key == key), None)
-            if existing:
-                new_configs.append(existing)
-            elif key in existing_keys:
-                new_configs.append(next(r for r in self.room_configs if r.key == key))
-            else:
+            if key not in existing_keys:
                 display_name = key.replace("_", " ").title()
-                new_configs.append(
+                self.room_configs.append(
                     RoomConfig(
                         key=key,
                         display_name=display_name,
@@ -168,12 +161,6 @@ class AppState:
                         max_cats=6,
                     )
                 )
-
-        for r in self.room_configs:
-            if r.key not in room_keys:
-                new_configs.append(r)
-
-        self.room_configs = new_configs
 
     def save(self):
         """Save current state to disk."""

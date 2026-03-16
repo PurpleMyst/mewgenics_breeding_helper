@@ -461,11 +461,7 @@ def on_room_selected(sender, app_data, user_data):
 
 def build_details_tabs(selected_room, state):
     """Build the tabbed details view for a selected room."""
-    # Header
-    dpg.add_text(f"Room: {selected_room.room.display_name}", parent="details_section")
-    dpg.add_separator(parent="details_section")
-
-    # Tab bar
+    # Tab bar only (section title is already "Selected Room Details")
     dpg.add_tab_bar(parent="details_section", tag="details_tab_bar")
 
     # Pairs tab
@@ -480,45 +476,78 @@ def build_details_tabs(selected_room, state):
         else:
             dpg.add_text("No breeding pairs in this room")
 
-    # Cats tab
+    # Cats tab - clickable rows
     with dpg.tab(label="Cats", parent="details_tab_bar"):
         if selected_room.cats:
-            # Build cats table
-            with dpg.table(
-                header_row=True,
-                borders_innerH=True,
-                row_background=True,
-            ):
-                dpg.add_table_column(label="Name")
-                dpg.add_table_column(label="Age")
-                dpg.add_table_column(label="Location")
-                dpg.add_table_column(label="Abilities")
-
-                for cat in selected_room.cats:
-                    with dpg.table_row():
-                        dpg.add_text(cat.name or "Unnamed")
-                        dpg.add_text(str(cat.age) if cat.age else "Unknown")
-                        dpg.add_text(cat.room or "Unknown")
-
-                        # Abilities with tooltips
-                        all_abilities = (cat.abilities or []) + (
-                            cat.passive_abilities or []
-                        )
-                        if all_abilities:
-                            ability_text = ", ".join(all_abilities)
-                            ability_id = f"ability_{cat.db_key}_{all_abilities[0]}"
-                            dpg.add_text(ability_text, tag=ability_id)
-
-                            # Tooltip with description
-                            for ab in all_abilities:
-                                desc = state.game_data.ability_descriptions.get(ab, "")
-                                if desc:
-                                    with dpg.tooltip(parent=ability_id):
-                                        dpg.add_text(desc)
-                                        dpg.add_text(
-                                            f"({ab})", color=(150, 150, 150, 255)
-                                        )
-                        else:
-                            dpg.add_text("None")
+            for cat in selected_room.cats:
+                cat_name = cat.name or "Unnamed"
+                dpg.add_selectable(
+                    label=f"{cat_name} [{cat.gender}] S:{sum(cat.stat_base)}",
+                    callback=on_cat_selected,
+                    user_data=(cat, state),
+                    tag=f"cat_row_{cat.db_key}",
+                )
         else:
             dpg.add_text("No unpaired cats in this room")
+
+
+def on_cat_selected(sender, app_data, user_data):
+    """Handle cat selection - show detail window."""
+    cat, state = user_data
+    show_cat_detail_window(cat, state)
+
+
+def show_cat_detail_window(cat, state):
+    """Show a window with full cat details."""
+    from mewgenics_parser.constants import STAT_NAMES
+
+    # Close existing window if open
+    if dpg.does_item_exist("cat_detail_window"):
+        dpg.delete_item("cat_detail_window")
+
+    with dpg.window(
+        label=f"Cat: {cat.name or 'Unnamed'}",
+        width=450,
+        height=550,
+        tag="cat_detail_window",
+    ):
+        # Basic info
+        dpg.add_text(f"Name: {cat.name or 'Unnamed'}")
+        dpg.add_text(f"Gender: {cat.gender}")
+        dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
+        dpg.add_text(f"Status: {cat.status}")
+        dpg.add_text(f"Room: {cat.room or 'Unknown'}")
+
+        dpg.add_separator()
+
+        # Stats
+        dpg.add_text("Base Stats:")
+        for i, stat in enumerate(cat.stat_base):
+            dpg.add_text(f"  {STAT_NAMES[i]}: {stat}")
+
+        dpg.add_separator()
+
+        # Abilities
+        dpg.add_text("Active Abilities:")
+        for ab in cat.abilities or []:
+            desc = state.game_data.ability_descriptions.get(ab, "No description")
+            dpg.add_text(f"  {ab}")
+            if desc:
+                dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
+
+        dpg.add_separator()
+
+        # Passive Abilities
+        dpg.add_text("Passive Abilities:")
+        for ab in cat.passive_abilities or []:
+            desc = state.game_data.ability_descriptions.get(ab, "No description")
+            dpg.add_text(f"  {ab}")
+            if desc:
+                dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
+
+        dpg.add_separator()
+
+        # Mutations
+        dpg.add_text("Mutations:")
+        for mut in cat.mutations or []:
+            dpg.add_text(f"  {mut}")
