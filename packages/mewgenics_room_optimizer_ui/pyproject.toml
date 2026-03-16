@@ -8,7 +8,6 @@ dependencies = [
     "mewgenics_scorer",
     "mewgenics_room_optimizer",
     "dearpygui>=1.6",
-    "rapidfuzz>=3.0",
 ]
 
 [project.scripts]

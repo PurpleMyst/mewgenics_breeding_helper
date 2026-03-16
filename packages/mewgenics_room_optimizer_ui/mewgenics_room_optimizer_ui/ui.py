@@ -1,26 +1,18 @@
 """DearPyGui UI components for room optimizer."""
 
 import dearpygui.dearpygui as dpg
-from rapidfuzz import fuzz
 
 from mewgenics_room_optimizer import RoomType
 
 from .state import AppState
 
 
-FUZZY_THRESHOLD = 60
-
-
-def fuzzy_match(query: str, choices: list[str]) -> list[str]:
-    """Return items matching query with score above threshold."""
+def substring_match(query: str, choices: list[str]) -> list[str]:
+    """Return items containing query as substring (case-insensitive)."""
     if not query:
         return choices
     query_lower = query.lower()
-    return [
-        c
-        for c in choices
-        if fuzz.partial_ratio(query_lower, c.lower()) >= FUZZY_THRESHOLD
-    ]
+    return [c for c in choices if query_lower in c.lower()]
 
 
 def build_ui(state: AppState):
@@ -343,7 +335,7 @@ def on_mutation_filter(sender, app_data, user_data: AppState):
     """Filter mutations listbox with fuzzy matching."""
     filter_text = app_data or ""
     mutations = user_data.get_available_mutations()
-    filtered = fuzzy_match(filter_text, mutations)
+    filtered = substring_match(filter_text, mutations)
     formatted = [
         _format_trait_with_description(m, user_data.game_data) for m in filtered
     ]
@@ -354,7 +346,7 @@ def on_passive_filter(sender, app_data, user_data: AppState):
     """Filter passives listbox with fuzzy matching."""
     filter_text = app_data or ""
     passives = user_data.get_available_passives()
-    filtered = fuzzy_match(filter_text, passives)
+    filtered = substring_match(filter_text, passives)
     formatted = [
         _format_trait_with_description(p, user_data.game_data) for p in filtered
     ]
@@ -365,7 +357,7 @@ def on_ability_filter(sender, app_data, user_data: AppState):
     """Filter abilities listbox with fuzzy matching."""
     filter_text = app_data or ""
     abilities = user_data.get_available_abilities()
-    filtered = fuzzy_match(filter_text, abilities)
+    filtered = substring_match(filter_text, abilities)
     formatted = [
         _format_trait_with_description(a, user_data.game_data) for a in filtered
     ]
@@ -563,10 +555,10 @@ def update_all_cats_table(
     show_all = dpg.get_value("show_all_cats")
     cats = state.cats if show_all else state.alive_cats
 
-    name_filtered = fuzzy_match(name_filter, [c.name for c in cats])
+    name_filtered = substring_match(name_filter, [c.name or "" for c in cats])
     name_filtered_set = set(name_filtered)
 
-    filtered_cats = [c for c in cats if c.name in name_filtered_set]
+    filtered_cats = [c for c in cats if (c.name or "") in name_filtered_set]
 
     if trait_filter:
         trait_filtered = []
@@ -575,7 +567,7 @@ def update_all_cats_table(
             all_traits.extend(cat.mutations or [])
             all_traits.extend(cat.passive_abilities or [])
             all_traits.extend(cat.abilities or [])
-            if fuzzy_match(trait_filter, all_traits):
+            if substring_match(trait_filter, all_traits):
                 trait_filtered.append(cat)
         filtered_cats = trait_filtered
 
@@ -611,6 +603,7 @@ def update_all_cats_table(
                 span_columns=True,
                 callback=on_all_cats_cat_selected,
                 user_data=(cat.db_key, state),
+                tag=f"all_cats_row_{cat.db_key}",
             )
             dpg.add_text(sex_display)
             dpg.add_text(age_display)
@@ -1009,8 +1002,13 @@ def clear_inspector():
 
 
 def on_all_cats_cat_selected(sender, app_data, user_data):
-    """Handle cat selection in All Cats table."""
+    """Handle cat selection in All Cats table with radio behavior."""
     db_key, state = user_data
+
+    if state.selected_cat_db_key is not None and state.selected_cat_db_key != db_key:
+        old_item = f"all_cats_row_{state.selected_cat_db_key}"
+        if dpg.does_item_exist(old_item):
+            dpg.set_value(old_item, False)
 
     cat = None
     for c in state.cats:
