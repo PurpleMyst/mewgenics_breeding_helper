@@ -770,7 +770,3 @@ VISUAL_MUTATION_NAMES: dict[tuple[str, int], str] = {
     ("tail", 900): "slender",
     ("tail", 1500): "rat tail",
 }
-
-
-def load_visual_mutation_names() -> dict[tuple[str, int], str]:
-    return VISUAL_MUTATION_NAMES

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-from .data.visual_names import load_visual_mutation_names
+from .data.visual_names import VISUAL_MUTATION_NAMES
 
 
 # Pre-compiled regexes for performance
@@ -158,7 +158,7 @@ def _read_visual_mutation_entries(
     """
     if gpak_data is None:
         gpak_data = {}
-    fallback_names = load_visual_mutation_names()
+    fallback_names = VISUAL_MUTATION_NAMES
     entries: list[dict[str, object]] = []
     for (
         slot_key,

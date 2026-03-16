@@ -58,33 +58,6 @@ def _read_db_key_candidates(
     return keys
 
 
-def _scan_blob_for_parent_uids(
-    raw: bytes, uid_set: frozenset, self_uid: int
-) -> tuple[int, int]:
-    """
-    Scan the decompressed blob byte-by-byte looking for two consecutive u64
-    values (4-byte aligned) that are in uid_set and are not self_uid.
-    Parent UIDs appear early in the blob so we only scan the first 1 KB.
-    Returns (parent_a_uid, parent_b_uid), each 0 if not found.
-    """
-    if not uid_set:
-        return 0, 0
-    limit = min(1024, len(raw) - 16)
-    i = 12  # skip breed_id(4) + own uid(8)
-    while i <= limit - 16:
-        lo1, hi1 = struct.unpack_from("<II", raw, i)
-        v1 = lo1 + hi1 * 4_294_967_296
-        if v1 in uid_set and v1 != self_uid:
-            lo2, hi2 = struct.unpack_from("<II", raw, i + 8)
-            v2 = lo2 + hi2 * 4_294_967_296
-            if v2 in uid_set and v2 != self_uid:
-                return v1, v2  # both parents found
-            if v2 == 0:
-                return v1, 0  # one parent (other unknown)
-        i += 4  # u64-aligned steps
-    return 0, 0
-
-
 @dataclass(init=False, slots=True)
 class Cat:
     """Main data model representing a cat in Mewgenics."""

@@ -233,6 +233,7 @@ from .save import parse_save, find_save_files, SaveData
 from .cat import Cat
 from .gpak import GameData
 from .data.abilities import ABILITY_LOOKUP, MUTATION_DISPLAY_NAMES, ABILITY_KEY_ALIASES
+from .data.visual_names import VISUAL_MUTATION_NAMES
 
 __all__ = [
     "parse_save",
@@ -243,4 +244,5 @@ __all__ = [
     "ABILITY_LOOKUP",
     "MUTATION_DISPLAY_NAMES",
     "ABILITY_KEY_ALIASES",
+    "VISUAL_MUTATION_NAMES",
 ]

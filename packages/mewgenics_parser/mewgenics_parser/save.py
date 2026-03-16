@@ -111,13 +111,12 @@ def _parse_pedigree(conn) -> dict:
     return ped_map
 
 
-def parse_save(path: str, gpak_path: Optional[str] = None) -> SaveData:
+def parse_save(path: str) -> SaveData:
     """
     Parse a Mewgenics save file (.sav).
 
     Args:
         path: Path to the .sav file
-        gpak_path: Optional path to .gpak file (currently unused)
 
     Returns:
         SaveData containing parsed cats and metadata
