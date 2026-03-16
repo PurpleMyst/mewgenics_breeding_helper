@@ -1035,37 +1035,30 @@ def show_cat_detail_window(cat, state):
                 dpg.add_text(f"Status: {cat.status}")
                 dpg.add_text(f"Room: {room_display}")
 
-        with dpg.group(horizontal=True):
-            lover_names = []
-            for lover in cat.lovers or []:
-                if lover is None:
-                    lover_names.append("Unknown (Gone)")
-                else:
-                    lover_names.append(
-                        f"{lover.name or 'Unnamed'} ({lover.status or 'Gone'})"
-                    )
-            lovers_str = ", ".join(lover_names) if lover_names else "None"
-            lovers_text = dpg.add_text(
-                f"Lovers: {lovers_str}", color=(255, 150, 200, 255)
-            )
-            with dpg.tooltip(lovers_text):
-                dpg.add_text("Cats this cat loves")
-
-        with dpg.group(horizontal=True):
-            hater_names = []
-            for hater in cat.haters or []:
-                if hater is None:
-                    hater_names.append("Unknown (Gone)")
-                else:
-                    hater_names.append(
-                        f"{hater.name or 'Unnamed'} ({hater.status or 'Gone'})"
-                    )
-            haters_str = ", ".join(hater_names) if hater_names else "None"
-            haters_text = dpg.add_text(
-                f"Haters: {haters_str}", color=(255, 100, 100, 255)
-            )
-            with dpg.tooltip(haters_text):
-                dpg.add_text("Cats that hate this cat")
+            with dpg.table_row():
+                lover_names = []
+                for lover in cat.lovers or []:
+                    if lover is None:
+                        lover_names.append("Unknown (Gone)")
+                    else:
+                        lover_names.append(
+                            f"{lover.name or 'Unnamed'} ({lover.status or 'Gone'})"
+                        )
+                lovers_str = ", ".join(lover_names) if lover_names else "None"
+                dpg.add_text(f"Lovers: {lovers_str}", color=(255, 150, 200, 255))
+                hater_names = []
+                for hater in cat.haters or []:
+                    if hater is None:
+                        hater_names.append("Unknown (Gone)")
+                    else:
+                        hater_names.append(
+                            f"{hater.name or 'Unnamed'} ({hater.status or 'Gone'})"
+                        )
+                haters_str = ", ".join(hater_names) if hater_names else "None"
+                dpg.add_text(f"Haters: {haters_str}", color=(255, 100, 100, 255))
+                dpg.add_text("")
+                dpg.add_text("")
+                dpg.add_text("")
 
         is_gay = state.gay_flags.get(cat.db_key, False)
         dpg.add_checkbox(
@@ -1082,7 +1075,7 @@ def show_cat_detail_window(cat, state):
         dpg.add_separator()
 
         with dpg.tree_node(
-            label=f"Active Abilities ({len(cat.abilities or [])})", default_open=False
+            label=f"Active Abilities ({len(cat.abilities or [])})", default_open=True
         ):
             for ab in cat.abilities or []:
                 desc = state.game_data.ability_descriptions.get(
@@ -1097,7 +1090,7 @@ def show_cat_detail_window(cat, state):
 
         with dpg.tree_node(
             label=f"Passive Abilities ({len(cat.passive_abilities or [])})",
-            default_open=False,
+            default_open=True,
         ):
             for ab in cat.passive_abilities or []:
                 desc = state.game_data.ability_descriptions.get(
@@ -1111,7 +1104,7 @@ def show_cat_detail_window(cat, state):
                     dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
         with dpg.tree_node(
-            label=f"Mutations ({len(cat.mutations or [])})", default_open=False
+            label=f"Mutations ({len(cat.mutations or [])})", default_open=True
         ):
             for mut in cat.mutations or []:
                 is_fav = _is_favorable_trait(mut, state.planner_traits)
