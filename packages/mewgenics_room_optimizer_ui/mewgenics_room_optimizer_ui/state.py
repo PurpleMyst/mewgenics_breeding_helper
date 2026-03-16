@@ -84,6 +84,7 @@ def room_configs_from_dict(data: list[dict]) -> list[RoomConfig]:
             display_name=r["display_name"],
             room_type=RoomType(r["room_type"]),
             max_cats=r.get("max_cats"),
+            base_stim=r.get("base_stim", 50.0),
         )
         for r in data
     ]
@@ -97,6 +98,7 @@ def room_configs_to_dict(configs: list[RoomConfig]) -> list[dict]:
             "display_name": r.display_name,
             "room_type": r.room_type.value,
             "max_cats": r.max_cats,
+            "base_stim": r.base_stim,
         }
         for r in configs
     ]
@@ -146,6 +148,7 @@ class AppState:
     prefer_high_libido: bool = True
 
     planner_traits: list[TraitRequirement] = field(default_factory=list)
+    gay_flags: dict[int, bool] = field(default_factory=dict)
 
     is_loading: bool = False
 
@@ -176,6 +179,13 @@ class AppState:
             room_configs=room_configs,
             planner_traits=planner_traits_from_dict(config.get("planner_traits", [])),
             last_save_path=config.get("last_save_path"),
+            min_stats=config.get("min_stats", 0),
+            max_risk=config.get("max_risk", 20.0),
+            minimize_variance=config.get("minimize_variance", True),
+            avoid_lovers=config.get("avoid_lovers", True),
+            prefer_low_aggression=config.get("prefer_low_aggression", True),
+            prefer_high_libido=config.get("prefer_high_libido", True),
+            gay_flags=config.get("gay_flags", {}),
         )
 
     def to_config(self) -> dict:
@@ -184,6 +194,13 @@ class AppState:
             "rooms": room_configs_to_dict(self.room_configs),
             "planner_traits": planner_traits_to_dict(self.planner_traits),
             "last_save_path": self.last_save_path,
+            "min_stats": self.min_stats,
+            "max_risk": self.max_risk,
+            "minimize_variance": self.minimize_variance,
+            "avoid_lovers": self.avoid_lovers,
+            "prefer_low_aggression": self.prefer_low_aggression,
+            "prefer_high_libido": self.prefer_high_libido,
+            "gay_flags": self.gay_flags,
         }
 
     def save(self):

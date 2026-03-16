@@ -24,6 +24,7 @@ class RoomConfig:
     display_name: str
     room_type: RoomType
     max_cats: int | None = None  # None = unlimited for FIGHTING
+    base_stim: float = 50.0
 
 
 @dataclass
@@ -43,6 +44,7 @@ class RoomAssignment:
     room: RoomConfig
     cats: list[Cat]
     pairs: list[ScoredPair]
+    eternal_youth_cats: list[Cat] = field(default_factory=list)
 
 
 @dataclass
@@ -57,6 +59,7 @@ class OptimizationParams:
     prefer_high_libido: bool = True
     stimulation: float = 50.0
     planner_traits: list[TraitRequirement] = field(default_factory=list)
+    gay_flags: dict[int, bool] = field(default_factory=dict)
 
 
 @dataclass
@@ -82,9 +85,9 @@ class OptimizationResult:
 
 
 DEFAULT_ROOM_CONFIGS = [
-    RoomConfig("Floor1_Large", "Ground Floor Left", RoomType.FIGHTING, None),
-    RoomConfig("Floor1_Small", "Ground Floor Right", RoomType.BREEDING, 6),
-    RoomConfig("Attic", "Top Floor", RoomType.GENERAL, 6),
-    RoomConfig("Floor2_Large", "Second Floor Left", RoomType.NONE, None),
-    RoomConfig("Floor2_Small", "Second Floor Right", RoomType.NONE, None),
+    RoomConfig("Floor1_Large", "Ground Floor Left", RoomType.FIGHTING, None, 50.0),
+    RoomConfig("Floor1_Small", "Ground Floor Right", RoomType.BREEDING, 6, 50.0),
+    RoomConfig("Attic", "Top Floor", RoomType.GENERAL, 6, 50.0),
+    RoomConfig("Floor2_Large", "Second Floor Left", RoomType.NONE, None, 50.0),
+    RoomConfig("Floor2_Small", "Second Floor Right", RoomType.NONE, None, 50.0),
 ]

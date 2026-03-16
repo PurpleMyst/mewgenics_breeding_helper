@@ -19,6 +19,27 @@ from .types import (
 )
 
 
+def _has_eternalyouth(cat: Cat) -> bool:
+    """Check if cat has EternalYouth passive."""
+    return any(p.lower() == "eternalyouth" for p in (cat.passive_abilities or []))
+
+
+def _can_pair_gay(cat_a: Cat, cat_b: Cat, gay_flags: dict[int, bool]) -> bool:
+    """Check if gay cats can breed based on gender restrictions."""
+    is_a_gay = gay_flags.get(cat_a.db_key, False)
+    is_b_gay = gay_flags.get(cat_b.db_key, False)
+
+    if not is_a_gay and not is_b_gay:
+        return True
+
+    if is_a_gay and cat_b.gender.lower() != "female":
+        return False
+    if is_b_gay and cat_a.gender.lower() != "female":
+        return False
+
+    return True
+
+
 def _cat_stats_sum(cat: Cat) -> int:
     """Calculate total base stats for a cat."""
     return sum(cat.stat_base)
@@ -62,6 +83,9 @@ def _score_pair(
         return None
 
     if is_lover_conflict(cat_a, cat_b, params.avoid_lovers):
+        return None
+
+    if not _can_pair_gay(cat_a, cat_b, params.gay_flags):
         return None
 
     factors = calculate_pair_factors(
@@ -178,7 +202,10 @@ def optimize(
 
     filtered_cats = _filter_cats(cats, params.min_stats)
 
-    pairs = _generate_pairs(filtered_cats)
+    eternal_youth_cats = [c for c in filtered_cats if _has_eternalyouth(c)]
+    breeding_cats = [c for c in filtered_cats if not _has_eternalyouth(c)]
+
+    pairs = _generate_pairs(breeding_cats)
 
     scored_pairs: list[ScoredPair] = []
     for cat_a, cat_b in pairs:
@@ -194,6 +221,7 @@ def optimize(
 
     room_assignments: dict[str, list[Cat]] = {r.key: [] for r in room_configs}
     room_pairs: dict[str, list[ScoredPair]] = {r.key: [] for r in room_configs}
+    room_eternal_youth: dict[str, list[Cat]] = {r.key: [] for r in room_configs}
     assigned_cats: set[int] = set()
 
     for pair in scored_pairs:
@@ -207,6 +235,18 @@ def optimize(
                 room_pairs[room.key].append(pair)
                 assigned_cats.add(pair.cat_a.db_key)
                 assigned_cats.add(pair.cat_b.db_key)
+                break
+
+    unassigned = [c for c in filtered_cats if c.db_key not in assigned_cats]
+
+    for ey_cat in eternal_youth_cats:
+        for room in breeding_rooms + general_rooms:
+            current_count = len(room_assignments[room.key]) + len(
+                room_eternal_youth[room.key]
+            )
+            if _can_fit_single(ey_cat, room, assigned_cats, current_count):
+                room_eternal_youth[room.key].append(ey_cat)
+                assigned_cats.add(ey_cat.db_key)
                 break
 
     unassigned = [c for c in filtered_cats if c.db_key not in assigned_cats]
@@ -245,13 +285,15 @@ def optimize(
     for config in room_configs:
         cats_in_room = room_assignments[config.key]
         pairs_in_room = room_pairs[config.key]
+        ey_cats_in_room = room_eternal_youth[config.key]
 
-        if cats_in_room or pairs_in_room:
+        if cats_in_room or pairs_in_room or ey_cats_in_room:
             room_results.append(
                 RoomAssignment(
                     room=config,
                     cats=cats_in_room,
                     pairs=pairs_in_room,
+                    eternal_youth_cats=ey_cats_in_room,
                 )
             )
 

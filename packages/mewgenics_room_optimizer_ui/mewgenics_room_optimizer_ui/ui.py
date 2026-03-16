@@ -50,7 +50,7 @@ def build_menu_bar(state: AppState):
 
 def build_saves_section(state: AppState):
     """Build the saves selection section."""
-    with dpg.collapsing_header(label="Available Saves", default_open=True):
+    with dpg.collapsing_header(label="Available Saves", default_open=False):
         with dpg.child_window(height=100, border=True, tag="saves_section"):
             dpg.add_listbox(
                 tag="saves_listbox",
@@ -82,7 +82,7 @@ def build_toolbar(state: AppState):
 
 def build_room_config_section(state: AppState):
     """Build the room configuration section."""
-    with dpg.collapsing_header(label="Room Configuration", default_open=True):
+    with dpg.collapsing_header(label="Room Configuration", default_open=False):
         with dpg.child_window(height=180, border=True, tag="room_config_section"):
             with dpg.table(
                 tag="room_config_table",
@@ -94,6 +94,7 @@ def build_room_config_section(state: AppState):
                 dpg.add_table_column(label="Display Name")
                 dpg.add_table_column(label="Type")
                 dpg.add_table_column(label="Max Cats")
+                dpg.add_table_column(label="Base Stim")
 
             room_types = ["breeding", "fighting", "general", "none"]
             for room in state.room_configs:
@@ -102,7 +103,7 @@ def build_room_config_section(state: AppState):
                     dpg.add_input_text(
                         default_value=room.display_name,
                         tag=f"room_name_{room.key}",
-                        width=150,
+                        width=120,
                         callback=on_room_config_changed,
                         user_data=state,
                     )
@@ -110,7 +111,7 @@ def build_room_config_section(state: AppState):
                         room_types,
                         default_value=room.room_type.value,
                         tag=f"room_type_{room.key}",
-                        width=100,
+                        width=80,
                         callback=on_room_config_changed,
                         user_data=state,
                     )
@@ -118,8 +119,15 @@ def build_room_config_section(state: AppState):
                     dpg.add_input_text(
                         default_value=max_cats_val,
                         tag=f"room_max_{room.key}",
-                        width=100,
+                        width=80,
                         hint="empty=unlimited",
+                        callback=on_room_config_changed,
+                        user_data=state,
+                    )
+                    dpg.add_input_text(
+                        default_value=str(room.base_stim),
+                        tag=f"room_stim_{room.key}",
+                        width=80,
                         callback=on_room_config_changed,
                         user_data=state,
                     )
@@ -358,6 +366,17 @@ def on_clear_traits(sender, app_data, user_data: AppState):
     update_traits_display(user_data)
 
 
+def on_toggle_gay(sender, app_data, user_data: tuple[int, AppState]):
+    """Toggle gay flag for a cat."""
+    db_key, state = user_data
+    current = state.gay_flags.get(db_key, False)
+    state.gay_flags[db_key] = not current
+    state.save()
+    cat = next((c for c in state.cats if c.db_key == db_key), None)
+    if cat:
+        show_cat_detail_window(cat, state)
+
+
 def on_trait_weight_changed(sender, app_data, user_data: tuple[int, AppState]):
     """Handle trait weight change."""
     index, state = user_data
@@ -434,6 +453,7 @@ def build_results_section(state: AppState):
                 dpg.add_table_column(label="Room")
                 dpg.add_table_column(label="Cats")
                 dpg.add_table_column(label="Pairs")
+                dpg.add_table_column(label="EY")
                 dpg.add_table_column(label="Avg Stats")
                 dpg.add_table_column(label="Risk %")
 
@@ -571,13 +591,13 @@ def on_room_config_changed(sender, app_data, user_data: AppState):
     from mewgenics_room_optimizer import RoomConfig, RoomType
 
     is_valid = True
-    sender_tag = dpg.get_item_label(sender) or sender
 
     new_configs = []
     for room in user_data.room_configs:
         new_name = dpg.get_value(f"room_name_{room.key}")
         new_type_str = dpg.get_value(f"room_type_{room.key}")
         new_max_str = dpg.get_value(f"room_max_{room.key}")
+        new_stim_str = dpg.get_value(f"room_stim_{room.key}")
 
         new_max = None
         if new_max_str.strip():
@@ -590,12 +610,24 @@ def on_room_config_changed(sender, app_data, user_data: AppState):
         else:
             dpg.bind_item_theme(f"room_max_{room.key}", 0)
 
+        new_stim = 50.0
+        if new_stim_str.strip():
+            try:
+                new_stim = float(new_stim_str)
+                dpg.bind_item_theme(f"room_stim_{room.key}", 0)
+            except ValueError:
+                dpg.bind_item_theme(f"room_stim_{room.key}", "input_error_theme")
+                is_valid = False
+        else:
+            dpg.bind_item_theme(f"room_stim_{room.key}", 0)
+
         new_configs.append(
             RoomConfig(
                 key=room.key,
                 display_name=new_name,
                 room_type=RoomType(new_type_str),
                 max_cats=new_max,
+                base_stim=new_stim,
             )
         )
 
@@ -626,7 +658,6 @@ def run_optimization(sender, app_data, user_data: AppState):
     avoid_lovers = dpg.get_value("avoid_lovers")
     prefer_low_aggression = dpg.get_value("prefer_low_aggression")
     prefer_high_libido = dpg.get_value("prefer_high_libido")
-    print(user_data.planner_traits)
 
     params = OptimizationParams(
         min_stats=min_stats,
@@ -650,6 +681,7 @@ def run_optimization(sender, app_data, user_data: AppState):
 def update_results_table(results, state):
     """Update the results table with optimization results."""
     clear_results_table()
+    dpg.hide_item("results_placeholder")
 
     for i, room in enumerate(results.rooms):
         avg_stats = 0.0
@@ -670,6 +702,11 @@ def update_results_table(results, state):
             )
             dpg.add_text(str(len(room.cats)))
             dpg.add_text(str(len(room.pairs)))
+            ey_count = len(room.eternal_youth_cats)
+            dpg.add_text(
+                f"{ey_count}",
+                color=(100, 200, 255, 255) if ey_count > 0 else (200, 200, 200, 255),
+            )
             dpg.add_text(f"{avg_stats:.1f}")
             dpg.add_text(
                 f"{avg_risk:.0f}%",
@@ -688,6 +725,7 @@ def clear_results_table():
         if children and 1 in children:
             for row in children[1]:
                 dpg.delete_item(row)
+    dpg.show_item("results_placeholder")
 
 
 def clear_details_section():
@@ -827,11 +865,24 @@ def show_cat_detail_window(cat, state):
                 dpg.add_text(f"Gender: {cat.gender}")
                 dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
                 dpg.add_text(f"Status: {cat.status}")
-                dpg.add_text(f"Room: {cat.room or 'Unknown'}")
+                room_display = cat.room or "Unknown"
+                if cat.room:
+                    for rc in state.room_configs:
+                        if rc.key == cat.room:
+                            room_display = rc.display_name
+                            break
+                dpg.add_text(f"Room: {room_display}")
 
             with dpg.table_row():
                 for i, stat in enumerate(cat.stat_base):
                     dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
+
+        is_gay = state.gay_flags.get(cat.db_key, False)
+        dpg.add_button(
+            label="Gay" if is_gay else "Straight",
+            callback=on_toggle_gay,
+            user_data=(cat.db_key, state),
+        )
 
         dpg.add_separator()
 
