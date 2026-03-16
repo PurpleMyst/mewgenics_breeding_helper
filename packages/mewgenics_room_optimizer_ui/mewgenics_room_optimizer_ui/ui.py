@@ -136,7 +136,7 @@ def build_room_config_section(state: AppState):
 def build_params_section(state: AppState):
     """Build the optimization parameters section."""
     with dpg.collapsing_header(label="Optimization Parameters", default_open=True):
-        with dpg.child_window(height=160, border=True, tag="params_section"):
+        with dpg.child_window(height=180, border=True, tag="params_section"):
             with dpg.group(horizontal=True):
                 dpg.add_input_int(
                     label="Min Stats",
@@ -144,6 +144,10 @@ def build_params_section(state: AppState):
                     default_value=state.min_stats,
                     width=100,
                 )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Minimum total base stats required for a cat to be considered for breeding."
+                    )
                 dpg.add_slider_float(
                     label="Max Risk %",
                     tag="max_risk",
@@ -151,33 +155,48 @@ def build_params_section(state: AppState):
                     max_value=100.0,
                     width=200,
                 )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Maximum inbreeding risk percentage allowed for breeding pairs."
+                    )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(
                     label="Minimize Variance",
                     tag="minimize_variance",
                     default_value=state.minimize_variance,
                 )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Prioritizes consistent stat lines across offspring rather than gambling for single high-stat spikes."
+                    )
                 dpg.add_checkbox(
                     label="Avoid Lovers",
                     tag="avoid_lovers",
                     default_value=state.avoid_lovers,
                 )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Excludes pairs that are mutual lovers to prevent relationship conflicts."
+                    )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(
                     label="Prefer High Libido",
                     tag="prefer_high_libido",
                     default_value=state.prefer_high_libido,
                 )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Favors pairs with higher combined libido for faster breeding."
+                    )
                 dpg.add_checkbox(
                     label="Prefer High Charisma",
                     tag="prefer_high_charisma",
                     default_value=state.prefer_high_charisma,
                 )
-                dpg.add_checkbox(
-                    label="Prefer High Libido",
-                    tag="prefer_high_libido",
-                    default_value=state.prefer_high_libido,
-                )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Favors pairs with higher combined charisma for better breeding odds."
+                    )
 
 
 def build_traits_section(state: AppState):
@@ -242,7 +261,7 @@ def build_traits_section(state: AppState):
 
 
 def on_mutation_filter(sender, app_data, user_data: AppState):
-    """Filter mutations listbox. Auto-add top result on Enter."""
+    """Filter mutations listbox."""
     filter_text = (app_data or "").lower()
     mutations = user_data.get_available_mutations()
     filtered = (
@@ -250,21 +269,9 @@ def on_mutation_filter(sender, app_data, user_data: AppState):
     )
     dpg.configure_item("mutation_listbox", items=filtered)
 
-    if app_data and filtered:
-        from mewgenics_scorer import TraitRequirement
-
-        trait = TraitRequirement(category="mutation", key=filtered[0], weight=5.0)
-        if not any(
-            t.key == trait.key and t.category == trait.category
-            for t in user_data.planner_traits
-        ):
-            user_data.planner_traits.append(trait)
-            user_data.save()
-            update_traits_display(user_data)
-
 
 def on_passive_filter(sender, app_data, user_data: AppState):
-    """Filter passives listbox. Auto-add top result on Enter."""
+    """Filter passives listbox."""
     filter_text = (app_data or "").lower()
     passives = user_data.get_available_passives()
     filtered = (
@@ -272,39 +279,15 @@ def on_passive_filter(sender, app_data, user_data: AppState):
     )
     dpg.configure_item("passive_listbox", items=filtered)
 
-    if app_data and filtered:
-        from mewgenics_scorer import TraitRequirement
-
-        trait = TraitRequirement(category="passive", key=filtered[0], weight=5.0)
-        if not any(
-            t.key == trait.key and t.category == trait.category
-            for t in user_data.planner_traits
-        ):
-            user_data.planner_traits.append(trait)
-            user_data.save()
-            update_traits_display(user_data)
-
 
 def on_ability_filter(sender, app_data, user_data: AppState):
-    """Filter abilities listbox. Auto-add top result on Enter."""
+    """Filter abilities listbox."""
     filter_text = (app_data or "").lower()
     abilities = user_data.get_available_abilities()
     filtered = (
         [a for a in abilities if filter_text in a.lower()] if filter_text else abilities
     )
     dpg.configure_item("ability_listbox", items=filtered)
-
-    if app_data and filtered:
-        from mewgenics_scorer import TraitRequirement
-
-        trait = TraitRequirement(category="ability", key=filtered[0], weight=5.0)
-        if not any(
-            t.key == trait.key and t.category == trait.category
-            for t in user_data.planner_traits
-        ):
-            user_data.planner_traits.append(trait)
-            user_data.save()
-            update_traits_display(user_data)
 
 
 def on_add_mutation(sender, app_data, user_data: AppState):
@@ -369,6 +352,11 @@ def on_clear_traits(sender, app_data, user_data: AppState):
     user_data.planner_traits.clear()
     user_data.save()
     update_traits_display(user_data)
+
+
+def _is_favorable_trait(trait_key: str, planner_traits: list) -> bool:
+    """Check if a trait is in the favorable traits list."""
+    return any(t.key.lower() == trait_key.lower() for t in planner_traits)
 
 
 def on_toggle_gay(sender, app_data, user_data: tuple[int, AppState]):
@@ -797,18 +785,59 @@ def on_room_selected(sender, app_data, user_data):
 
 def build_details_tabs(selected_room, state):
     """Build the tabbed details view for a selected room."""
-    # Tab bar only (section title is already "Selected Room Details")
     dpg.add_tab_bar(parent="details_section", tag="details_tab_bar")
 
-    # Pairs tab
     with dpg.tab(label="Pairs", parent="details_tab_bar"):
         if selected_room.pairs:
             for pair in selected_room.pairs:
-                stats_a = sum(pair.cat_a.stat_base)
-                stats_b = sum(pair.cat_b.stat_base)
-                dpg.add_text(
-                    f"{pair.cat_a.name or 'Unnamed'} (S:{stats_a}) + {pair.cat_b.name or 'Unnamed'} (S:{stats_b})"
-                )
+                name_a = pair.cat_a.name or "Unnamed"
+                name_b = pair.cat_b.name or "Unnamed"
+                risk = pair.factors.risk_percent
+                risk_color = (255, 100, 100, 255) if risk > 15 else (100, 255, 100, 255)
+
+                with dpg.tree_node(label=f"{name_a} + {name_b}"):
+                    dpg.add_text(
+                        f"Quality: {pair.quality:.1f} | Risk: {risk:.0f}%",
+                        color=risk_color,
+                    )
+
+                    with dpg.group(horizontal=True):
+                        if pair.factors.mutual_lovers:
+                            dpg.add_text("[<3 Lovers]", color=(255, 150, 150, 255))
+                        libido = getattr(pair.factors, "libido_factor", 0)
+                        if libido > 0.6:
+                            dpg.add_text("[+ Libido]", color=(255, 200, 100, 255))
+                        agg = getattr(pair.factors, "aggression_factor", 0)
+                        if agg > 0.6:
+                            dpg.add_text("[- Aggro]", color=(100, 200, 255, 255))
+                        if risk > 10:
+                            dpg.add_text("[! Inbred]", color=(255, 100, 100, 255))
+
+                    if state.planner_traits:
+                        combined_traits = set()
+                        for cat in (pair.cat_a, pair.cat_b):
+                            combined_traits.update(
+                                t.lower() for t in (cat.mutations or [])
+                            )
+                            combined_traits.update(
+                                t.lower() for t in (cat.passive_abilities or [])
+                            )
+                            combined_traits.update(
+                                t.lower() for t in (cat.abilities or [])
+                            )
+
+                        hits = sum(
+                            1
+                            for pt in state.planner_traits
+                            if pt.key.lower() in combined_traits
+                        )
+                        total = len(state.planner_traits)
+
+                        if hits > 0:
+                            dpg.add_text(
+                                f"[* {hits}/{total} Favorable Traits]",
+                                color=(100, 255, 100, 255),
+                            )
         else:
             dpg.add_text("No breeding pairs in this room")
 
@@ -907,7 +936,10 @@ def show_cat_detail_window(cat, state):
                 desc = state.game_data.ability_descriptions.get(
                     ab.lower(), "No description"
                 )
-                dpg.add_text(f"  {ab}")
+                is_fav = _is_favorable_trait(ab, state.planner_traits)
+                color = (100, 255, 100, 255) if is_fav else (200, 200, 200, 255)
+                prefix = "[*] " if is_fav else "  "
+                dpg.add_text(f"{prefix}{ab}", color=color)
                 if desc:
                     dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
@@ -919,7 +951,10 @@ def show_cat_detail_window(cat, state):
                 desc = state.game_data.ability_descriptions.get(
                     ab.lower(), "No description"
                 )
-                dpg.add_text(f"  {ab}")
+                is_fav = _is_favorable_trait(ab, state.planner_traits)
+                color = (100, 255, 100, 255) if is_fav else (200, 200, 200, 255)
+                prefix = "[*] " if is_fav else "  "
+                dpg.add_text(f"{prefix}{ab}", color=color)
                 if desc:
                     dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
@@ -927,4 +962,7 @@ def show_cat_detail_window(cat, state):
             label=f"Mutations ({len(cat.mutations or [])})", default_open=False
         ):
             for mut in cat.mutations or []:
-                dpg.add_text(f"  {mut}")
+                is_fav = _is_favorable_trait(mut, state.planner_traits)
+                color = (100, 255, 100, 255) if is_fav else (200, 200, 200, 255)
+                prefix = "[*] " if is_fav else "  "
+                dpg.add_text(f"{prefix}{mut}", color=color)

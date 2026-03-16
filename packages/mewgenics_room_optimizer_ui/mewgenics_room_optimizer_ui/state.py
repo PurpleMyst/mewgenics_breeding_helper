@@ -224,25 +224,25 @@ class AppState:
         return [c for c in self.cats if c.status == "In House"]
 
     def get_available_mutations(self) -> list[str]:
-        """Extract unique mutations from all cats."""
+        """Extract unique mutations from alive cats."""
         mutations = set()
-        for cat in self.cats:
+        for cat in self.alive_cats:
             for m in cat.mutations or []:
                 mutations.add(m)
         return sorted(mutations)
 
     def get_available_passives(self) -> list[str]:
-        """Extract unique passive abilities from all cats."""
+        """Extract unique passive abilities from alive cats."""
         passives = set()
-        for cat in self.cats:
+        for cat in self.alive_cats:
             for p in cat.passive_abilities or []:
                 passives.add(p)
         return sorted(passives)
 
     def get_available_abilities(self) -> list[str]:
-        """Extract unique active abilities from all cats."""
+        """Extract unique active abilities from alive cats."""
         abilities = set()
-        for cat in self.cats:
+        for cat in self.alive_cats:
             for a in cat.abilities or []:
                 abilities.add(a)
         return sorted(abilities)
