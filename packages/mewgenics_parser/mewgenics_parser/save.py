@@ -1,4 +1,5 @@
 """Mewgenics save file parsing."""
+
 import sqlite3
 import struct
 import os
@@ -24,19 +25,19 @@ def _get_house_info(conn) -> dict:
     if not row or len(row[0]) < 8:
         return {}
     data = row[0]
-    count = struct.unpack_from('<I', data, 4)[0]
+    count = struct.unpack_from("<I", data, 4)[0]
     pos = 8
     result = {}
     for _ in range(count):
         if pos + 8 > len(data):
             break
-        cat_key = struct.unpack_from('<I', data, pos)[0]
+        cat_key = struct.unpack_from("<I", data, pos)[0]
         pos += 8
-        room_len = struct.unpack_from('<I', data, pos)[0]
+        room_len = struct.unpack_from("<I", data, pos)[0]
         pos += 8
         room_name = ""
         if room_len > 0:
-            room_name = data[pos:pos + room_len].decode('ascii', errors='ignore')
+            room_name = data[pos : pos + room_len].decode("ascii", errors="ignore")
             pos += room_len
         pos += 24
         result[cat_key] = room_name
@@ -46,16 +47,18 @@ def _get_house_info(conn) -> dict:
 def _get_adventure_keys(conn) -> set:
     keys = set()
     try:
-        row = conn.execute("SELECT data FROM files WHERE key = 'adventure_state'").fetchone()
+        row = conn.execute(
+            "SELECT data FROM files WHERE key = 'adventure_state'"
+        ).fetchone()
         if not row or len(row[0]) < 8:
             return keys
         data = row[0]
-        count = struct.unpack_from('<I', data, 4)[0]
+        count = struct.unpack_from("<I", data, 4)[0]
         pos = 8
         for _ in range(count):
             if pos + 8 > len(data):
                 break
-            val = struct.unpack_from('<Q', data, pos)[0]
+            val = struct.unpack_from("<Q", data, pos)[0]
             pos += 8
             cat_key = (val >> 32) & 0xFFFF_FFFF
             if cat_key:
@@ -91,7 +94,7 @@ def _parse_pedigree(conn) -> dict:
     ped_map: dict = {}
 
     for pos in range(8, len(data) - 31, 32):
-        cat_k, pa_k, pb_k, extra = struct.unpack_from('<QQQQ', data, pos)
+        cat_k, pa_k, pb_k, extra = struct.unpack_from("<QQQQ", data, pos)
         if cat_k == 0 or cat_k == NULL or cat_k > MAX_KEY:
             continue
         pa = int(pa_k) if pa_k != NULL and 0 < pa_k <= MAX_KEY else None
@@ -111,11 +114,11 @@ def _parse_pedigree(conn) -> dict:
 def parse_save(path: str, gpak_path: Optional[str] = None) -> SaveData:
     """
     Parse a Mewgenics save file (.sav).
-    
+
     Args:
         path: Path to the .sav file
         gpak_path: Optional path to .gpak file (currently unused)
-    
+
     Returns:
         SaveData containing parsed cats and metadata
     """
@@ -125,7 +128,9 @@ def parse_save(path: str, gpak_path: Optional[str] = None) -> SaveData:
         adv = _get_adventure_keys(conn)
         rows = conn.execute("SELECT key, data FROM cats").fetchall()
         ped_map = _parse_pedigree(conn)
-        current_day_row = conn.execute("SELECT data FROM properties WHERE key='current_day'").fetchone()
+        current_day_row = conn.execute(
+            "SELECT data FROM properties WHERE key='current_day'"
+        ).fetchone()
         current_day = current_day_row[0] if current_day_row else None
     finally:
         conn.close()
@@ -208,7 +213,7 @@ def parse_save(path: str, gpak_path: Optional[str] = None) -> SaveData:
 def find_save_files() -> list[str]:
     """
     Discover .sav files in standard Mewgenics save locations.
-    
+
     Returns:
         List of absolute paths to .sav files, sorted by modification time (newest first)
     """

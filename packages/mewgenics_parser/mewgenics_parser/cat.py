@@ -1,4 +1,5 @@
 """Cat data model for Mewgenics Breeding Manager."""
+
 from __future__ import annotations
 
 import struct
@@ -9,7 +10,11 @@ from typing import Optional
 
 from .binary import BinaryReader
 from .constants import STAT_NAMES, _JUNK_STRINGS, _IDENT_RE, ROOM_DISPLAY
-from .visual import _read_visual_mutation_entries, _visual_mutation_chip_items, _VISUAL_MUTATION_FIELDS
+from .visual import (
+    _read_visual_mutation_entries,
+    _visual_mutation_chip_items,
+    _VISUAL_MUTATION_FIELDS,
+)
 
 
 def _valid_str(s: Optional[str]) -> bool:
@@ -34,14 +39,16 @@ def _normalize_gender(raw_gender: Optional[str]) -> str:
     return "?"
 
 
-def _read_db_key_candidates(raw: bytes, self_key: int, offsets: tuple[int, ...], base_offset: int = 0) -> list[int]:
+def _read_db_key_candidates(
+    raw: bytes, self_key: int, offsets: tuple[int, ...], base_offset: int = 0
+) -> list[int]:
     keys: list[int] = []
     for off in offsets:
         pos = base_offset + off
         if pos < 0 or pos + 4 > len(raw):
             continue
         try:
-            value = struct.unpack_from('<I', raw, pos)[0]
+            value = struct.unpack_from("<I", raw, pos)[0]
         except Exception:
             continue
         if value in (0, 0xFFFF_FFFF) or value == self_key:
@@ -51,7 +58,9 @@ def _read_db_key_candidates(raw: bytes, self_key: int, offsets: tuple[int, ...],
     return keys
 
 
-def _scan_blob_for_parent_uids(raw: bytes, uid_set: frozenset, self_uid: int) -> tuple[int, int]:
+def _scan_blob_for_parent_uids(
+    raw: bytes, uid_set: frozenset, self_uid: int
+) -> tuple[int, int]:
     """
     Scan the decompressed blob byte-by-byte looking for two consecutive u64
     values (4-byte aligned) that are in uid_set and are not self_uid.
@@ -63,15 +72,15 @@ def _scan_blob_for_parent_uids(raw: bytes, uid_set: frozenset, self_uid: int) ->
     limit = min(1024, len(raw) - 16)
     i = 12  # skip breed_id(4) + own uid(8)
     while i <= limit - 16:
-        lo1, hi1 = struct.unpack_from('<II', raw, i)
+        lo1, hi1 = struct.unpack_from("<II", raw, i)
         v1 = lo1 + hi1 * 4_294_967_296
         if v1 in uid_set and v1 != self_uid:
-            lo2, hi2 = struct.unpack_from('<II', raw, i + 8)
+            lo2, hi2 = struct.unpack_from("<II", raw, i + 8)
             v2 = lo2 + hi2 * 4_294_967_296
             if v2 in uid_set and v2 != self_uid:
-                return v1, v2          # both parents found
+                return v1, v2  # both parents found
             if v2 == 0:
-                return v1, 0           # one parent (other unknown)
+                return v1, 0  # one parent (other unknown)
         i += 4  # u64-aligned steps
     return 0, 0
 
@@ -129,28 +138,35 @@ class Cat:
     _lover_uids: list = field(repr=False, default_factory=list)
     _hater_uids: list = field(repr=False, default_factory=list)
 
-    def __init__(self, blob: bytes, cat_key: int, house_info: dict, adventure_keys: set, current_day: Optional[int] = None):
-        uncomp_size = struct.unpack('<I', blob[:4])[0]
+    def __init__(
+        self,
+        blob: bytes,
+        cat_key: int,
+        house_info: dict,
+        adventure_keys: set,
+        current_day: Optional[int] = None,
+    ):
+        uncomp_size = struct.unpack("<I", blob[:4])[0]
         raw = lz4.block.decompress(blob[4:], uncompressed_size=uncomp_size)
-        r   = BinaryReader(raw)
-        self._raw = raw   # kept for parent-UID blob scan in parse_save
+        r = BinaryReader(raw)
+        self._raw = raw  # kept for parent-UID blob scan in parse_save
 
         self.db_key = cat_key
 
         # Location / status
         if cat_key in adventure_keys:
             self.status = "Adventure"
-            self.room   = "Adventure"
+            self.room = "Adventure"
         elif cat_key in house_info:
             self.status = "In House"
-            self.room   = house_info[cat_key]
+            self.room = house_info[cat_key]
         else:
             self.status = "Gone"
-            self.room   = ""
+            self.room = ""
 
         # Blob fields
         self.breed_id = r.u32()
-        self._uid_int = r.u64()            # cat's own unique id (seed)
+        self._uid_int = r.u64()  # cat's own unique id (seed)
         self.unique_id = hex(self._uid_int)
         self.name = r.utf16str()
 
@@ -178,7 +194,9 @@ class Cat:
         visual_entries = _read_visual_mutation_entries(T)
         visual_items = _visual_mutation_chip_items(visual_entries)
         self.visual_mutation_entries = visual_entries
-        self.visual_mutation_ids = [int(entry["mutation_id"]) for entry in visual_entries]
+        self.visual_mutation_ids = [
+            int(entry["mutation_id"]) for entry in visual_entries
+        ]
         visual_display_names = [text for text, _ in visual_items]
 
         self.gender_token_fields = tuple(r.u32() for _ in range(3))
@@ -199,25 +217,28 @@ class Cat:
         r.f64()
 
         self.stat_base = [r.u32() for _ in range(7)]
-        self.stat_mod  = [r.i32() for _ in range(7)]
-        self.stat_sec  = [r.i32() for _ in range(7)]
+        self.stat_mod = [r.i32() for _ in range(7)]
+        self.stat_sec = [r.i32() for _ in range(7)]
 
-        self.total_stats = {n: self.stat_base[i] + self.stat_mod[i] + self.stat_sec[i]
-                            for i, n in enumerate(STAT_NAMES)}
+        self.total_stats = {
+            n: self.stat_base[i] + self.stat_mod[i] + self.stat_sec[i]
+            for i, n in enumerate(STAT_NAMES)
+        }
 
         # Personality stats (age, aggression, libido, inbredness).
         # Libido and inbredness are doubles anchored after the post-name tag string.
         # Age is stored as creation_day at offset (blob_len - 103), then calculated as (current_day - creation_day).
-        self.age         = None
-        self.aggression  = None   # None = unknown
-        self.libido      = None
-        self.inbredness  = None
+        self.age = None
+        self.aggression = None  # None = unknown
+        self.libido = None
+        self.inbredness = None
+
         def _read_personality(offset: int) -> Optional[float]:
             i = personality_anchor + offset
             if i + 8 > len(raw):
                 return None
             try:
-                v = struct.unpack_from('<d', raw, i)[0]
+                v = struct.unpack_from("<d", raw, i)[0]
             except Exception:
                 return None
             if not math.isfinite(v) or not (0.0 <= v <= 1.0):
@@ -237,11 +258,15 @@ class Cat:
 
         # Relationship slots: direct db_key references relative to the byte
         # immediately after the optional post-name tag string.
-        self._lover_uids = _read_db_key_candidates(raw, self.db_key, (48,), base_offset=personality_anchor)
-        self._hater_uids = _read_db_key_candidates(raw, self.db_key, (72,), base_offset=personality_anchor)
+        self._lover_uids = _read_db_key_candidates(
+            raw, self.db_key, (48,), base_offset=personality_anchor
+        )
+        self._hater_uids = _read_db_key_candidates(
+            raw, self.db_key, (72,), base_offset=personality_anchor
+        )
         self.lovers = []
         self.haters = []
-        self.children = []   # direct offspring; assigned by parse_save
+        self.children = []  # direct offspring; assigned by parse_save
 
         # ── Ability run — anchored on "DefaultMove" ─────────────────────────
         # The ability block is a u64-length-prefixed ASCII identifier run.
@@ -255,13 +280,13 @@ class Cat:
         curr = r.pos
         run_start = -1
         for i in range(curr, min(curr + 600, len(raw) - 19)):
-            lo = struct.unpack_from('<I', raw, i)[0]
-            hi = struct.unpack_from('<I', raw, i + 4)[0]
+            lo = struct.unpack_from("<I", raw, i)[0]
+            hi = struct.unpack_from("<I", raw, i + 4)[0]
             if hi != 0 or not (1 <= lo <= 96):
                 continue
             try:
-                cand = raw[i + 8: i + 8 + lo].decode('ascii')
-                if cand == 'DefaultMove':
+                cand = raw[i + 8 : i + 8 + lo].decode("ascii")
+                if cand == "DefaultMove":
                     run_start = i
                     break
             except Exception:
@@ -292,7 +317,7 @@ class Cat:
             # Passive1 tier, then Passive2, Disorder1, Disorder2 each with tier.
             # Skip Passive1's tier first, then read 3 more string+tier pairs.
             try:
-                r.u32()   # passive1 tier — discard
+                r.u32()  # passive1 tier — discard
             except Exception:
                 pass
 
@@ -311,16 +336,18 @@ class Cat:
                     break
 
             self.passive_abilities = passives
-            self.equipment = []   # equipment parsing requires separate byte-marker logic
+            self.equipment = []  # equipment parsing requires separate byte-marker logic
 
         else:
             # Fallback: old heuristic scan for any uppercase-starting ASCII string
             found = -1
             for i in range(curr, min(curr + 500, len(raw) - 9)):
-                length = struct.unpack_from('<I', raw, i)[0]
-                if (0 < length < 64
-                        and struct.unpack_from('<I', raw, i + 4)[0] == 0
-                        and 65 <= raw[i + 8] <= 90):
+                length = struct.unpack_from("<I", raw, i)[0]
+                if (
+                    0 < length < 64
+                    and struct.unpack_from("<I", raw, i + 4)[0] == 0
+                    and 65 <= raw[i + 8] <= 90
+                ):
                     found = i
                     break
             if found != -1:
@@ -351,11 +378,23 @@ class Cat:
         if current_day is not None:
             try:
                 # Try positions from blob_len-100 to blob_len-110, preferring closer to -103
-                for offset_from_end in [103, 102, 104, 101, 105, 100, 106, 107, 108, 109, 110]:
+                for offset_from_end in [
+                    103,
+                    102,
+                    104,
+                    101,
+                    105,
+                    100,
+                    106,
+                    107,
+                    108,
+                    109,
+                    110,
+                ]:
                     pos = len(raw) - offset_from_end
                     if pos + 4 > len(raw) or pos < 0:
                         continue
-                    creation_day = struct.unpack_from('<I', raw, pos)[0]
+                    creation_day = struct.unpack_from("<I", raw, pos)[0]
                     # Valid creation_day should be between 0 and current_day
                     if 0 <= creation_day <= current_day:
                         age = current_day - creation_day
@@ -375,8 +414,10 @@ class Cat:
     @property
     def gender_display(self) -> str:
         g = (self.gender or "").strip().lower()
-        if g.startswith("male"):   return "M"
-        if g.startswith("female"): return "F"
+        if g.startswith("male"):
+            return "M"
+        if g.startswith("female"):
+            return "F"
         return "?"
 
     @property
