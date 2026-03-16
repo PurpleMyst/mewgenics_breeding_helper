@@ -1,6 +1,7 @@
 """Tests for room optimizer."""
 
 import pytest
+from inline_snapshot import snapshot
 from unittest.mock import MagicMock, patch
 
 from mewgenics_room_optimizer import (
@@ -15,6 +16,8 @@ from mewgenics_room_optimizer.optimizer import (
     _filter_cats,
     _generate_pairs,
 )
+
+from mewgenics_room_optimizer import OptimizationStats
 
 
 def make_mock_cat(
@@ -252,3 +255,127 @@ class TestOptimizationResultSchema:
             assert isinstance(room_result.room, RoomConfig)
             assert isinstance(room_result.cats, list)
             assert isinstance(room_result.pairs, list)
+
+
+class TestSnapshotResults:
+    """Snapshot tests for optimization results."""
+
+    @pytest.fixture
+    def mock_scorer(self):
+        with patch("mewgenics_room_optimizer.optimizer.calculate_pair_factors") as mock:
+            mock_factors = MagicMock()
+            mock_factors.risk_percent = 5.0
+            mock_factors.total_expected_stats = 35.0
+            mock_factors.expected_stats = [5.0] * 7
+            mock_factors.aggression_factor = 0.5
+            mock_factors.libido_factor = 0.5
+            mock_factors.trait_matches = []
+            mock.return_value = mock_factors
+            yield mock
+
+    def test_optimization_stats_snapshot(self, mock_scorer):
+        cats = [
+            make_mock_cat(1, gender="male"),
+            make_mock_cat(2, gender="female"),
+            make_mock_cat(3, gender="male"),
+            make_mock_cat(4, gender="female"),
+        ]
+        rooms = [
+            RoomConfig("test1", "Test 1", RoomType.BREEDING, 6),
+            RoomConfig("test2", "Test 2", RoomType.FIGHTING, None),
+            RoomConfig("test3", "Test 3", RoomType.GENERAL, 6),
+        ]
+        params = OptimizationParams(min_stats=10)
+
+        result = optimize(cats, rooms, params, {})
+
+        assert result.stats == snapshot(
+            OptimizationStats(
+                total_cats=4,
+                assigned_cats=4,
+                total_pairs=2,
+                breeding_rooms_used=1,
+                general_rooms_used=0,
+                avg_pair_quality=27.0,
+                avg_risk_percent=5.0,
+            )
+        )
+
+    def test_optimization_rooms_snapshot(self, mock_scorer):
+        cats = [
+            make_mock_cat(1, gender="male"),
+            make_mock_cat(2, gender="female"),
+            make_mock_cat(3, gender="male"),
+            make_mock_cat(4, gender="female"),
+        ]
+        rooms = [
+            RoomConfig("breeding", "Breeding Room", RoomType.BREEDING, 6),
+            RoomConfig("fighting", "Fighting Room", RoomType.FIGHTING, None),
+        ]
+        params = OptimizationParams()
+
+        result = optimize(cats, rooms, params, {})
+
+        room_summaries = [
+            {
+                "room_key": r.room.key,
+                "room_type": r.room.room_type.value,
+                "num_cats": len(r.cats),
+                "num_pairs": len(r.pairs),
+            }
+            for r in result.rooms
+        ]
+        assert room_summaries == snapshot(
+            [
+                {
+                    "room_key": "breeding",
+                    "room_type": "breeding",
+                    "num_cats": 4,
+                    "num_pairs": 2,
+                }
+            ]
+        )
+
+    def test_default_room_configs_snapshot(self):
+        assert DEFAULT_ROOM_CONFIGS == snapshot(
+            [
+                RoomConfig(
+                    key="Floor1_Large",
+                    display_name="Ground Floor Left",
+                    room_type=RoomType.FIGHTING,
+                ),
+                RoomConfig(
+                    key="Floor1_Small",
+                    display_name="Ground Floor Right",
+                    room_type=RoomType.BREEDING,
+                    max_cats=6,
+                ),
+                RoomConfig(
+                    key="Attic",
+                    display_name="Top Floor",
+                    room_type=RoomType.GENERAL,
+                    max_cats=6,
+                ),
+            ]
+        )
+
+    def test_empty_cats_result_snapshot(self, mock_scorer):
+        cats = []
+        rooms = [
+            RoomConfig("test1", "Test 1", RoomType.BREEDING, 6),
+        ]
+        params = OptimizationParams()
+
+        result = optimize(cats, rooms, params, {})
+
+        assert result.stats == snapshot(
+            OptimizationStats(
+                total_cats=0,
+                assigned_cats=0,
+                total_pairs=0,
+                breeding_rooms_used=0,
+                general_rooms_used=0,
+                avg_pair_quality=0.0,
+                avg_risk_percent=0.0,
+            )
+        )
