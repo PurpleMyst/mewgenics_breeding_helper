@@ -168,7 +168,7 @@ def build_traits_section(state: AppState):
                     dpg.add_listbox(
                         tag="mutation_listbox",
                         width=150,
-                        height=80,
+                        num_items=5,
                     )
                     dpg.add_button(
                         label="Add", callback=on_add_mutation, user_data=state
@@ -185,7 +185,7 @@ def build_traits_section(state: AppState):
                     dpg.add_listbox(
                         tag="passive_listbox",
                         width=150,
-                        height=80,
+                        num_items=5,
                     )
                     dpg.add_button(
                         label="Add", callback=on_add_passive, user_data=state
@@ -202,7 +202,7 @@ def build_traits_section(state: AppState):
                     dpg.add_listbox(
                         tag="ability_listbox",
                         width=150,
-                        height=80,
+                        num_items=5,
                     )
                     dpg.add_button(
                         label="Add", callback=on_add_ability, user_data=state
