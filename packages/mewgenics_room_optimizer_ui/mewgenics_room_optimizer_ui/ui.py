@@ -71,6 +71,7 @@ def build_toolbar(state: AppState):
             tag="optimize_button",
             callback=run_optimization,
             user_data=state,
+            enabled=False,
         )
 
 
@@ -97,12 +98,16 @@ def build_room_config_section(state: AppState):
                         default_value=room.display_name,
                         tag=f"room_name_{room.key}",
                         width=150,
+                        callback=on_room_config_changed,
+                        user_data=state,
                     )
                     dpg.add_combo(
                         room_types,
                         default_value=room.room_type.value,
                         tag=f"room_type_{room.key}",
                         width=100,
+                        callback=on_room_config_changed,
+                        user_data=state,
                     )
                     max_cats_val = "" if room.max_cats is None else str(room.max_cats)
                     dpg.add_input_text(
@@ -110,14 +115,9 @@ def build_room_config_section(state: AppState):
                         tag=f"room_max_{room.key}",
                         width=100,
                         hint="empty=unlimited",
+                        callback=on_room_config_changed,
+                        user_data=state,
                     )
-
-            dpg.add_button(
-                label="Update Rooms",
-                tag="update_rooms_button",
-                callback=on_update_rooms,
-                user_data=state,
-            )
 
 
 def build_params_section(state: AppState):
@@ -170,10 +170,11 @@ def build_traits_section(state: AppState):
                 with dpg.tab(label="Mutations"):
                     dpg.add_input_text(
                         tag="mutation_filter",
-                        hint="Filter...",
+                        hint="Filter... (Enter to add)",
                         width=-1,
                         callback=on_mutation_filter,
                         user_data=state,
+                        on_enter=True,
                     )
                     dpg.add_listbox(
                         tag="mutation_listbox",
@@ -186,10 +187,11 @@ def build_traits_section(state: AppState):
                 with dpg.tab(label="Passives"):
                     dpg.add_input_text(
                         tag="passive_filter",
-                        hint="Filter...",
+                        hint="Filter... (Enter to add)",
                         width=-1,
                         callback=on_passive_filter,
                         user_data=state,
+                        on_enter=True,
                     )
                     dpg.add_listbox(
                         tag="passive_listbox",
@@ -202,10 +204,11 @@ def build_traits_section(state: AppState):
                 with dpg.tab(label="Abilities"):
                     dpg.add_input_text(
                         tag="ability_filter",
-                        hint="Filter...",
+                        hint="Filter... (Enter to add)",
                         width=-1,
                         callback=on_ability_filter,
                         user_data=state,
+                        on_enter=True,
                     )
                     dpg.add_listbox(
                         tag="ability_listbox",
@@ -224,7 +227,7 @@ def build_traits_section(state: AppState):
 
 
 def on_mutation_filter(sender, app_data, user_data: AppState):
-    """Filter mutations listbox."""
+    """Filter mutations listbox. Auto-add top result on Enter."""
     filter_text = (app_data or "").lower()
     mutations = user_data.get_available_mutations()
     filtered = (
@@ -232,9 +235,21 @@ def on_mutation_filter(sender, app_data, user_data: AppState):
     )
     dpg.configure_item("mutation_listbox", items=filtered)
 
+    if app_data and filtered:
+        from mewgenics_scorer import TraitRequirement
+
+        trait = TraitRequirement(category="mutation", key=filtered[0], weight=5.0)
+        if not any(
+            t.key == trait.key and t.category == trait.category
+            for t in user_data.planner_traits
+        ):
+            user_data.planner_traits.append(trait)
+            user_data.save()
+            update_traits_display(user_data)
+
 
 def on_passive_filter(sender, app_data, user_data: AppState):
-    """Filter passives listbox."""
+    """Filter passives listbox. Auto-add top result on Enter."""
     filter_text = (app_data or "").lower()
     passives = user_data.get_available_passives()
     filtered = (
@@ -242,15 +257,39 @@ def on_passive_filter(sender, app_data, user_data: AppState):
     )
     dpg.configure_item("passive_listbox", items=filtered)
 
+    if app_data and filtered:
+        from mewgenics_scorer import TraitRequirement
+
+        trait = TraitRequirement(category="passive", key=filtered[0], weight=5.0)
+        if not any(
+            t.key == trait.key and t.category == trait.category
+            for t in user_data.planner_traits
+        ):
+            user_data.planner_traits.append(trait)
+            user_data.save()
+            update_traits_display(user_data)
+
 
 def on_ability_filter(sender, app_data, user_data: AppState):
-    """Filter abilities listbox."""
+    """Filter abilities listbox. Auto-add top result on Enter."""
     filter_text = (app_data or "").lower()
     abilities = user_data.get_available_abilities()
     filtered = (
         [a for a in abilities if filter_text in a.lower()] if filter_text else abilities
     )
     dpg.configure_item("ability_listbox", items=filtered)
+
+    if app_data and filtered:
+        from mewgenics_scorer import TraitRequirement
+
+        trait = TraitRequirement(category="ability", key=filtered[0], weight=5.0)
+        if not any(
+            t.key == trait.key and t.category == trait.category
+            for t in user_data.planner_traits
+        ):
+            user_data.planner_traits.append(trait)
+            user_data.save()
+            update_traits_display(user_data)
 
 
 def on_add_mutation(sender, app_data, user_data: AppState):
@@ -454,6 +493,7 @@ def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
             dpg.set_value(
                 "cat_count_text", f"Cats: {len(state.cats)} ({alive} in house)"
             )
+            dpg.configure_item("optimize_button", enabled=True)
             clear_results_table()
             init_traits_lists(state)
         except Exception as e:
@@ -498,6 +538,7 @@ def on_save_selected(sender, app_data, user_data: AppState):
         dpg.set_value(
             "cat_count_text", f"Cats: {len(user_data.cats)} ({alive} in house)"
         )
+        dpg.configure_item("optimize_button", enabled=True)
         clear_results_table()
         init_traits_lists(user_data)
     except Exception as e:
@@ -509,9 +550,12 @@ def save_config_callback(sender, app_data, user_data: AppState):
     user_data.save()
 
 
-def on_update_rooms(sender, app_data, user_data: AppState):
-    """Handle update rooms button click."""
+def on_room_config_changed(sender, app_data, user_data: AppState):
+    """Handle room config change - auto-save immediately."""
     from mewgenics_room_optimizer import RoomConfig, RoomType
+
+    is_valid = True
+    sender_tag = dpg.get_item_label(sender) or sender
 
     new_configs = []
     for room in user_data.room_configs:
@@ -523,8 +567,10 @@ def on_update_rooms(sender, app_data, user_data: AppState):
         if new_max_str.strip():
             try:
                 new_max = int(new_max_str)
+                dpg.configure_item(f"room_max_{room.key}", color=(255, 255, 255, 255))
             except ValueError:
-                pass
+                dpg.configure_item(f"room_max_{room.key}", color=(255, 100, 100, 255))
+                is_valid = False
 
         new_configs.append(
             RoomConfig(
@@ -535,11 +581,11 @@ def on_update_rooms(sender, app_data, user_data: AppState):
             )
         )
 
-    user_data.room_configs = new_configs
-    user_data.results = None
-    user_data.save()
-    clear_results_table()
-    dpg.set_value("status_text", "Rooms updated and saved. Run optimization to apply.")
+    if is_valid:
+        user_data.room_configs = new_configs
+        user_data.results = None
+        user_data.save()
+        clear_results_table()
 
 
 def exit_callback(sender, app_data, user_data):
@@ -587,12 +633,14 @@ def update_results_table(results, state):
     """Update the results table with optimization results."""
     clear_results_table()
 
-    for room in results.rooms:
+    for i, room in enumerate(results.rooms):
         avg_stats = 0.0
         avg_risk = 0.0
         if room.pairs:
             avg_stats = sum(p.quality for p in room.pairs) / len(room.pairs)
             avg_risk = sum(p.factors.risk_percent for p in room.pairs) / len(room.pairs)
+
+        row_color = (50, 30, 30, 255) if avg_risk > 15 else (0, 0, 0, 0)
 
         with dpg.table_row(parent="results_table"):
             dpg.add_selectable(
@@ -605,7 +653,13 @@ def update_results_table(results, state):
             dpg.add_text(str(len(room.cats)))
             dpg.add_text(str(len(room.pairs)))
             dpg.add_text(f"{avg_stats:.1f}")
-            dpg.add_text(f"{avg_risk:.0f}%")
+            dpg.add_text(
+                f"{avg_risk:.0f}%",
+                color=(255, 100, 100, 255) if avg_risk > 15 else (200, 200, 200, 255),
+            )
+
+        if avg_risk > 15:
+            dpg.highlight_table_row("results_table", i, row_color)
 
 
 def clear_results_table():
@@ -730,20 +784,36 @@ def show_cat_detail_window(cat, state):
     dpg.delete_item(container, children_only=True)
 
     with dpg.group(parent=container):
-        dpg.add_text(f"Name: {cat.name or 'Unnamed'}")
-        dpg.add_text(f"Gender: {cat.gender}")
-        dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
-        dpg.add_text(f"Status: {cat.status}")
-        dpg.add_text(f"Room: {cat.room or 'Unknown'}")
+        # Top half: Compact bio and stats in tables
+        with dpg.table(
+            tag="inspector_bio_table",
+            header_row=False,
+            borders_innerH=False,
+            borders_innerV=False,
+            borders_outerH=False,
+            borders_outerV=False,
+            rows=2,
+        ):
+            dpg.add_table_column(width_fixed=True)
+            dpg.add_table_column(width_fixed=True)
+            dpg.add_table_column(width_fixed=True)
+            dpg.add_table_column(width_fixed=True)
+            dpg.add_table_column(width_fixed=True)
+
+            with dpg.table_row():
+                dpg.add_text(f"Name: {cat.name or 'Unnamed'}")
+                dpg.add_text(f"Gender: {cat.gender}")
+                dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
+                dpg.add_text(f"Status: {cat.status}")
+                dpg.add_text(f"Room: {cat.room or 'Unknown'}")
+
+            with dpg.table_row():
+                for i, stat in enumerate(cat.stat_base):
+                    dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
 
         dpg.add_separator()
 
-        dpg.add_text("Base Stats:")
-        for i, stat in enumerate(cat.stat_base):
-            dpg.add_text(f"  {STAT_NAMES[i]}: {stat}")
-
-        dpg.add_separator()
-
+        # Bottom half: Vertical stack for traits (preserved)
         dpg.add_text("Active Abilities:")
         for ab in cat.abilities or []:
             desc = state.game_data.ability_descriptions.get(
