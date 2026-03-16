@@ -438,23 +438,24 @@ def on_room_selected(sender, app_data, user_data):
 
     clear_details_section()
 
-    details = dpg.get_item("details_section")
-    dpg.add_text(f"Room: {selected_room.room.display_name}", parent=details)
-    dpg.add_separator(parent=details)
+    dpg.add_text(f"Room: {selected_room.room.display_name}", parent="details_section")
+    dpg.add_separator(parent="details_section")
 
     if selected_room.pairs:
-        dpg.add_text("Breeding Pairs:", parent=details)
+        dpg.add_text("Breeding Pairs:", parent="details_section")
         for pair in selected_room.pairs:
             stats_a = sum(pair.cat_a.stat_base)
             stats_b = sum(pair.cat_b.stat_base)
             dpg.add_text(
                 f"  {pair.cat_a.name or 'Unnamed'} (S:{stats_a}) + {pair.cat_b.name or 'Unnamed'} (S:{stats_b})",
-                parent=details,
+                parent="details_section",
             )
-        dpg.add_separator(parent=details)
+        dpg.add_separator(parent="details_section")
 
     if selected_room.cats:
-        dpg.add_text(f"Unpaired Cats ({len(selected_room.cats)}):", parent=details)
+        dpg.add_text(
+            f"Unpaired Cats ({len(selected_room.cats)}):", parent="details_section"
+        )
         for cat in selected_room.cats:
             stats = sum(cat.stat_base)
             stat_str = "/".join(str(s) for s in cat.stat_base)
@@ -462,13 +463,13 @@ def on_room_selected(sender, app_data, user_data):
             mutations = ", ".join(cat.mutations or [])
             dpg.add_text(
                 f"  {cat.name or 'Unnamed'} [{cat.gender}] S:{stats}",
-                parent=details,
+                parent="details_section",
             )
             dpg.add_text(
                 f"    Stats: {stat_str}",
-                parent=details,
+                parent="details_section",
             )
             if abilities:
-                dpg.add_text(f"    Abilities: {abilities}", parent=details)
+                dpg.add_text(f"    Abilities: {abilities}", parent="details_section")
             if mutations:
-                dpg.add_text(f"    Mutations: {mutations}", parent=details)
+                dpg.add_text(f"    Mutations: {mutations}", parent="details_section")
