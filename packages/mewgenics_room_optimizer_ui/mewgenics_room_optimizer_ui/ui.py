@@ -10,16 +10,21 @@ from .state import AppState
 def build_ui(state: AppState):
     """Build all DPG UI components."""
 
-    with dpg.window(tag="main_window", label="Room Optimizer", width=1000, height=700):
+    with dpg.window(tag="main_window", label="Room Optimizer", width=1200, height=700):
         build_menu_bar(state)
-        build_saves_section(state)
         build_toolbar(state)
-        build_room_config_section(state)
-        build_params_section(state)
-        build_traits_section(state)
-        build_optimize_button(state)
-        build_results_section(state)
-        build_details_section(state)
+
+        with dpg.group(horizontal=True):
+            with dpg.group(width=450):
+                build_saves_section(state)
+                build_room_config_section(state)
+                build_params_section(state)
+                build_traits_section(state)
+                build_optimize_button(state)
+
+            with dpg.group():
+                build_results_section(state)
+                build_details_section(state)
 
     build_themes()
 
@@ -559,6 +564,7 @@ def run_optimization(sender, app_data, user_data: AppState):
     avoid_lovers = dpg.get_value("avoid_lovers")
     prefer_low_aggression = dpg.get_value("prefer_low_aggression")
     prefer_high_libido = dpg.get_value("prefer_high_libido")
+    print(user_data.planner_traits)
 
     params = OptimizationParams(
         min_stats=min_stats,
