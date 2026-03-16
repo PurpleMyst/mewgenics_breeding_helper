@@ -85,4 +85,6 @@ DEFAULT_ROOM_CONFIGS = [
     RoomConfig("Floor1_Large", "Ground Floor Left", RoomType.FIGHTING, None),
     RoomConfig("Floor1_Small", "Ground Floor Right", RoomType.BREEDING, 6),
     RoomConfig("Attic", "Top Floor", RoomType.GENERAL, 6),
+    RoomConfig("Floor2_Large", "Second Floor Left", RoomType.NONE, None),
+    RoomConfig("Floor2_Small", "Second Floor Right", RoomType.NONE, None),
 ]

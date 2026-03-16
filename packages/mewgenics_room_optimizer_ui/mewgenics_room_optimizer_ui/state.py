@@ -125,7 +125,25 @@ class AppState:
     def from_config(cls) -> "AppState":
         """Create AppState from saved configuration."""
         config = load_config()
-        room_configs = room_configs_from_dict(config.get("rooms", []))
+        saved_rooms = {r["key"]: r for r in config.get("rooms", [])}
+
+        room_configs = []
+        for default in DEFAULT_ROOM_CONFIGS:
+            if default.key in saved_rooms:
+                saved = saved_rooms[default.key]
+                room_configs.append(
+                    RoomConfig(
+                        key=default.key,
+                        display_name=saved.get("display_name", default.display_name),
+                        room_type=RoomType(
+                            saved.get("room_type", default.room_type.value)
+                        ),
+                        max_cats=saved.get("max_cats", default.max_cats),
+                    )
+                )
+            else:
+                room_configs.append(default)
+
         return cls(
             room_configs=room_configs,
             last_save_path=config.get("last_save_path"),
@@ -137,30 +155,6 @@ class AppState:
             "rooms": room_configs_to_dict(self.room_configs),
             "last_save_path": self.last_save_path,
         }
-
-    def set_rooms_from_cats(self):
-        """Extract unique rooms from cats and add to existing room configs."""
-        room_keys = set()
-        for cat in self.cats:
-            if cat.room:
-                room_keys.add(cat.room)
-
-        if not room_keys:
-            return
-
-        existing_keys = {r.key for r in self.room_configs}
-
-        for key in sorted(room_keys):
-            if key not in existing_keys:
-                display_name = key.replace("_", " ").title()
-                self.room_configs.append(
-                    RoomConfig(
-                        key=key,
-                        display_name=display_name,
-                        room_type=RoomType.BREEDING,
-                        max_cats=6,
-                    )
-                )
 
     def save(self):
         """Save current state to disk."""
