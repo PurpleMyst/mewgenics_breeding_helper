@@ -1,10 +1,26 @@
 """DearPyGui UI components for room optimizer."""
 
 import dearpygui.dearpygui as dpg
+from rapidfuzz import fuzz
 
 from mewgenics_room_optimizer import RoomType
 
 from .state import AppState
+
+
+FUZZY_THRESHOLD = 60
+
+
+def fuzzy_match(query: str, choices: list[str]) -> list[str]:
+    """Return items matching query with score above threshold."""
+    if not query:
+        return choices
+    query_lower = query.lower()
+    return [
+        c
+        for c in choices
+        if fuzz.partial_ratio(query_lower, c.lower()) >= FUZZY_THRESHOLD
+    ]
 
 
 def build_ui(state: AppState):
@@ -27,8 +43,13 @@ def build_ui(state: AppState):
                 build_traits_section(state)
 
             with dpg.child_window(border=False):
-                build_results_section(state)
-                build_details_section(state)
+                with dpg.tab_bar():
+                    with dpg.tab(label="Results"):
+                        build_results_tab(state)
+                    with dpg.tab(label="All Cats"):
+                        build_all_cats_tab(state)
+
+                build_inspector_section(state)
 
     build_themes()
 
@@ -319,12 +340,10 @@ def _extract_trait_key(formatted: str) -> str:
 
 
 def on_mutation_filter(sender, app_data, user_data: AppState):
-    """Filter mutations listbox."""
-    filter_text = (app_data or "").lower()
+    """Filter mutations listbox with fuzzy matching."""
+    filter_text = app_data or ""
     mutations = user_data.get_available_mutations()
-    filtered = (
-        [m for m in mutations if filter_text in m.lower()] if filter_text else mutations
-    )
+    filtered = fuzzy_match(filter_text, mutations)
     formatted = [
         _format_trait_with_description(m, user_data.game_data) for m in filtered
     ]
@@ -332,12 +351,10 @@ def on_mutation_filter(sender, app_data, user_data: AppState):
 
 
 def on_passive_filter(sender, app_data, user_data: AppState):
-    """Filter passives listbox."""
-    filter_text = (app_data or "").lower()
+    """Filter passives listbox with fuzzy matching."""
+    filter_text = app_data or ""
     passives = user_data.get_available_passives()
-    filtered = (
-        [p for p in passives if filter_text in p.lower()] if filter_text else passives
-    )
+    filtered = fuzzy_match(filter_text, passives)
     formatted = [
         _format_trait_with_description(p, user_data.game_data) for p in filtered
     ]
@@ -345,16 +362,39 @@ def on_passive_filter(sender, app_data, user_data: AppState):
 
 
 def on_ability_filter(sender, app_data, user_data: AppState):
-    """Filter abilities listbox."""
-    filter_text = (app_data or "").lower()
+    """Filter abilities listbox with fuzzy matching."""
+    filter_text = app_data or ""
     abilities = user_data.get_available_abilities()
-    filtered = (
-        [a for a in abilities if filter_text in a.lower()] if filter_text else abilities
-    )
+    filtered = fuzzy_match(filter_text, abilities)
     formatted = [
         _format_trait_with_description(a, user_data.game_data) for a in filtered
     ]
     dpg.configure_item("ability_listbox", items=formatted)
+
+
+def on_cat_name_filter(sender, app_data, user_data: AppState):
+    """Filter All Cats table by name with fuzzy matching."""
+    filter_text = app_data or ""
+    update_all_cats_table(
+        user_data, filter_text, dpg.get_value("cat_trait_filter") or ""
+    )
+
+
+def on_cat_trait_filter(sender, app_data, user_data: AppState):
+    """Filter All Cats table by trait with fuzzy matching."""
+    filter_text = app_data or ""
+    update_all_cats_table(
+        user_data, dpg.get_value("cat_name_filter") or "", filter_text
+    )
+
+
+def on_toggle_show_all_cats(sender, app_data, user_data: AppState):
+    """Toggle showing non-In-House cats."""
+    update_all_cats_table(
+        user_data,
+        dpg.get_value("cat_name_filter") or "",
+        dpg.get_value("cat_trait_filter") or "",
+    )
 
 
 def on_add_mutation(sender, app_data, user_data: AppState):
@@ -493,6 +533,92 @@ def update_traits_display(state: AppState):
             )
 
 
+def _cat_has_favorable_trait(cat, planner_traits: list) -> bool:
+    """Check if cat has any favorable trait from planner."""
+    for trait in planner_traits:
+        if trait.category == "mutation" and trait.key in (cat.mutations or []):
+            return True
+        if trait.category == "passive" and trait.key in (cat.passive_abilities or []):
+            return True
+        if trait.category == "ability" and trait.key in (cat.abilities or []):
+            return True
+    return False
+
+
+def update_all_cats_table(
+    state: AppState, name_filter: str = "", trait_filter: str = ""
+):
+    """Update the All Cats table with filtered cats."""
+    table = "all_cats_table"
+    placeholder = "all_cats_placeholder"
+
+    if not dpg.does_item_exist(table):
+        return
+
+    children = dpg.get_item_children(table)
+    if children and 1 in children:
+        for row in children[1]:
+            dpg.delete_item(row)
+
+    show_all = dpg.get_value("show_all_cats")
+    cats = state.cats if show_all else state.alive_cats
+
+    name_filtered = fuzzy_match(name_filter, [c.name for c in cats])
+    name_filtered_set = set(name_filtered)
+
+    filtered_cats = [c for c in cats if c.name in name_filtered_set]
+
+    if trait_filter:
+        trait_filtered = []
+        for cat in filtered_cats:
+            all_traits = []
+            all_traits.extend(cat.mutations or [])
+            all_traits.extend(cat.passive_abilities or [])
+            all_traits.extend(cat.abilities or [])
+            if fuzzy_match(trait_filter, all_traits):
+                trait_filtered.append(cat)
+        filtered_cats = trait_filtered
+
+    if not filtered_cats:
+        dpg.show_item(placeholder)
+        return
+
+    dpg.hide_item(placeholder)
+
+    for cat in filtered_cats:
+        total_stats = sum(cat.stat_base)
+        sex_display = (
+            cat.gender.value if hasattr(cat.gender, "value") else str(cat.gender)
+        )
+
+        age = cat.age
+        if age is None:
+            age = 0
+        age = min(age, 100)
+        if hasattr(cat, "eternal_youth") and cat.eternal_youth:
+            age_display = f"{age} [EY]"
+        else:
+            age_display = str(age)
+
+        status = cat.status if cat.status else "Unknown"
+
+        has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
+        trait_badge = "[*] " if has_fav else ""
+
+        with dpg.table_row(parent=table):
+            dpg.add_selectable(
+                label=cat.name,
+                span_columns=True,
+                callback=on_all_cats_cat_selected,
+                user_data=(cat.db_key, state),
+            )
+            dpg.add_text(sex_display)
+            dpg.add_text(age_display)
+            dpg.add_text(str(total_stats))
+            dpg.add_text(status)
+            dpg.add_text(trait_badge)
+
+
 def on_decrement_weight(sender, app_data, user_data: tuple[int, AppState]):
     """Decrement trait weight."""
     index, state = user_data
@@ -509,8 +635,8 @@ def on_increment_weight(sender, app_data, user_data: tuple[int, AppState]):
     update_traits_display(state)
 
 
-def build_results_section(state: AppState):
-    """Build the results section."""
+def build_results_tab(state: AppState):
+    """Build the results tab with room summary and details."""
     with dpg.collapsing_header(label="Results", default_open=True):
         with dpg.child_window(height=200, border=True, tag="results_section"):
             with dpg.table(
@@ -528,15 +654,59 @@ def build_results_section(state: AppState):
 
             dpg.add_text("Run optimization to see results", tag="results_placeholder")
 
-
-def build_details_section(state: AppState):
-    """Build the details and inspector panels."""
     with dpg.collapsing_header(label="Room Details", default_open=True):
         with dpg.child_window(height=200, border=True, tag="details_section"):
             dpg.add_text(
                 "Select a room from results to see details", tag="details_placeholder"
             )
 
+
+def build_all_cats_tab(state: AppState):
+    """Build the All Cats tab with searchable cat table."""
+    with dpg.collapsing_header(label="All Cats", default_open=True):
+        with dpg.child_window(height=350, border=True, tag="all_cats_section"):
+            with dpg.group(horizontal=True):
+                dpg.add_input_text(
+                    tag="cat_name_filter",
+                    hint="Filter by name...",
+                    width=150,
+                    callback=on_cat_name_filter,
+                    user_data=state,
+                )
+                dpg.add_input_text(
+                    tag="cat_trait_filter",
+                    hint="Filter by trait...",
+                    width=150,
+                    callback=on_cat_trait_filter,
+                    user_data=state,
+                )
+                dpg.add_checkbox(
+                    tag="show_all_cats",
+                    label="Show non-In-House",
+                    default_value=False,
+                    callback=on_toggle_show_all_cats,
+                    user_data=state,
+                )
+
+            with dpg.table(
+                tag="all_cats_table",
+                header_row=True,
+                borders_innerH=True,
+                row_background=True,
+                height=280,
+            ):
+                dpg.add_table_column(label="Name", width_stretch=True)
+                dpg.add_table_column(label="Sex", width_fixed=True)
+                dpg.add_table_column(label="Age", width_fixed=True)
+                dpg.add_table_column(label="Stats", width_fixed=True)
+                dpg.add_table_column(label="Status", width_fixed=True)
+                dpg.add_table_column(label="Traits", width_stretch=True)
+
+            dpg.add_text("Load a save to see cats", tag="all_cats_placeholder")
+
+
+def build_inspector_section(state: AppState):
+    """Build the inspector panel."""
     with dpg.collapsing_header(label="Inspector", default_open=True):
         with dpg.child_window(border=True, tag="inspector_section"):
             dpg.add_text("Select a cat to inspect", tag="inspector_placeholder")
@@ -656,6 +826,7 @@ def on_save_selected(sender, app_data, user_data: AppState):
         dpg.configure_item("optimize_button", enabled=True)
         clear_results_table()
         init_traits_lists(user_data)
+        update_all_cats_table(user_data)
     except Exception as e:
         print(f"Error loading save: {e}")
 
@@ -837,6 +1008,23 @@ def clear_inspector():
     dpg.hide_item(container)
 
 
+def on_all_cats_cat_selected(sender, app_data, user_data):
+    """Handle cat selection in All Cats table."""
+    db_key, state = user_data
+
+    cat = None
+    for c in state.cats:
+        if c.db_key == db_key:
+            cat = c
+            break
+
+    if not cat:
+        return
+
+    state.selected_cat_db_key = db_key
+    show_cat_detail_window(cat, state)
+
+
 def on_room_selected(sender, app_data, user_data):
     """Handle room selection in results table."""
     selected_key, state = user_data
@@ -959,6 +1147,7 @@ def build_details_tabs(selected_room, state):
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(label="Stats", width_fixed=True)
+                dpg.add_table_column(label="Traits", width_fixed=True)
 
                 for cat in all_cats:
                     is_ey = cat in selected_room.eternal_youth_cats
@@ -967,9 +1156,14 @@ def build_details_tabs(selected_room, state):
                         cat_name = f"{cat_name} [EY]"
                     total_stats = sum(cat.stat_base)
                     age = cat.age if cat.age is not None else "-"
+                    if age != "-":
+                        age = min(age, 100)
                     name_color = (
                         (0, 255, 255, 255) if is_ey else (255, 255, 255, 255)
                     )  # Teal for EY
+
+                    has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
+                    trait_badge = "[*]" if has_fav else ""
 
                     with dpg.table_row():
                         dpg.add_selectable(
@@ -982,6 +1176,12 @@ def build_details_tabs(selected_room, state):
                         dpg.add_text(cat.gender)
                         dpg.add_text(str(age))
                         dpg.add_text(str(total_stats))
+                        dpg.add_text(
+                            trait_badge,
+                            color=(100, 255, 100, 255)
+                            if has_fav
+                            else (150, 150, 150, 255),
+                        )
         else:
             dpg.add_text("No cats in this room")
 
