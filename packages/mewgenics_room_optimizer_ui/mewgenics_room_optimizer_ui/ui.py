@@ -10,6 +10,11 @@ from .state import AppState
 def build_ui(state: AppState):
     """Build all DPG UI components."""
 
+    with dpg.handler_registry():
+        dpg.add_key_press_handler(
+            dpg.mvKey_Return, callback=on_global_enter, user_data=state
+        )
+
     with dpg.window(tag="main_window", label="Room Optimizer", width=1200, height=700):
         build_menu_bar(state)
         build_toolbar(state)
@@ -170,11 +175,10 @@ def build_traits_section(state: AppState):
                 with dpg.tab(label="Mutations"):
                     dpg.add_input_text(
                         tag="mutation_filter",
-                        hint="Filter... (Enter to add)",
+                        hint="Filter...",
                         width=-1,
                         callback=on_mutation_filter,
                         user_data=state,
-                        on_enter=True,
                     )
                     dpg.add_listbox(
                         tag="mutation_listbox",
@@ -187,11 +191,10 @@ def build_traits_section(state: AppState):
                 with dpg.tab(label="Passives"):
                     dpg.add_input_text(
                         tag="passive_filter",
-                        hint="Filter... (Enter to add)",
+                        hint="Filter...",
                         width=-1,
                         callback=on_passive_filter,
                         user_data=state,
-                        on_enter=True,
                     )
                     dpg.add_listbox(
                         tag="passive_listbox",
@@ -204,11 +207,10 @@ def build_traits_section(state: AppState):
                 with dpg.tab(label="Abilities"):
                     dpg.add_input_text(
                         tag="ability_filter",
-                        hint="Filter... (Enter to add)",
+                        hint="Filter...",
                         width=-1,
                         callback=on_ability_filter,
                         user_data=state,
-                        on_enter=True,
                     )
                     dpg.add_listbox(
                         tag="ability_listbox",
@@ -461,7 +463,21 @@ def build_themes():
             dpg.add_theme_color(dpg.mvThemeCol_Button, (60, 120, 200, 255))
             dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (80, 140, 220, 255))
 
+    with dpg.theme(tag="input_error_theme"):
+        with dpg.theme_component(dpg.mvInputText):
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (150, 50, 50, 255))
+
     dpg.bind_theme(global_theme)
+
+
+def on_global_enter(sender, app_data, user_data):
+    """Check which filter is active when Enter is pressed and trigger add."""
+    if dpg.is_item_active("mutation_filter"):
+        on_add_mutation(None, None, user_data)
+    elif dpg.is_item_active("passive_filter"):
+        on_add_passive(None, None, user_data)
+    elif dpg.is_item_active("ability_filter"):
+        on_add_ability(None, None, user_data)
 
 
 def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
@@ -567,10 +583,12 @@ def on_room_config_changed(sender, app_data, user_data: AppState):
         if new_max_str.strip():
             try:
                 new_max = int(new_max_str)
-                dpg.configure_item(f"room_max_{room.key}", color=(255, 255, 255, 255))
+                dpg.bind_item_theme(f"room_max_{room.key}", 0)
             except ValueError:
-                dpg.configure_item(f"room_max_{room.key}", color=(255, 100, 100, 255))
+                dpg.bind_item_theme(f"room_max_{room.key}", "input_error_theme")
                 is_valid = False
+        else:
+            dpg.bind_item_theme(f"room_max_{room.key}", 0)
 
         new_configs.append(
             RoomConfig(
@@ -687,6 +705,8 @@ def clear_inspector():
     container = "inspector_container"
     if dpg.does_item_exist(container):
         dpg.delete_item(container, children_only=True)
+    dpg.show_item("inspector_placeholder")
+    dpg.hide_item(container)
 
 
 def on_room_selected(sender, app_data, user_data):
@@ -781,6 +801,9 @@ def show_cat_detail_window(cat, state):
     if not dpg.does_item_exist(container):
         return
 
+    dpg.hide_item("inspector_placeholder")
+    dpg.show_item(container)
+
     dpg.delete_item(container, children_only=True)
 
     with dpg.group(parent=container):
@@ -792,7 +815,6 @@ def show_cat_detail_window(cat, state):
             borders_innerV=False,
             borders_outerH=False,
             borders_outerV=False,
-            rows=2,
         ):
             dpg.add_table_column(width_fixed=True)
             dpg.add_table_column(width_fixed=True)
