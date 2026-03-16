@@ -98,7 +98,7 @@ def build_room_config_section(state: AppState):
                 dpg.add_input_text(
                     default_value=max_cats_val,
                     tag=f"room_max_{room.key}",
-                    width=60,
+                    width=100,
                     hint="empty=unlimited",
                 )
 
@@ -225,12 +225,14 @@ def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
             state.cats = save_data.cats
             state.last_save_path = newest
             state.results = None
+            state.set_rooms_from_cats()
 
             dpg.set_value("saves_listbox", save_names[0])
             dpg.set_value(
                 "status_text", f"Loaded: {newest.split('\\')[-1].split('/')[-1]}"
             )
             dpg.set_value("cat_count_text", f"Cats: {len(state.cats)}")
+            rebuild_room_config_table(state)
             clear_results_table()
         except Exception as e:
             print(f"Error loading save: {e}")
@@ -255,9 +257,11 @@ def on_save_selected(sender, app_data, user_data: AppState):
         user_data.cats = save_data.cats
         user_data.last_save_path = filepath
         user_data.results = None
+        user_data.set_rooms_from_cats()
 
         dpg.set_value("status_text", f"Loaded: {selected_name}")
         dpg.set_value("cat_count_text", f"Cats: {len(user_data.cats)}")
+        rebuild_room_config_table(user_data)
         clear_results_table()
     except Exception as e:
         print(f"Error loading save: {e}")
@@ -266,6 +270,39 @@ def on_save_selected(sender, app_data, user_data: AppState):
 def save_config_callback(sender, app_data, user_data: AppState):
     """Save configuration to disk."""
     user_data.save()
+
+
+def rebuild_room_config_table(state: AppState):
+    """Rebuild the room config table with current room configs."""
+    table = "room_config_table"
+    if dpg.does_item_exist(table):
+        children = dpg.get_item_children(table)
+        if children and 1 in children:
+            for row in children[1]:
+                dpg.delete_item(row)
+
+    room_types = ["breeding", "fighting", "general", "none"]
+    for room in state.room_configs:
+        with dpg.table_row(parent=table):
+            dpg.add_text(room.key, tag=f"room_key_{room.key}")
+            dpg.add_input_text(
+                default_value=room.display_name,
+                tag=f"room_name_{room.key}",
+                width=150,
+            )
+            dpg.add_combo(
+                room_types,
+                default_value=room.room_type.value,
+                tag=f"room_type_{room.key}",
+                width=100,
+            )
+            max_cats_val = "" if room.max_cats is None else str(room.max_cats)
+            dpg.add_input_text(
+                default_value=max_cats_val,
+                tag=f"room_max_{room.key}",
+                width=100,
+                hint="empty=unlimited",
+            )
 
 
 def on_update_rooms(sender, app_data, user_data: AppState):
@@ -336,10 +373,10 @@ def run_optimization(sender, app_data, user_data: AppState):
     )
     user_data.results = results
 
-    update_results_table(results)
+    update_results_table(results, user_data)
 
 
-def update_results_table(results):
+def update_results_table(results, state):
     """Update the results table with optimization results."""
     clear_results_table()
 
@@ -355,7 +392,7 @@ def update_results_table(results):
                 label=room.room.display_name,
                 span_columns=True,
                 callback=on_room_selected,
-                user_data=room.room.key,
+                user_data=(room.room.key, state),
             )
             dpg.add_text(str(len(room.cats)))
             dpg.add_text(str(len(room.pairs)))
@@ -385,8 +422,7 @@ def clear_details_section():
 
 def on_room_selected(sender, app_data, user_data):
     """Handle room selection in results table."""
-    selected_key = user_data
-    state = user_data
+    selected_key, state = user_data
 
     if not state.results:
         return
