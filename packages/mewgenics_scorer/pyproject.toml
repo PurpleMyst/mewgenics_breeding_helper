@@ -1,0 +1,11 @@
+[project]
+name = "mewgenics_scorer"
+version = "0.1.0"
+description = "Pair scoring factors for Mewgenics breeding optimization"
+requires-python = ">=3.13"
+dependencies = [
+    "mewgenics_parser",
+]
+
+[tool.uv.sources]
+mewgenics_parser = { workspace = true }

@@ -6,6 +6,7 @@ requires-python = ">=3.14"
 members = [
     "mewgenics-breeding-helper",
     "mewgenics-parser",
+    "mewgenics-scorer",
 ]
 
 [[package]]
@@ -123,12 +124,14 @@ source = { virtual = "." }
 dependencies = [
     { name = "dearpygui" },
     { name = "mewgenics-parser" },
+    { name = "mewgenics-scorer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "dearpygui", specifier = ">=2.2" },
     { name = "mewgenics-parser", editable = "packages/mewgenics_parser" },
+    { name = "mewgenics-scorer", editable = "packages/mewgenics_scorer" },
 ]
 
 [[package]]
@@ -154,6 +157,17 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
 ]
 provides-extras = ["test"]
+
+[[package]]
+name = "mewgenics-scorer"
+version = "0.1.0"
+source = { editable = "packages/mewgenics_scorer" }
+dependencies = [
+    { name = "mewgenics-parser" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "mewgenics-parser", editable = "packages/mewgenics_parser" }]
 
 [[package]]
 name = "packaging"

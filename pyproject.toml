@@ -4,11 +4,19 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "dearpygui>=2.2",
-    "mewgenics_parser"
+    "mewgenics_parser",
+    "mewgenics_scorer",
 ]
 
 [tool.uv.sources]
 mewgenics_parser = { workspace = true }
+mewgenics_scorer = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "packages/mewgenics_scorer",
+    "packages/mewgenics_parser",
+]
