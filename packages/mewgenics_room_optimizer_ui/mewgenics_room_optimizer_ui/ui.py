@@ -434,10 +434,11 @@ def update_traits_display(state: AppState):
             trait_text = dpg.add_text(
                 f"[{int(trait.weight)}] {trait.category}: {trait.key}"
             )
+            desc = state.game_data.ability_descriptions.get(
+                trait.key.lower(), "No description"
+            )
             with dpg.tooltip(trait_text):
-                dpg.add_text(
-                    f"Category: {trait.category}\nWeight: {int(trait.weight)}/10\nTrait: {trait.key}"
-                )
+                dpg.add_text(desc if desc else "No description")
             dpg.add_button(
                 label="-",
                 width=25,
@@ -843,55 +844,68 @@ def build_details_tabs(selected_room, state):
 
     with dpg.tab(label="Pairs", parent="details_tab_bar"):
         if selected_room.pairs:
-            for pair in selected_room.pairs:
-                name_a = pair.cat_a.name or "Unnamed"
-                name_b = pair.cat_b.name or "Unnamed"
-                risk = pair.factors.risk_percent
-                risk_color = (255, 100, 100, 255) if risk > 15 else (100, 255, 100, 255)
+            with dpg.table(
+                tag="pairs_detail_table",
+                header_row=True,
+                borders_innerH=True,
+                row_background=True,
+            ):
+                dpg.add_table_column(label="Names", width_stretch=True)
+                dpg.add_table_column(label="Quality", width_fixed=True)
+                dpg.add_table_column(label="Risk", width_fixed=True)
+                dpg.add_table_column(label="Badges", width_stretch=True)
 
-                with dpg.tree_node(label=f"{name_a} + {name_b}"):
-                    dpg.add_text(
-                        f"Quality: {pair.quality:.1f} | Risk: {risk:.0f}%",
-                        color=risk_color,
+                for pair in selected_room.pairs:
+                    name_a = pair.cat_a.name or "Unnamed"
+                    name_b = pair.cat_b.name or "Unnamed"
+                    risk = pair.factors.risk_percent
+                    risk_color = (
+                        (255, 100, 100, 255) if risk > 15 else (100, 255, 100, 255)
                     )
 
-                    with dpg.group(horizontal=True):
-                        if pair.factors.mutual_lovers:
-                            dpg.add_text("[<3 Lovers]", color=(255, 150, 150, 255))
-                        libido = getattr(pair.factors, "libido_factor", 0)
-                        if libido > 0.6:
-                            dpg.add_text("[+ Libido]", color=(255, 200, 100, 255))
-                        agg = getattr(pair.factors, "aggression_factor", 0)
-                        if agg > 0.6:
-                            dpg.add_text("[- Aggro]", color=(100, 200, 255, 255))
-                        if risk > 10:
-                            dpg.add_text("[! Inbred]", color=(255, 100, 100, 255))
-
-                    if state.planner_traits:
-                        combined_traits = set()
-                        for cat in (pair.cat_a, pair.cat_b):
-                            combined_traits.update(
-                                t.lower() for t in (cat.mutations or [])
-                            )
-                            combined_traits.update(
-                                t.lower() for t in (cat.passive_abilities or [])
-                            )
-                            combined_traits.update(
-                                t.lower() for t in (cat.abilities or [])
-                            )
-
-                        hits = sum(
-                            1
-                            for pt in state.planner_traits
-                            if pt.key.lower() in combined_traits
+                    combined_traits = set()
+                    for cat in (pair.cat_a, pair.cat_b):
+                        combined_traits.update(t.lower() for t in (cat.mutations or []))
+                        combined_traits.update(
+                            t.lower() for t in (cat.passive_abilities or [])
                         )
-                        total = len(state.planner_traits)
+                        combined_traits.update(t.lower() for t in (cat.abilities or []))
 
-                        if hits > 0:
-                            dpg.add_text(
-                                f"[* {hits}/{total} Favorable Traits]",
-                                color=(100, 255, 100, 255),
-                            )
+                    hits = sum(
+                        1
+                        for pt in state.planner_traits
+                        if pt.key.lower() in combined_traits
+                    )
+                    total = len(state.planner_traits)
+
+                    with dpg.table_row():
+                        dpg.add_text(f"{name_a} + {name_b}")
+                        dpg.add_text(f"{pair.quality:.1f}")
+                        dpg.add_text(f"{risk:.0f}%", color=risk_color)
+
+                        with dpg.group(horizontal=True):
+                            if pair.factors.mutual_lovers:
+                                badge = dpg.add_text("[<3]")
+                                with dpg.tooltip(badge):
+                                    dpg.add_text("Mutual Lovers")
+                            libido = getattr(pair.factors, "libido_factor", 0)
+                            if libido > 0.6:
+                                badge = dpg.add_text("[+]", color=(255, 200, 100, 255))
+                                with dpg.tooltip(badge):
+                                    dpg.add_text("High Libido")
+                            agg = getattr(pair.factors, "aggression_factor", 0)
+                            if agg > 0.6:
+                                badge = dpg.add_text("[-]", color=(100, 200, 255, 255))
+                                with dpg.tooltip(badge):
+                                    dpg.add_text("High Aggression")
+                            if risk > 10:
+                                badge = dpg.add_text("[!]", color=(255, 100, 100, 255))
+                                with dpg.tooltip(badge):
+                                    dpg.add_text("High Inbreeding Risk")
+                            if hits > 0:
+                                badge = dpg.add_text("[*]", color=(100, 255, 100, 255))
+                                with dpg.tooltip(badge):
+                                    dpg.add_text(f"{hits}/{total} Favorable Traits")
         else:
             dpg.add_text("No breeding pairs in this room")
 
@@ -906,19 +920,13 @@ def build_details_tabs(selected_room, state):
             ):
                 dpg.add_table_column(label="Name", width_stretch=True)
                 dpg.add_table_column(label="Sex", width_fixed=True)
+                dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(label="Stats", width_fixed=True)
-                dpg.add_table_column(label="Top Traits", width_stretch=True)
 
                 for cat in selected_room.cats:
                     cat_name = cat.name or "Unnamed"
                     total_stats = sum(cat.stat_base)
-                    all_traits = (
-                        (cat.mutations or [])
-                        + (cat.passive_abilities or [])
-                        + (cat.abilities or [])
-                    )
-                    top_traits = all_traits[:2]
-                    traits_str = ", ".join(top_traits) if top_traits else "-"
+                    age = cat.age if cat.age is not None else "-"
 
                     with dpg.table_row():
                         dpg.add_selectable(
@@ -929,8 +937,8 @@ def build_details_tabs(selected_room, state):
                             tag=f"cat_row_{cat.db_key}",
                         )
                         dpg.add_text(cat.gender)
+                        dpg.add_text(str(age))
                         dpg.add_text(str(total_stats))
-                        dpg.add_text(traits_str)
         else:
             dpg.add_text("No cats in this room")
 
