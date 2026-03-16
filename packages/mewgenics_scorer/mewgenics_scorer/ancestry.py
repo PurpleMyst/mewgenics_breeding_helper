@@ -1,4 +1,5 @@
 """Ancestry and inbreeding risk calculations."""
+
 from dataclasses import dataclass
 
 from mewgenics_parser import Cat
@@ -8,15 +9,20 @@ MAX_DEPTH = 14
 COI_THRESHOLD = 0.25
 
 
-def _ancestor_contributions(cat: Cat | None) -> dict[Cat, float]:
-    """Compute Σ(0.5^depth) for each ancestor of cat."""
+def _ancestor_contributions(cat: Cat | None) -> dict[int, tuple[Cat, float]]:
+    """Compute Σ(0.5^depth) for each ancestor of cat. Returns dict of id(cat) -> (cat, contribution)."""
     if cat is None:
         return {}
-    contribs: dict[Cat, float] = {}
+    contribs: dict[int, tuple[Cat, float]] = {}
     stack: list[tuple[Cat, int, float]] = [(cat, 0, 1.0)]
     while stack:
         node, depth, prob = stack.pop()
-        contribs[node] = contribs.get(node, 0.0) + prob
+        node_id = id(node)
+        existing = contribs.get(node_id)
+        if existing:
+            contribs[node_id] = (existing[0], existing[1] + prob)
+        else:
+            contribs[node_id] = (node, prob)
         if depth >= MAX_DEPTH:
             continue
         half_prob = prob * 0.5
@@ -28,39 +34,44 @@ def _ancestor_contributions(cat: Cat | None) -> dict[Cat, float]:
     return contribs
 
 
-def build_ancestor_contribs(cats: list[Cat]) -> dict[int, dict[Cat, float]]:
-    """Batch compute ancestor contributions for all cats."""
+def build_ancestor_contribs(cats: list[Cat]) -> dict[int, dict[int, float]]:
+    """Batch compute ancestor contributions for all cats.
+
+    Returns dict[db_key, dict[id(cat), contribution]].
+    """
     ordered = sorted(cats, key=lambda c: c.generation)
-    memo: dict[int, dict[Cat, float]] = {}
-    result: dict[int, dict[Cat, float]] = {}
+    memo: dict[int, dict[int, float]] = {}
+    result: dict[int, dict[int, float]] = {}
     for cat in ordered:
-        contribs: dict[Cat, float] = {cat: 1.0}
+        contribs: dict[int, float] = {id(cat): 1.0}
         for parent in (cat.parent_a, cat.parent_b):
             if parent is None:
                 continue
-            pc = memo.get(id(parent))
+            parent_id = id(parent)
+            pc = memo.get(parent_id)
             if pc is None:
-                pc = _ancestor_contributions(parent)
-                memo[id(parent)] = pc
-            for anc, prob in pc.items():
+                raw_contribs = _ancestor_contributions(parent)
+                pc = {cid: prob for cid, (_, prob) in raw_contribs.items()}
+                memo[parent_id] = pc
+            for anc_id, prob in pc.items():
                 new_prob = prob * 0.5
                 if new_prob < MIN_CONTRIB:
                     continue
-                contribs[anc] = contribs.get(anc, 0.0) + new_prob
+                contribs[anc_id] = contribs.get(anc_id, 0.0) + new_prob
         memo[id(cat)] = contribs
         result[cat.db_key] = contribs
     return result
 
 
-def coi_from_contribs(ca: dict[Cat, float], cb: dict[Cat, float]) -> float:
+def coi_from_contribs(ca: dict[int, float], cb: dict[int, float]) -> float:
     """Compute raw COI from two ancestor-contribution dicts."""
     if not ca or not cb:
         return 0.0
     if len(ca) > len(cb):
         ca, cb = cb, ca
     coi = 0.0
-    for anc, prob_a in ca.items():
-        prob_b = cb.get(anc)
+    for anc_id, prob_a in ca.items():
+        prob_b = cb.get(anc_id)
         if prob_b is not None:
             coi += prob_a * prob_b
     return coi * 0.5

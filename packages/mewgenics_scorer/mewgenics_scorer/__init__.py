@@ -1,4 +1,5 @@
 """Mewgenics pair scoring factors for breeding optimization."""
+
 from .factors import (
     PairFactors,
     calculate_pair_factors,

@@ -1,4 +1,5 @@
 """Pair factors calculation for breeding optimization."""
+
 from dataclasses import dataclass
 
 from mewgenics_parser import Cat
@@ -46,7 +47,9 @@ class PairFactors:
     trait_matches: list[str]
 
 
-def expected_stats(a: Cat, b: Cat, stimulation: float = DEFAULT_STIMULATION) -> list[float]:
+def expected_stats(
+    a: Cat, b: Cat, stimulation: float = DEFAULT_STIMULATION
+) -> list[float]:
     """Calculate expected stat values for offspring."""
     chance = _better_chance(stimulation)
     return [
@@ -100,7 +103,7 @@ def _cat_has_trait(cat: Cat, category: str, key: str) -> bool:
 def calculate_pair_factors(
     a: Cat,
     b: Cat,
-    ancestor_contribs: dict[int, dict[Cat, float]],
+    ancestor_contribs: dict[int, dict[int, float]],
     stimulation: float = DEFAULT_STIMULATION,
     avoid_lovers: bool = True,
     planner_traits: list[TraitRequirement] | None = None,

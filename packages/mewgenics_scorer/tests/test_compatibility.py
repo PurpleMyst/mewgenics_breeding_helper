@@ -1,4 +1,5 @@
 """Tests for mewgenics_scorer compatibility module."""
+
 import pytest
 from unittest.mock import MagicMock
 

@@ -1,4 +1,5 @@
 """Type definitions for mewgenics_scorer."""
+
 from dataclasses import dataclass
 
 
