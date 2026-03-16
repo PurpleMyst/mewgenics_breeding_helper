@@ -6,3 +6,10 @@ requires-python = ">=3.14"
 dependencies = [
     "lz4>=4.4.5",
 ]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "inline-snapshot>=0.6",
+    "dirty-equals>=0.1",
+]
