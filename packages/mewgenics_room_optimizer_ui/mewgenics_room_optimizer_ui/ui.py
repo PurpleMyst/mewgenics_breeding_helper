@@ -12,6 +12,7 @@ def build_ui(state: AppState):
 
     with dpg.window(tag="main_window", label="Room Optimizer", width=1000, height=700):
         build_menu_bar(state)
+        build_saves_section(state)
         build_toolbar(state)
         build_room_config_section(state)
         build_params_section(state)
@@ -19,8 +20,9 @@ def build_ui(state: AppState):
         build_results_section(state)
         build_details_section(state)
 
-    build_file_dialogs(state)
     build_themes()
+
+    scan_and_load_saves(state)
 
 
 def build_menu_bar(state: AppState):
@@ -28,12 +30,25 @@ def build_menu_bar(state: AppState):
     with dpg.menu_bar():
         with dpg.menu(label="File"):
             dpg.add_menu_item(
-                label="Load Save", callback=show_load_dialog, user_data=state
+                label="Reload Saves", callback=scan_and_load_saves, user_data=state
             )
             dpg.add_menu_item(
                 label="Save Config", callback=save_config_callback, user_data=state
             )
             dpg.add_menu_item(label="Exit", callback=exit_callback)
+
+
+def build_saves_section(state: AppState):
+    """Build the saves selection section."""
+    with dpg.child_window(height=120, border=True, tag="saves_section"):
+        dpg.add_text("Available Saves")
+        dpg.add_separator()
+        dpg.add_listbox(
+            tag="saves_listbox",
+            callback=on_save_selected,
+            user_data=state,
+            width=-1,
+        )
 
 
 def build_toolbar(state: AppState):
@@ -157,21 +172,6 @@ def build_details_section(state: AppState):
         )
 
 
-def build_file_dialogs(state: AppState):
-    """Build file dialogs (hidden by default)."""
-    with dpg.file_dialog(
-        directory_selector=False,
-        show=False,
-        callback=load_save_file,
-        tag="load_file_dialog",
-        width=600,
-        height=400,
-        user_data=state,
-    ):
-        dpg.add_file_extension(".*")
-        dpg.add_file_extension(".sav", color=(0, 255, 0, 255))
-
-
 def build_themes():
     """Build application themes."""
     with dpg.theme() as global_theme:
@@ -184,24 +184,58 @@ def build_themes():
     dpg.bind_theme(global_theme)
 
 
-def show_load_dialog(sender, app_data, user_data: AppState):
-    """Show the load file dialog."""
-    dpg.show_item("load_file_dialog")
+def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
+    """Scan for saves and auto-load the newest."""
+    from mewgenics_parser import find_save_files, parse_save
+
+    if user_data is None:
+        user_data = sender
+
+    save_paths = find_save_files()
+    save_names = [s.split("\\")[-1].split("/")[-1] for s in save_paths]
+    state = user_data
+
+    dpg.configure_item("saves_listbox", items=save_names)
+
+    if save_paths:
+        newest = save_paths[0]
+        try:
+            save_data = parse_save(newest)
+            state.cats = save_data.cats
+            state.last_save_path = newest
+            state.results = None
+
+            dpg.set_value("saves_listbox", save_names[0])
+            dpg.set_value(
+                "status_text", f"Loaded: {newest.split('\\')[-1].split('/')[-1]}"
+            )
+            dpg.set_value("cat_count_text", f"Cats: {len(state.cats)}")
+            clear_results_table()
+        except Exception as e:
+            print(f"Error loading save: {e}")
+    else:
+        dpg.set_value("status_text", "No saves found")
+        dpg.set_value("cat_count_text", "Cats: 0")
 
 
-def load_save_file(sender, app_data, user_data: AppState):
-    """Handle file selection from dialog."""
-    from mewgenics_parser import parse_save
+def on_save_selected(sender, app_data, user_data: AppState):
+    """Handle save selection from listbox."""
+    from mewgenics_parser import find_save_files, parse_save
 
-    filepath = app_data["file_path_name"]
+    selected_name = app_data
+    save_paths = find_save_files()
+    save_names = [s.split("\\")[-1].split("/")[-1] for s in save_paths]
+
+    idx = save_names.index(selected_name)
+    filepath = save_paths[idx]
+
     try:
         save_data = parse_save(filepath)
         user_data.cats = save_data.cats
         user_data.last_save_path = filepath
         user_data.results = None
-        user_data.save()
 
-        dpg.set_value("status_text", f"Loaded: {filepath}")
+        dpg.set_value("status_text", f"Loaded: {selected_name}")
         dpg.set_value("cat_count_text", f"Cats: {len(user_data.cats)}")
         clear_results_table()
     except Exception as e:
