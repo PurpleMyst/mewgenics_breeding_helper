@@ -2,8 +2,6 @@
 
 from dataclasses import replace
 
-import networkx as nx
-
 from mewgenics_parser import Cat
 from mewgenics_scorer import (
     calculate_pair_factors,
@@ -190,13 +188,35 @@ def _calculate_true_stim(room: RoomConfig, ey_cats: list[Cat]) -> float:
     return room.base_stim + len(ey_cats)
 
 
+def _passes_throughput_cap(
+    room: RoomConfig,
+    current_cats_in_room: list[Cat],
+    new_cat: Cat,
+) -> bool:
+    """Ensures no single gender hogs the room, maximizing breeds per night.
+
+    Example: In a 5-cat room, max 3 of one gender, guaranteeing at least 2M/3F or 3M/2F.
+    """
+    if room.max_cats is None or room.max_cats <= 2:
+        return True
+    if new_cat.gender == "?":
+        return True  # Non-binary cats are universally compatible
+
+    gender_cap = max(1, room.max_cats - 2)
+    same_gender_count = sum(
+        1 for c in current_cats_in_room if c.gender == new_cat.gender
+    )
+
+    return (same_gender_count + 1) <= gender_cap
+
+
 def optimize(
     cats: list[Cat],
     room_configs: list[RoomConfig],
     params: OptimizationParams,
     ancestor_contribs: dict[int, dict[Cat, float]],
 ) -> OptimizationResult:
-    """Main optimization entry point using graph theory for optimal pairing."""
+    """Main optimization entry point using Seed and Pull algorithm."""
 
     filtered_cats = _filter_cats(cats, params.min_stats)
 
@@ -212,6 +232,7 @@ def optimize(
     room_assignments: dict[str, list[Cat]] = {r.key: [] for r in room_configs}
     room_pairs: dict[str, list[ScoredPair]] = {r.key: [] for r in room_configs}
     room_eternal_youth: dict[str, list[Cat]] = {r.key: [] for r in room_configs}
+    cat_locations: dict[int, str] = {}  # Track which room each cat is in
     assigned_cats: set[int] = set()
 
     # --- PHASE 1: EY BUFF PLACEMENT ---
@@ -221,6 +242,7 @@ def optimize(
         for ey_cat in eternal_youth_cats:
             room_eternal_youth[best_breeding_room.key].append(ey_cat)
             assigned_cats.add(ey_cat.db_key)
+            cat_locations[ey_cat.db_key] = best_breeding_room.key
 
     # Calculate True Stimulation for all breeding rooms
     room_true_stim: dict[str, float] = {}
@@ -229,59 +251,73 @@ def optimize(
             room, room_eternal_youth[room.key]
         )
 
-    # --- PHASE 2: GRAPH THEORY MATCHMAKING ---
+    # --- PHASE 2: SCORE ALL PAIRS ---
     pairs = _generate_pairs(breeding_cats)
 
     # Score all pairs using baseline stimulation (50.0)
     temp_params = replace(params, stimulation=50.0)
 
-    G = nx.Graph()
-    pair_lookup: dict[tuple[int, int], ScoredPair] = {}
-
+    scored_pairs: list[ScoredPair] = []
     for cat_a, cat_b in pairs:
         scored = score_pair(cat_a, cat_b, ancestor_contribs, temp_params)
         if scored is not None:
-            edge_key = tuple(sorted([cat_a.db_key, cat_b.db_key]))
-            G.add_edge(cat_a.db_key, cat_b.db_key, weight=scored.quality)
-            pair_lookup[edge_key] = scored
-
-    # Find maximum weight matching (maxcardinality=False = prioritize total quality)
-    optimal_edges = nx.max_weight_matching(G, maxcardinality=False)
-
-    # Reconstruct the chosen pairs
-    optimal_pairs: list[ScoredPair] = []
-    for u, v in optimal_edges:
-        edge_key = tuple(sorted([u, v]))
-        if edge_key in pair_lookup:
-            optimal_pairs.append(pair_lookup[edge_key])
+            scored_pairs.append(scored)
 
     # Sort pairs from highest quality to lowest
-    optimal_pairs.sort(key=lambda p: p.quality, reverse=True)
+    scored_pairs.sort(key=lambda p: p.quality, reverse=True)
 
-    # --- PHASE 3: ROOM BOARDING ---
+    # --- PHASE 3: SEED & PULL ---
     # Sort rooms from highest True Stimulation to lowest
     breeding_rooms.sort(key=lambda r: room_true_stim[r.key], reverse=True)
 
-    for pair in optimal_pairs:
-        for room in breeding_rooms:
-            current_breeding_count = len(room_assignments[room.key])
-            if _can_fit_pair(room, current_breeding_count):
-                # RE-SCORE the pair using the room's True Stimulation
-                actual_params = replace(params, stimulation=room_true_stim[room.key])
-                final_pair = score_pair(
-                    pair.cat_a,
-                    pair.cat_b,
-                    ancestor_contribs,
-                    actual_params,
-                )
+    for pair in scored_pairs:
+        loc_a = cat_locations.get(pair.cat_a.db_key)
+        loc_b = cat_locations.get(pair.cat_b.db_key)
 
-                # Only assign if still within max_risk after re-scoring
-                if final_pair is not None:
-                    room_assignments[room.key].extend([pair.cat_a, pair.cat_b])
-                    room_pairs[room.key].append(final_pair)
-                    assigned_cats.add(pair.cat_a.db_key)
+        # CASE 1: Both unassigned -> SEED
+        if loc_a is None and loc_b is None:
+            for room in breeding_rooms:
+                current_cats = room_assignments[room.key]
+                if not _can_fit_pair(room, len(current_cats)):
+                    continue
+                if not _passes_throughput_cap(room, current_cats, pair.cat_a):
+                    continue
+                temp_cats = current_cats + [pair.cat_a]
+                if not _passes_throughput_cap(room, temp_cats, pair.cat_b):
+                    continue
+
+                # Place both cats
+                room_assignments[room.key].extend([pair.cat_a, pair.cat_b])
+                cat_locations[pair.cat_a.db_key] = room.key
+                cat_locations[pair.cat_b.db_key] = room.key
+                assigned_cats.update([pair.cat_a.db_key, pair.cat_b.db_key])
+                break
+
+        # CASE 2: A assigned, B unassigned -> PULL B
+        elif loc_a is not None and loc_b is None:
+            room = next((r for r in breeding_rooms if r.key == loc_a), None)
+            if room:
+                current_cats = room_assignments[room.key]
+                if _can_fit_single(room, len(current_cats)) and _passes_throughput_cap(
+                    room, current_cats, pair.cat_b
+                ):
+                    room_assignments[room.key].append(pair.cat_b)
+                    cat_locations[pair.cat_b.db_key] = room.key
                     assigned_cats.add(pair.cat_b.db_key)
-                    break
+
+        # CASE 3: B assigned, A unassigned -> PULL A
+        elif loc_b is not None and loc_a is None:
+            room = next((r for r in breeding_rooms if r.key == loc_b), None)
+            if room:
+                current_cats = room_assignments[room.key]
+                if _can_fit_single(room, len(current_cats)) and _passes_throughput_cap(
+                    room, current_cats, pair.cat_a
+                ):
+                    room_assignments[room.key].append(pair.cat_a)
+                    cat_locations[pair.cat_a.db_key] = room.key
+                    assigned_cats.add(pair.cat_a.db_key)
+
+        # CASE 4: Both in different rooms -> SKIP (do nothing)
 
     # --- PHASE 4: UNMATCHED CATS ---
     unassigned = [c for c in filtered_cats if c.db_key not in assigned_cats]
@@ -298,14 +334,32 @@ def optimize(
 
     # Non-trait cats go to fighting rooms + general rooms
     remaining = [c for c in unassigned if c.db_key not in assigned_cats]
-    non_trait_cats = [c for c in remaining if c not in trait_cats]
-    for cat in non_trait_cats:
+    for cat in remaining:
         for room in fighting_rooms + general_rooms:
             current_count = len(room_assignments[room.key])
             if _can_fit_single(room, current_count):
                 room_assignments[room.key].append(cat)
                 assigned_cats.add(cat.db_key)
                 break
+
+    # --- PHASE 5: CROSS-PRODUCT RESCORING ---
+    # For each breeding room, re-score pairs using TRUE stimulation
+    for room in breeding_rooms:
+        cats_in_room = room_assignments[room.key]
+        if len(cats_in_room) < 2:
+            continue
+
+        # Generate all pairs from cats in this room
+        room_pairs_list = _generate_pairs(cats_in_room)
+
+        # Re-score using TRUE stimulation for this room
+        true_stim = room_true_stim[room.key]
+        actual_params = replace(params, stimulation=true_stim)
+
+        for cat_a, cat_b in room_pairs_list:
+            scored = score_pair(cat_a, cat_b, ancestor_contribs, actual_params)
+            if scored is not None:
+                room_pairs[room.key].append(scored)
 
     excluded = [c for c in filtered_cats if c.db_key not in assigned_cats]
 
