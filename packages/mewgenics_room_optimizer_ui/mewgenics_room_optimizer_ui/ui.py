@@ -212,8 +212,7 @@ def build_traits_section(state: AppState):
             dpg.add_text("Selected Traits:")
             dpg.add_button(label="Clear All", callback=on_clear_traits, user_data=state)
 
-            with dpg.group(horizontal=True):
-                dpg.add_text("", tag="selected_traits_placeholder")
+            dpg.add_group(tag="selected_traits_container")
 
 
 def on_mutation_filter(sender, app_data, user_data: AppState):
@@ -249,6 +248,12 @@ def on_ability_filter(sender, app_data, user_data: AppState):
 def on_add_mutation(sender, app_data, user_data: AppState):
     """Add selected mutation to favorable traits."""
     selected = dpg.get_value("mutation_listbox")
+
+    if not selected:
+        items = dpg.get_item_configuration("mutation_listbox").get("items", [])
+        if items:
+            selected = items[0]
+
     if selected:
         from mewgenics_scorer import TraitRequirement
 
@@ -262,6 +267,12 @@ def on_add_mutation(sender, app_data, user_data: AppState):
 def on_add_passive(sender, app_data, user_data: AppState):
     """Add selected passive to favorable traits."""
     selected = dpg.get_value("passive_listbox")
+
+    if not selected:
+        items = dpg.get_item_configuration("passive_listbox").get("items", [])
+        if items:
+            selected = items[0]
+
     if selected:
         from mewgenics_scorer import TraitRequirement
 
@@ -275,6 +286,12 @@ def on_add_passive(sender, app_data, user_data: AppState):
 def on_add_ability(sender, app_data, user_data: AppState):
     """Add selected ability to favorable traits."""
     selected = dpg.get_value("ability_listbox")
+
+    if not selected:
+        items = dpg.get_item_configuration("ability_listbox").get("items", [])
+        if items:
+            selected = items[0]
+
     if selected:
         from mewgenics_scorer import TraitRequirement
 
@@ -310,32 +327,33 @@ def on_remove_trait(sender, app_data, user_data: tuple[int, AppState]):
 
 def update_traits_display(state: AppState):
     """Update the selected traits display."""
-    placeholder = "selected_traits_placeholder"
-    if dpg.does_item_exist(placeholder):
-        dpg.delete_item(placeholder)
+    container = "selected_traits_container"
+    if not dpg.does_item_exist(container):
+        return
 
-    with dpg.group(parent="traits_section", tag=placeholder):
-        for i, trait in enumerate(state.planner_traits):
-            with dpg.group(horizontal=True):
-                dpg.add_text(f"[{int(trait.weight)}] {trait.category}: {trait.key}")
-                dpg.add_button(
-                    label="-",
-                    width=25,
-                    callback=on_decrement_weight,
-                    user_data=(i, state),
-                )
-                dpg.add_button(
-                    label="+",
-                    width=25,
-                    callback=on_increment_weight,
-                    user_data=(i, state),
-                )
-                dpg.add_button(
-                    label="X",
-                    width=25,
-                    callback=on_remove_trait,
-                    user_data=(i, state),
-                )
+    dpg.delete_item(container, children_only=True)
+
+    for i, trait in enumerate(state.planner_traits):
+        with dpg.group(horizontal=True, parent=container):
+            dpg.add_text(f"[{int(trait.weight)}] {trait.category}: {trait.key}")
+            dpg.add_button(
+                label="-",
+                width=25,
+                callback=on_decrement_weight,
+                user_data=(i, state),
+            )
+            dpg.add_button(
+                label="+",
+                width=25,
+                callback=on_increment_weight,
+                user_data=(i, state),
+            )
+            dpg.add_button(
+                label="X",
+                width=25,
+                callback=on_remove_trait,
+                user_data=(i, state),
+            )
 
 
 def on_decrement_weight(sender, app_data, user_data: tuple[int, AppState]):
