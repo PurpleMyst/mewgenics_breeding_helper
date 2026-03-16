@@ -107,7 +107,7 @@ def _calculate_quality(factors, params: OptimizationParams) -> float:
     if params.prefer_high_libido:
         personality_bonus += factors.libido_factor * 2.5
 
-    trait_bonus = len(factors.trait_matches) * 5.0
+    trait_bonus = sum(t.weight for t in factors.trait_matches) * 5.0
 
     quality = (
         (avg_stats + risk_factor * 20)

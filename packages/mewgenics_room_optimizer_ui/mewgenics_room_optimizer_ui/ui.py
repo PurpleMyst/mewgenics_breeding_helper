@@ -16,6 +16,7 @@ def build_ui(state: AppState):
         build_toolbar(state)
         build_room_config_section(state)
         build_params_section(state)
+        build_traits_section(state)
         build_optimize_button(state)
         build_results_section(state)
         build_details_section(state)
@@ -150,6 +151,209 @@ def build_params_section(state: AppState):
                 )
 
 
+def build_traits_section(state: AppState):
+    """Build the favorable traits selection section."""
+    with dpg.collapsing_header(label="Favorable Traits", default_open=True):
+        with dpg.child_window(height=200, border=True, tag="traits_section"):
+            with dpg.group(horizontal=True):
+                with dpg.group():
+                    dpg.add_text("Mutations")
+                    dpg.add_input_text(
+                        tag="mutation_filter",
+                        hint="Filter...",
+                        width=150,
+                        callback=on_mutation_filter,
+                        user_data=state,
+                    )
+                    dpg.add_listbox(
+                        tag="mutation_listbox",
+                        width=150,
+                        height=80,
+                    )
+                    dpg.add_button(
+                        label="Add", callback=on_add_mutation, user_data=state
+                    )
+                with dpg.group():
+                    dpg.add_text("Passives")
+                    dpg.add_input_text(
+                        tag="passive_filter",
+                        hint="Filter...",
+                        width=150,
+                        callback=on_passive_filter,
+                        user_data=state,
+                    )
+                    dpg.add_listbox(
+                        tag="passive_listbox",
+                        width=150,
+                        height=80,
+                    )
+                    dpg.add_button(
+                        label="Add", callback=on_add_passive, user_data=state
+                    )
+                with dpg.group():
+                    dpg.add_text("Abilities")
+                    dpg.add_input_text(
+                        tag="ability_filter",
+                        hint="Filter...",
+                        width=150,
+                        callback=on_ability_filter,
+                        user_data=state,
+                    )
+                    dpg.add_listbox(
+                        tag="ability_listbox",
+                        width=150,
+                        height=80,
+                    )
+                    dpg.add_button(
+                        label="Add", callback=on_add_ability, user_data=state
+                    )
+
+            dpg.add_separator()
+            dpg.add_text("Selected Traits:")
+            dpg.add_button(label="Clear All", callback=on_clear_traits, user_data=state)
+
+            with dpg.group(horizontal=True):
+                dpg.add_text("", tag="selected_traits_placeholder")
+
+
+def on_mutation_filter(sender, app_data, user_data: AppState):
+    """Filter mutations listbox."""
+    filter_text = (app_data or "").lower()
+    mutations = user_data.get_available_mutations()
+    filtered = (
+        [m for m in mutations if filter_text in m.lower()] if filter_text else mutations
+    )
+    dpg.configure_item("mutation_listbox", items=filtered)
+
+
+def on_passive_filter(sender, app_data, user_data: AppState):
+    """Filter passives listbox."""
+    filter_text = (app_data or "").lower()
+    passives = user_data.get_available_passives()
+    filtered = (
+        [p for p in passives if filter_text in p.lower()] if filter_text else passives
+    )
+    dpg.configure_item("passive_listbox", items=filtered)
+
+
+def on_ability_filter(sender, app_data, user_data: AppState):
+    """Filter abilities listbox."""
+    filter_text = (app_data or "").lower()
+    abilities = user_data.get_available_abilities()
+    filtered = (
+        [a for a in abilities if filter_text in a.lower()] if filter_text else abilities
+    )
+    dpg.configure_item("ability_listbox", items=filtered)
+
+
+def on_add_mutation(sender, app_data, user_data: AppState):
+    """Add selected mutation to favorable traits."""
+    selected = dpg.get_value("mutation_listbox")
+    if selected:
+        from mewgenics_scorer import TraitRequirement
+
+        user_data.planner_traits.append(
+            TraitRequirement(category="mutation", key=selected, weight=5.0)
+        )
+        user_data.save()
+        update_traits_display(user_data)
+
+
+def on_add_passive(sender, app_data, user_data: AppState):
+    """Add selected passive to favorable traits."""
+    selected = dpg.get_value("passive_listbox")
+    if selected:
+        from mewgenics_scorer import TraitRequirement
+
+        user_data.planner_traits.append(
+            TraitRequirement(category="passive", key=selected, weight=5.0)
+        )
+        user_data.save()
+        update_traits_display(user_data)
+
+
+def on_add_ability(sender, app_data, user_data: AppState):
+    """Add selected ability to favorable traits."""
+    selected = dpg.get_value("ability_listbox")
+    if selected:
+        from mewgenics_scorer import TraitRequirement
+
+        user_data.planner_traits.append(
+            TraitRequirement(category="ability", key=selected, weight=5.0)
+        )
+        user_data.save()
+        update_traits_display(user_data)
+
+
+def on_clear_traits(sender, app_data, user_data: AppState):
+    """Clear all favorable traits."""
+    user_data.planner_traits.clear()
+    user_data.save()
+    update_traits_display(user_data)
+
+
+def on_trait_weight_changed(sender, app_data, user_data: tuple[int, AppState]):
+    """Handle trait weight change."""
+    index, state = user_data
+    new_weight = max(1, min(10, int(app_data)))
+    state.planner_traits[index].weight = float(new_weight)
+    state.save()
+
+
+def on_remove_trait(sender, app_data, user_data: tuple[int, AppState]):
+    """Remove a trait from favorable traits."""
+    index, state = user_data
+    state.planner_traits.pop(index)
+    state.save()
+    update_traits_display(state)
+
+
+def update_traits_display(state: AppState):
+    """Update the selected traits display."""
+    placeholder = "selected_traits_placeholder"
+    if dpg.does_item_exist(placeholder):
+        dpg.delete_item(placeholder)
+
+    with dpg.group(parent="traits_section", tag=placeholder):
+        for i, trait in enumerate(state.planner_traits):
+            with dpg.group(horizontal=True):
+                dpg.add_text(f"[{int(trait.weight)}] {trait.category}: {trait.key}")
+                dpg.add_button(
+                    label="-",
+                    width=25,
+                    callback=on_decrement_weight,
+                    user_data=(i, state),
+                )
+                dpg.add_button(
+                    label="+",
+                    width=25,
+                    callback=on_increment_weight,
+                    user_data=(i, state),
+                )
+                dpg.add_button(
+                    label="X",
+                    width=25,
+                    callback=on_remove_trait,
+                    user_data=(i, state),
+                )
+
+
+def on_decrement_weight(sender, app_data, user_data: tuple[int, AppState]):
+    """Decrement trait weight."""
+    index, state = user_data
+    state.planner_traits[index].weight = max(1, state.planner_traits[index].weight - 1)
+    state.save()
+    update_traits_display(state)
+
+
+def on_increment_weight(sender, app_data, user_data: tuple[int, AppState]):
+    """Increment trait weight."""
+    index, state = user_data
+    state.planner_traits[index].weight = min(10, state.planner_traits[index].weight + 1)
+    state.save()
+    update_traits_display(state)
+
+
 def build_optimize_button(state: AppState):
     """Build the optimize button."""
     dpg.add_button(
@@ -230,11 +434,25 @@ def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
                 "cat_count_text", f"Cats: {len(state.cats)} ({alive} in house)"
             )
             clear_results_table()
+            init_traits_lists(state)
         except Exception as e:
             print(f"Error loading save: {e}")
     else:
         dpg.set_value("status_text", "No saves found")
         dpg.set_value("cat_count_text", "Cats: 0")
+
+
+def init_traits_lists(state: AppState):
+    """Initialize the trait filter listboxes with available traits from cats."""
+    mutations = state.get_available_mutations()
+    passives = state.get_available_passives()
+    abilities = state.get_available_abilities()
+
+    dpg.configure_item("mutation_listbox", items=mutations)
+    dpg.configure_item("passive_listbox", items=passives)
+    dpg.configure_item("ability_listbox", items=abilities)
+
+    update_traits_display(state)
 
 
 def on_save_selected(sender, app_data, user_data: AppState):
@@ -260,6 +478,7 @@ def on_save_selected(sender, app_data, user_data: AppState):
             "cat_count_text", f"Cats: {len(user_data.cats)} ({alive} in house)"
         )
         clear_results_table()
+        init_traits_lists(user_data)
     except Exception as e:
         print(f"Error loading save: {e}")
 
@@ -330,6 +549,7 @@ def run_optimization(sender, app_data, user_data: AppState):
         avoid_lovers=avoid_lovers,
         prefer_low_aggression=prefer_low_aggression,
         prefer_high_libido=prefer_high_libido,
+        planner_traits=user_data.planner_traits,
     )
 
     ancestor_contribs = build_ancestor_contribs(user_data.cats)
@@ -451,8 +671,19 @@ def build_details_tabs(selected_room, state):
 
 
 def on_cat_selected(sender, app_data, user_data):
-    """Handle cat selection - show detail window."""
+    """Handle cat selection - show detail window with radio behavior."""
     cat, state = user_data
+
+    if (
+        state.selected_cat_db_key is not None
+        and state.selected_cat_db_key != cat.db_key
+    ):
+        old_item = f"cat_row_{state.selected_cat_db_key}"
+        if dpg.does_item_exist(old_item):
+            dpg.set_value(old_item, False)
+
+    state.selected_cat_db_key = cat.db_key
+
     show_cat_detail_window(cat, state)
 
 

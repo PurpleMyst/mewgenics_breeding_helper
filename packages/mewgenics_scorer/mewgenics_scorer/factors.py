@@ -44,7 +44,7 @@ class PairFactors:
     aggression_factor: float
     libido_factor: float
 
-    trait_matches: list[str]
+    trait_matches: list[TraitRequirement]
 
 
 def expected_stats(
@@ -78,14 +78,14 @@ def trait_coverage(
     a: Cat,
     b: Cat,
     traits: list[TraitRequirement],
-) -> list[str]:
-    """Return list of trait keys that either cat has."""
+) -> list[TraitRequirement]:
+    """Return list of TraitRequirements that either cat has."""
     matches = []
     for t in traits:
         a_has = _cat_has_trait(a, t.category, t.key)
         b_has = _cat_has_trait(b, t.category, t.key)
         if a_has or b_has:
-            matches.append(t.key)
+            matches.append(t)
     return matches
 
 

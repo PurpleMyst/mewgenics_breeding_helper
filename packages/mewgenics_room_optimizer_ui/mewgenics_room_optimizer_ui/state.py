@@ -13,6 +13,7 @@ from mewgenics_room_optimizer import (
     RoomType,
     DEFAULT_ROOM_CONFIGS,
 )
+from mewgenics_scorer import TraitRequirement
 
 
 CONFIG_DIR = Path.home() / ".mewgenics_room_optimizer"
@@ -101,6 +102,30 @@ def room_configs_to_dict(configs: list[RoomConfig]) -> list[dict]:
     ]
 
 
+def planner_traits_from_dict(data: list[dict]) -> list[TraitRequirement]:
+    """Convert dictionary list to TraitRequirement objects."""
+    return [
+        TraitRequirement(
+            category=t["category"],
+            key=t["key"],
+            weight=t.get("weight", 5.0),
+        )
+        for t in data
+    ]
+
+
+def planner_traits_to_dict(traits: list[TraitRequirement]) -> list[dict]:
+    """Convert TraitRequirement objects to dictionary list."""
+    return [
+        {
+            "category": t.category,
+            "key": t.key,
+            "weight": t.weight,
+        }
+        for t in traits
+    ]
+
+
 @dataclass
 class AppState:
     """Application state - pure Python, DPG-agnostic."""
@@ -109,6 +134,7 @@ class AppState:
     room_configs: list[RoomConfig] = field(default_factory=list)
     results: OptimizationResult | None = None
     selected_result_room_key: str | None = None
+    selected_cat_db_key: int | None = None
     last_save_path: str | None = None
     game_data: GameData = field(default_factory=lambda: _GAME_DATA)
 
@@ -118,6 +144,8 @@ class AppState:
     avoid_lovers: bool = True
     prefer_low_aggression: bool = True
     prefer_high_libido: bool = True
+
+    planner_traits: list[TraitRequirement] = field(default_factory=list)
 
     is_loading: bool = False
 
@@ -146,6 +174,7 @@ class AppState:
 
         return cls(
             room_configs=room_configs,
+            planner_traits=planner_traits_from_dict(config.get("planner_traits", [])),
             last_save_path=config.get("last_save_path"),
         )
 
@@ -153,6 +182,7 @@ class AppState:
         """Convert state to configuration dictionary for saving."""
         return {
             "rooms": room_configs_to_dict(self.room_configs),
+            "planner_traits": planner_traits_to_dict(self.planner_traits),
             "last_save_path": self.last_save_path,
         }
 
@@ -172,3 +202,27 @@ class AppState:
     def alive_cats(self) -> list[Cat]:
         """Return only cats with In House status."""
         return [c for c in self.cats if c.status == "In House"]
+
+    def get_available_mutations(self) -> list[str]:
+        """Extract unique mutations from all cats."""
+        mutations = set()
+        for cat in self.cats:
+            for m in cat.mutations or []:
+                mutations.add(m)
+        return sorted(mutations)
+
+    def get_available_passives(self) -> list[str]:
+        """Extract unique passive abilities from all cats."""
+        passives = set()
+        for cat in self.cats:
+            for p in cat.passive_abilities or []:
+                passives.add(p)
+        return sorted(passives)
+
+    def get_available_abilities(self) -> list[str]:
+        """Extract unique active abilities from all cats."""
+        abilities = set()
+        for cat in self.cats:
+            for a in cat.abilities or []:
+                abilities.add(a)
+        return sorted(abilities)
