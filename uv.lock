@@ -1,0 +1,35 @@
+version = 1
+revision = 3
+requires-python = ">=3.14"
+
+[manifest]
+members = [
+    "mewgenics-breeding-helper",
+    "mewgenics-parser",
+]
+
+[[package]]
+name = "dearpygui"
+version = "2.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/76/3ccaec465021b647f13c83be42a635043a08255076984a658ed691701498/dearpygui-2.2-cp314-cp314-macosx_13_0_arm64.whl", hash = "sha256:22451146968729429ba37afa2602957dfefc03ff92dcc627dd4d85ba3f93e771", size = 1931385, upload-time = "2026-02-17T14:21:58.193Z" },
+    { url = "https://files.pythonhosted.org/packages/52/ac/8e591f33a712563742fe77b0731c1c900fe2fcc3d3e75bd4c7d8e60057a8/dearpygui-2.2-cp314-cp314-manylinux1_x86_64.whl", hash = "sha256:dcc9377d8d9fe27f659ae6b016fe96aa37d8b26b57ce60c47985290e1be7801e", size = 2592691, upload-time = "2026-02-17T14:22:05.191Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/03/aeb4ebe09a0240c8c9337018d2ac3e087fd911f6051a3bb0131248fbd942/dearpygui-2.2-cp314-cp314-win_amd64.whl", hash = "sha256:fe3c8dc37be3ddce0356afb0c16721c0e485a4c94a831886935a0692bb9a9966", size = 1889279, upload-time = "2026-02-17T14:21:46.16Z" },
+]
+
+[[package]]
+name = "mewgenics-breeding-helper"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "dearpygui" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "dearpygui", specifier = ">=2.2" }]
+
+[[package]]
+name = "mewgenics-parser"
+version = "0.1.0"
+source = { virtual = "packages/mewgenics_parser" }
