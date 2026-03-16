@@ -20,14 +20,15 @@ def is_hater_conflict(a: Cat, b: Cat) -> bool:
 
 
 def is_lover_conflict(a: Cat, b: Cat, avoid_lovers: bool = True) -> bool:
-    """Check if pairing would break existing lover bonds."""
+    """Check if pairing would break existing lover bonds. Excludes 'Gone' cats."""
     if not avoid_lovers:
         return False
-    a_loves = {c.db_key for c in a.lovers}
-    b_loves = {c.db_key for c in b.lovers}
-    a_has_lover = bool(a_loves)
+    # Filter out "Gone" cats - they shouldn't count as lover conflicts
+    a_lovers = {c.db_key for c in a.lovers if c and c.status != "Gone"}
+    b_loves = {c.db_key for c in b.lovers if c and c.status != "Gone"}
+    a_has_lover = bool(a_lovers)
     b_has_lover = bool(b_loves)
-    return (a_has_lover and b.db_key not in a_loves) or (
+    return (a_has_lover and b.db_key not in a_lovers) or (
         b_has_lover and a.db_key not in b_loves
     )
 
