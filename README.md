@@ -4,6 +4,8 @@
 
 A Python-based tool for optimizing breeding operations in the game Mewgenics. Features a DearPyGui-based UI for room optimization, cat management, and breeding pair analysis.
 
+![Main UI](/.github/screenshots/main.png?raw=true "Main UI")
+
 ## Features
 
 - **Room Optimization**: Algorithm for optimal cat placement across breeding, general, and fighting rooms
@@ -15,6 +17,12 @@ A Python-based tool for optimizing breeding operations in the game Mewgenics. Fe
 - **Gay Marking**: Same-sex breeding preference support
 - **Auto-save**: Configuration persistence across sessions
 
+## Requirements
+
+- Python 3.13+
+- [uv](https://github.com/astral-sh/uv) package manager
+- Mewgenics game (for `resources.gpak`)
+
 ## Project Structure
 
 ```
@@ -25,18 +33,130 @@ mewgenics_breeding_helper/
 │   ├── mewgenics_room_optimizer/  # Optimization algorithm
 │   └── mewgenics_room_optimizer_ui/  # DearPyGui UI
 ├── MewgenicsBreedingManager/       # Reference submodule (do not modify)
+├── .github/screenshots/            # UI screenshots
 └── pyproject.toml                 # Workspace config
 ```
 
 ## Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/PurpleMyst/mewgenics_breeding_helper.git
+cd mewgenics_breeding_helper
+
 # Install dependencies (requires uv)
 uv sync
 
 # Run the UI
 uv run room-optimizer
 ```
+
+The application will look for `resources.gpak` in:
+1. The current directory
+2. The game default location: `C:\Program Files (x86)\Steam\steamapps\common\Mewgenics\resources.gpak`
+
+## Quick Start
+
+1. **Load a save file**: Click "Load Save" and select your `.sav` file
+2. **Configure rooms**: Adjust room types, capacities, and base stimulation in the Rooms tab
+3. **Set parameters**: Configure breeding parameters in the Optimization tab
+4. **Mark traits**: Add favorable traits in the Planner tab (optional)
+5. **Mark gay cats**: Toggle same-sex breeding preference in the Inspector (optional)
+6. **Optimize**: Click "Optimize Rooms" to generate breeding pairs
+
+## Room Types
+
+| Type | Purpose | Capacity Limit |
+|------|---------|----------------|
+| Breeding | Optimized for kitten production | Yes (configurable) |
+| Fighting | Defensive cats for expeditions | No limit |
+| General | Mixed use / storage | Yes (configurable) |
+| None | Disabled / unused | - |
+
+## Stimulation
+
+- **Base Stimulation**: Default 50.0, configurable per room
+- **True Stimulation**: `base_stim + Eternal_Youth_cats` in the room
+- Higher stimulation increases the chance offspring inherit higher stats from parents
+
+## Badge Legend
+
+| Badge | Meaning | Color |
+|-------|---------|-------|
+| `[<3]` | Mutual lovers (breeding pair) | Pink |
+| `[+]` | High libido bonus | Gold |
+| `[-]` | Low aggression bonus | Blue |
+| `[!]` | Inbred (shared ancestors) | Red |
+| `[*]` | Favorable trait match | Green |
+| `[EY]` | Eternal Youth passive | Teal |
+
+## Configuration
+
+### Optimization Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| Min Stats | Minimum total base stats for breeding candidates | 0 |
+| Max Risk % | Maximum inbreeding risk allowed (0-100) | 20.0 |
+| Minimize Variance | Prioritize pairs with similar stats for consistent offspring | On |
+| Avoid Lovers | Exclude mutual lover pairs from breeding | On |
+| Prefer High Libido | Favor high libido cats for faster breeding cycles | On |
+| Prefer High Charisma | Favor high charisma for better breeding odds | On |
+| Base Stimulation | Default stimulation for unconfigured rooms | 50.0 |
+
+### Favorable Traits (Breeding Planner)
+
+Mark specific mutations, passives, or abilities you want to propagate through your breeding program.
+
+- Select traits from alive ("In House") cats only
+- Each trait has a weight (1-10) that affects pair scoring
+- Higher weight = higher priority for that trait in breeding decisions
+- Traits are displayed in the Inspector with `[*]` prefix when marked as favorable
+
+### Gay Marking
+
+Some cats prefer same-sex breeding. To mark a cat as gay:
+
+1. Select the cat in the Cats tab
+2. Open the Inspector panel
+3. Check "Same-Sex Breeder"
+
+Gay cats will only breed with Female cats (not other gay cats).
+
+### Throughput Cap
+
+To prevent gender imbalance in breeding rooms, each gender is limited to `max_cats - 2` cats per breeding room. This prevents scenarios like 5 males / 1 female in a 6-cat room.
+
+## Cat Inspector
+
+Click any cat to view detailed information:
+
+- **Bio**: Name, Gender, Age, Status, Room, Lovers, Haters
+- **Stats**: All 7 base stats
+- **Abilities**: Active Abilities, Passive Abilities, Mutations
+- **Options**: Same-Sex Breeder toggle
+
+EY cats display with a teal `[EY]` badge and are excluded from capacity calculations.
+
+## Sandbox Mode
+
+The third tab in Room Details lets you test any breeding combination:
+
+1. Select Parent A from dropdown
+2. Select Parent B from dropdown
+3. View results:
+   - Expected Quality score
+   - Risk %
+   - Badges (Lovers, Libido, Aggression, Inbred, Favorable Traits)
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "No gpak found" | Copy `resources.gpak` to project root or install directory |
+| "No cats loaded" | Verify the save file path is correct |
+| Empty cat list | Ensure save file has cats with "In House" status |
+| Age shows 100 | Age is capped at 100 unless cat has Eternal Youth passive |
 
 ## Algorithm
 
@@ -46,50 +166,15 @@ The optimizer uses a "Seed and Pull" clustering approach:
 
 2. **True Stimulation**: Each room's final stimulation = base_stim + EY_cats_count
 
-3. **Seed & Pull**: 
+3. **Seed & Pull**:
    - Score all valid pairs using baseline stimulation (50.0)
    - Sort pairs by quality
    - Seed unassigned pairs into rooms
    - Pull unpaired cats into existing rooms when compatible
 
-4. **Throughput Cap**: Prevents gender imbalance (e.g., 4M/1F in 5-cat room). Each gender limited to max_cats - 2 in breeding rooms.
+4. **Throughput Cap**: Each gender limited to max_cats - 2 in breeding rooms
 
 5. **Cross-Product Rescoring**: Final pairs re-scored with room's actual True Stimulation
-
-## Configuration
-
-### Optimization Parameters
-
-| Parameter | Description |
-|-----------|-------------|
-| Min Stats | Minimum total base stats for breeding candidates |
-| Max Risk % | Maximum inbreeding risk allowed (0-100) |
-| Minimize Variance | Prioritize consistent offspring stats |
-| Avoid Lovers | Exclude mutual lover pairs |
-| Prefer High Libido | Favor high libido for faster breeding |
-| Prefer High Charisma | Favor high charisma for better odds |
-
-### Favorable Traits
-
-Mark specific mutations, passives, or abilities to prioritize in breeding. Each trait has a weight (1-10) that affects pair scoring.
-
-## Cat Inspector
-
-The inspector shows:
-- Name, Gender, Age, Status, Room
-- Lovers and Haters (with status)
-- Same-Sex Breeding Preference checkbox
-- Base stats
-- Active Abilities, Passive Abilities, Mutations
-
-EY cats are displayed in teal color with [EY] badge.
-
-## Sandbox Mode
-
-Test any breeding combination in a room. Select two cats from dropdowns to see:
-- Expected Quality
-- Risk %
-- Badges (Lovers, Libido, Aggression, Inbred, Favorable Traits)
 
 ## Known Issues
 
