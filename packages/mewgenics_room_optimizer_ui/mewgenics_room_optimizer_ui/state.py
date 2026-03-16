@@ -146,6 +146,7 @@ class AppState:
     avoid_lovers: bool = True
     prefer_low_aggression: bool = True
     prefer_high_libido: bool = True
+    prefer_high_charisma: bool = True
 
     planner_traits: list[TraitRequirement] = field(default_factory=list)
     gay_flags: dict[int, bool] = field(default_factory=dict)
@@ -185,6 +186,7 @@ class AppState:
             avoid_lovers=config.get("avoid_lovers", True),
             prefer_low_aggression=config.get("prefer_low_aggression", True),
             prefer_high_libido=config.get("prefer_high_libido", True),
+            prefer_high_charisma=config.get("prefer_high_charisma", True),
             gay_flags=config.get("gay_flags", {}),
         )
 
@@ -200,6 +202,7 @@ class AppState:
             "avoid_lovers": self.avoid_lovers,
             "prefer_low_aggression": self.prefer_low_aggression,
             "prefer_high_libido": self.prefer_high_libido,
+            "prefer_high_charisma": self.prefer_high_charisma,
             "gay_flags": self.gay_flags,
         }
 

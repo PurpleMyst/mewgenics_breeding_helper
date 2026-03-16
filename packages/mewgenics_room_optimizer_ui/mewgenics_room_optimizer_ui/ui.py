@@ -164,9 +164,14 @@ def build_params_section(state: AppState):
                 )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(
-                    label="Prefer Low Aggression",
-                    tag="prefer_low_aggression",
-                    default_value=state.prefer_low_aggression,
+                    label="Prefer High Libido",
+                    tag="prefer_high_libido",
+                    default_value=state.prefer_high_libido,
+                )
+                dpg.add_checkbox(
+                    label="Prefer High Charisma",
+                    tag="prefer_high_charisma",
+                    default_value=state.prefer_high_charisma,
                 )
                 dpg.add_checkbox(
                     label="Prefer High Libido",
@@ -367,10 +372,9 @@ def on_clear_traits(sender, app_data, user_data: AppState):
 
 
 def on_toggle_gay(sender, app_data, user_data: tuple[int, AppState]):
-    """Toggle gay flag for a cat."""
+    """Set gay flag for a cat based on checkbox state."""
     db_key, state = user_data
-    current = state.gay_flags.get(db_key, False)
-    state.gay_flags[db_key] = not current
+    state.gay_flags[db_key] = app_data
     state.save()
     cat = next((c for c in state.cats if c.db_key == db_key), None)
     if cat:
@@ -652,12 +656,17 @@ def run_optimization(sender, app_data, user_data: AppState):
     if not user_data.cats:
         return
 
+    dpg.set_value("status_text", "Calculating...")
+    dpg.configure_item("optimize_button", enabled=False)
+    dpg.render_dearpygui_frame()
+
     min_stats = dpg.get_value("min_stats")
     max_risk = dpg.get_value("max_risk")
     minimize_variance = dpg.get_value("minimize_variance")
     avoid_lovers = dpg.get_value("avoid_lovers")
     prefer_low_aggression = dpg.get_value("prefer_low_aggression")
     prefer_high_libido = dpg.get_value("prefer_high_libido")
+    prefer_high_charisma = dpg.get_value("prefer_high_charisma")
 
     params = OptimizationParams(
         min_stats=min_stats,
@@ -666,6 +675,7 @@ def run_optimization(sender, app_data, user_data: AppState):
         avoid_lovers=avoid_lovers,
         prefer_low_aggression=prefer_low_aggression,
         prefer_high_libido=prefer_high_libido,
+        prefer_high_charisma=prefer_high_charisma,
         planner_traits=user_data.planner_traits,
     )
 
@@ -674,6 +684,9 @@ def run_optimization(sender, app_data, user_data: AppState):
         user_data.cats, user_data.room_configs, params, ancestor_contribs
     )
     user_data.results = results
+
+    dpg.set_value("status_text", "Optimization Complete")
+    dpg.configure_item("optimize_button", enabled=True)
 
     update_results_table(results, user_data)
 
@@ -845,9 +858,15 @@ def show_cat_detail_window(cat, state):
     dpg.delete_item(container, children_only=True)
 
     with dpg.group(parent=container):
-        # Top half: Compact bio and stats in tables
+        room_display = cat.room or "Unknown"
+        if cat.room:
+            for rc in state.room_configs:
+                if rc.key == cat.room:
+                    room_display = rc.display_name
+                    break
+
         with dpg.table(
-            tag="inspector_bio_table",
+            tag="bio_table",
             header_row=False,
             borders_innerH=False,
             borders_innerV=False,
@@ -865,50 +884,47 @@ def show_cat_detail_window(cat, state):
                 dpg.add_text(f"Gender: {cat.gender}")
                 dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
                 dpg.add_text(f"Status: {cat.status}")
-                room_display = cat.room or "Unknown"
-                if cat.room:
-                    for rc in state.room_configs:
-                        if rc.key == cat.room:
-                            room_display = rc.display_name
-                            break
                 dpg.add_text(f"Room: {room_display}")
 
-            with dpg.table_row():
-                for i, stat in enumerate(cat.stat_base):
-                    dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
-
         is_gay = state.gay_flags.get(cat.db_key, False)
-        dpg.add_button(
-            label="Gay" if is_gay else "Straight",
+        dpg.add_checkbox(
+            label="Same-Sex Breeding Preference",
+            default_value=is_gay,
             callback=on_toggle_gay,
             user_data=(cat.db_key, state),
         )
 
-        dpg.add_separator()
-
-        # Bottom half: Vertical stack for traits (preserved)
-        dpg.add_text("Active Abilities:")
-        for ab in cat.abilities or []:
-            desc = state.game_data.ability_descriptions.get(
-                ab.lower(), "No description"
-            )
-            dpg.add_text(f"  {ab}")
-            if desc:
-                dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
+        with dpg.group(horizontal=True):
+            for i, stat in enumerate(cat.stat_base):
+                dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
 
         dpg.add_separator()
 
-        dpg.add_text("Passive Abilities:")
-        for ab in cat.passive_abilities or []:
-            desc = state.game_data.ability_descriptions.get(
-                ab.lower(), "No description"
-            )
-            dpg.add_text(f"  {ab}")
-            if desc:
-                dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
+        with dpg.tree_node(
+            label=f"Active Abilities ({len(cat.abilities or [])})", default_open=False
+        ):
+            for ab in cat.abilities or []:
+                desc = state.game_data.ability_descriptions.get(
+                    ab.lower(), "No description"
+                )
+                dpg.add_text(f"  {ab}")
+                if desc:
+                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
-        dpg.add_separator()
+        with dpg.tree_node(
+            label=f"Passive Abilities ({len(cat.passive_abilities or [])})",
+            default_open=False,
+        ):
+            for ab in cat.passive_abilities or []:
+                desc = state.game_data.ability_descriptions.get(
+                    ab.lower(), "No description"
+                )
+                dpg.add_text(f"  {ab}")
+                if desc:
+                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
-        dpg.add_text("Mutations:")
-        for mut in cat.mutations or []:
-            dpg.add_text(f"  {mut}")
+        with dpg.tree_node(
+            label=f"Mutations ({len(cat.mutations or [])})", default_open=False
+        ):
+            for mut in cat.mutations or []:
+                dpg.add_text(f"  {mut}")

@@ -43,6 +43,7 @@ class PairFactors:
 
     aggression_factor: float
     libido_factor: float
+    charisma_factor: float
 
     trait_matches: list[TraitRequirement]
 
@@ -72,6 +73,13 @@ def aggression_factor(a: Cat, b: Cat) -> float:
 def libido_factor(a: Cat, b: Cat) -> float:
     """Higher is better: (libido_a + libido_b) / 2."""
     return (_default_01(a.libido) + _default_01(b.libido)) / 2.0
+
+
+def charisma_factor(a: Cat, b: Cat) -> float:
+    """Higher is better: (charisma_a + charisma_b) / 2, normalized to 0-1."""
+    cha_a = a.stat_base[5] / 10.0 if len(a.stat_base) > 5 else 0.5
+    cha_b = b.stat_base[5] / 10.0 if len(b.stat_base) > 5 else 0.5
+    return (cha_a + cha_b) / 2.0
 
 
 def trait_coverage(
@@ -126,5 +134,6 @@ def calculate_pair_factors(
         stat_variance=stat_variance(a, b),
         aggression_factor=aggression_factor(a, b),
         libido_factor=libido_factor(a, b),
+        charisma_factor=charisma_factor(a, b),
         trait_matches=trait_coverage(a, b, planner_traits or []),
     )

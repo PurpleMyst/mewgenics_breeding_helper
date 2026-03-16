@@ -57,6 +57,7 @@ class OptimizationParams:
     avoid_lovers: bool = True
     prefer_low_aggression: bool = True
     prefer_high_libido: bool = True
+    prefer_high_charisma: bool = True
     stimulation: float = 50.0
     planner_traits: list[TraitRequirement] = field(default_factory=list)
     gay_flags: dict[int, bool] = field(default_factory=dict)
