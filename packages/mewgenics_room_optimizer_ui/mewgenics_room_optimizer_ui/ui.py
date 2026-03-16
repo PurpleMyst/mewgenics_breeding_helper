@@ -254,10 +254,34 @@ def build_traits_section(state: AppState):
                     )
 
             dpg.add_separator()
-            dpg.add_text("Selected Traits:")
-            dpg.add_button(label="Clear All", callback=on_clear_traits, user_data=state)
+            with dpg.table(
+                header_row=False, borders_innerV=False, borders_outerV=False
+            ):
+                dpg.add_table_column(width_stretch=True)
+                dpg.add_table_column(width_fixed=True, init_width_or_weight=80)
+                with dpg.table_row():
+                    dpg.add_text("Selected Traits:")
+                    dpg.add_button(
+                        label="Clear All", callback=on_clear_traits, user_data=state
+                    )
 
             dpg.add_group(tag="selected_traits_container")
+
+
+def _format_trait_with_description(
+    trait_key: str, game_data, max_desc_len: int = 40
+) -> str:
+    """Format a trait with its description for display in listbox."""
+    desc = game_data.ability_descriptions.get(trait_key.lower(), "")
+    if desc:
+        truncated = desc[:max_desc_len] + "..." if len(desc) > max_desc_len else desc
+        return f"{trait_key} | {truncated}"
+    return trait_key
+
+
+def _extract_trait_key(formatted: str) -> str:
+    """Extract the actual trait key from a formatted listbox string."""
+    return formatted.split(" | ")[0].strip()
 
 
 def on_mutation_filter(sender, app_data, user_data: AppState):
@@ -267,7 +291,10 @@ def on_mutation_filter(sender, app_data, user_data: AppState):
     filtered = (
         [m for m in mutations if filter_text in m.lower()] if filter_text else mutations
     )
-    dpg.configure_item("mutation_listbox", items=filtered)
+    formatted = [
+        _format_trait_with_description(m, user_data.game_data) for m in filtered
+    ]
+    dpg.configure_item("mutation_listbox", items=formatted)
 
 
 def on_passive_filter(sender, app_data, user_data: AppState):
@@ -277,7 +304,10 @@ def on_passive_filter(sender, app_data, user_data: AppState):
     filtered = (
         [p for p in passives if filter_text in p.lower()] if filter_text else passives
     )
-    dpg.configure_item("passive_listbox", items=filtered)
+    formatted = [
+        _format_trait_with_description(p, user_data.game_data) for p in filtered
+    ]
+    dpg.configure_item("passive_listbox", items=formatted)
 
 
 def on_ability_filter(sender, app_data, user_data: AppState):
@@ -287,7 +317,10 @@ def on_ability_filter(sender, app_data, user_data: AppState):
     filtered = (
         [a for a in abilities if filter_text in a.lower()] if filter_text else abilities
     )
-    dpg.configure_item("ability_listbox", items=filtered)
+    formatted = [
+        _format_trait_with_description(a, user_data.game_data) for a in filtered
+    ]
+    dpg.configure_item("ability_listbox", items=formatted)
 
 
 def on_add_mutation(sender, app_data, user_data: AppState):
@@ -302,8 +335,9 @@ def on_add_mutation(sender, app_data, user_data: AppState):
     if selected:
         from mewgenics_scorer import TraitRequirement
 
+        actual_key = _extract_trait_key(selected)
         user_data.planner_traits.append(
-            TraitRequirement(category="mutation", key=selected, weight=5.0)
+            TraitRequirement(category="mutation", key=actual_key, weight=5.0)
         )
         user_data.save()
         update_traits_display(user_data)
@@ -321,8 +355,9 @@ def on_add_passive(sender, app_data, user_data: AppState):
     if selected:
         from mewgenics_scorer import TraitRequirement
 
+        actual_key = _extract_trait_key(selected)
         user_data.planner_traits.append(
-            TraitRequirement(category="passive", key=selected, weight=5.0)
+            TraitRequirement(category="passive", key=actual_key, weight=5.0)
         )
         user_data.save()
         update_traits_display(user_data)
@@ -340,8 +375,9 @@ def on_add_ability(sender, app_data, user_data: AppState):
     if selected:
         from mewgenics_scorer import TraitRequirement
 
+        actual_key = _extract_trait_key(selected)
         user_data.planner_traits.append(
-            TraitRequirement(category="ability", key=selected, weight=5.0)
+            TraitRequirement(category="ability", key=actual_key, weight=5.0)
         )
         user_data.save()
         update_traits_display(user_data)
@@ -395,7 +431,13 @@ def update_traits_display(state: AppState):
 
     for i, trait in enumerate(state.planner_traits):
         with dpg.group(horizontal=True, parent=container):
-            dpg.add_text(f"[{int(trait.weight)}] {trait.category}: {trait.key}")
+            trait_text = dpg.add_text(
+                f"[{int(trait.weight)}] {trait.category}: {trait.key}"
+            )
+            with dpg.tooltip(trait_text):
+                dpg.add_text(
+                    f"Category: {trait.category}\nWeight: {int(trait.weight)}/10\nTrait: {trait.key}"
+                )
             dpg.add_button(
                 label="-",
                 width=25,
@@ -537,9 +579,19 @@ def init_traits_lists(state: AppState):
     passives = state.get_available_passives()
     abilities = state.get_available_abilities()
 
-    dpg.configure_item("mutation_listbox", items=mutations)
-    dpg.configure_item("passive_listbox", items=passives)
-    dpg.configure_item("ability_listbox", items=abilities)
+    formatted_mutations = [
+        _format_trait_with_description(m, state.game_data) for m in mutations
+    ]
+    formatted_passives = [
+        _format_trait_with_description(p, state.game_data) for p in passives
+    ]
+    formatted_abilities = [
+        _format_trait_with_description(a, state.game_data) for a in abilities
+    ]
+
+    dpg.configure_item("mutation_listbox", items=formatted_mutations)
+    dpg.configure_item("passive_listbox", items=formatted_passives)
+    dpg.configure_item("ability_listbox", items=formatted_abilities)
 
     update_traits_display(state)
 
@@ -843,19 +895,44 @@ def build_details_tabs(selected_room, state):
         else:
             dpg.add_text("No breeding pairs in this room")
 
-    # Cats tab - clickable rows
+    # Cats tab - high-density table
     with dpg.tab(label="Cats", parent="details_tab_bar"):
         if selected_room.cats:
-            for cat in selected_room.cats:
-                cat_name = cat.name or "Unnamed"
-                dpg.add_selectable(
-                    label=f"{cat_name} [{cat.gender}] S:{sum(cat.stat_base)}",
-                    callback=on_cat_selected,
-                    user_data=(cat, state),
-                    tag=f"cat_row_{cat.db_key}",
-                )
+            with dpg.table(
+                tag="cats_detail_table",
+                header_row=True,
+                borders_innerH=True,
+                row_background=True,
+            ):
+                dpg.add_table_column(label="Name", width_stretch=True)
+                dpg.add_table_column(label="Sex", width_fixed=True)
+                dpg.add_table_column(label="Stats", width_fixed=True)
+                dpg.add_table_column(label="Top Traits", width_stretch=True)
+
+                for cat in selected_room.cats:
+                    cat_name = cat.name or "Unnamed"
+                    total_stats = sum(cat.stat_base)
+                    all_traits = (
+                        (cat.mutations or [])
+                        + (cat.passive_abilities or [])
+                        + (cat.abilities or [])
+                    )
+                    top_traits = all_traits[:2]
+                    traits_str = ", ".join(top_traits) if top_traits else "-"
+
+                    with dpg.table_row():
+                        dpg.add_selectable(
+                            label=cat_name,
+                            span_columns=True,
+                            callback=on_cat_selected,
+                            user_data=(cat, state),
+                            tag=f"cat_row_{cat.db_key}",
+                        )
+                        dpg.add_text(cat.gender)
+                        dpg.add_text(str(total_stats))
+                        dpg.add_text(traits_str)
         else:
-            dpg.add_text("No unpaired cats in this room")
+            dpg.add_text("No cats in this room")
 
     # Sandbox tab - simulate breeding pairs
     with dpg.tab(label="Sandbox", parent="details_tab_bar"):
