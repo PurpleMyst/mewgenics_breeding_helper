@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-_ABILITY_LOOKUP: dict[str, str] = {
+__all__ = [
+    "ABILITY_LOOKUP",
+    "MUTATION_DISPLAY_NAMES",
+    "ABILITY_KEY_ALIASES",
+]
+
+ABILITY_LOOKUP: dict[str, str] = {
     # Birth defects
     "twoedarm": "-2 Strength",
     "twotoedarm": "-2 Strength",
@@ -260,7 +266,7 @@ _ABILITY_LOOKUP: dict[str, str] = {
 }
 
 
-_MUTATION_DISPLAY_NAMES: dict[str, str] = {
+MUTATION_DISPLAY_NAMES: dict[str, str] = {
     "twoedarm": "Two-Toed Arm",
     "twotoedarm": "Two-Toed Arm",
     "twoedleg": "Two-Toed Leg",
@@ -312,7 +318,7 @@ _MUTATION_DISPLAY_NAMES: dict[str, str] = {
 }
 
 
-_ABILITY_KEY_ALIASES: dict[str, str] = {
+ABILITY_KEY_ALIASES: dict[str, str] = {
     "holymantle": "holymantel",
     "pawmissle": "pawmissile",
 }

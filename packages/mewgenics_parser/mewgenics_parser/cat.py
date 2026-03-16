@@ -106,11 +106,6 @@ class Cat:
     aggression: Optional[float]
     libido: Optional[float]
     inbredness: Optional[float]
-    parsed_gender: str
-    parsed_age: Optional[int]
-    parsed_aggression: Optional[float]
-    parsed_libido: Optional[float]
-    parsed_inbredness: Optional[float]
     abilities: list
     passive_abilities: list
     equipment: list
@@ -248,13 +243,6 @@ class Cat:
         self.libido = _read_personality(32)
         self.inbredness = _read_personality(40)
         self.aggression = _read_personality(64)
-
-        # Parsed baseline values (before any manual calibration overrides).
-        self.parsed_gender = self.gender
-        self.parsed_age = self.age
-        self.parsed_aggression = self.aggression
-        self.parsed_libido = self.libido
-        self.parsed_inbredness = self.inbredness
 
         # Relationship slots: direct db_key references relative to the byte
         # immediately after the optional post-name tag string.

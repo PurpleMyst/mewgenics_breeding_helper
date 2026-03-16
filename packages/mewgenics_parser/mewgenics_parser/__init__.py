@@ -232,6 +232,7 @@ Stat Names:
 from .save import parse_save, find_save_files, SaveData
 from .cat import Cat
 from .gpak import GameData
+from .data.abilities import ABILITY_LOOKUP, MUTATION_DISPLAY_NAMES, ABILITY_KEY_ALIASES
 
 __all__ = [
     "parse_save",
@@ -239,4 +240,7 @@ __all__ = [
     "SaveData",
     "Cat",
     "GameData",
+    "ABILITY_LOOKUP",
+    "MUTATION_DISPLAY_NAMES",
+    "ABILITY_KEY_ALIASES",
 ]
