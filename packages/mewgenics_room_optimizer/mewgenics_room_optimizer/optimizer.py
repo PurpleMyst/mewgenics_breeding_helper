@@ -1,5 +1,9 @@
 """Room optimization logic for Mewgenics breeding."""
 
+from dataclasses import replace
+
+import networkx as nx
+
 from mewgenics_parser import Cat
 from mewgenics_scorer import (
     calculate_pair_factors,
@@ -162,37 +166,28 @@ def _has_planner_trait(cat: Cat, params: OptimizationParams) -> bool:
 
 
 def _can_fit_pair(
-    pair: ScoredPair,
     room: RoomConfig,
-    assigned_cats: set[int],
-    pair_cats_in_room: set[int],
+    current_breeding_count: int,
 ) -> bool:
-    """Check if a pair can fit in a room."""
-    if room.max_cats is not None:
-        if len(pair_cats_in_room) + 2 > room.max_cats:
-            return False
-
-    if pair.cat_a.db_key in assigned_cats or pair.cat_b.db_key in assigned_cats:
-        return False
-
-    return True
+    """Check if a pair can fit in a room. EY cats are invisible to capacity."""
+    if room.max_cats is None:
+        return True
+    return (current_breeding_count + 2) <= room.max_cats
 
 
 def _can_fit_single(
-    cat: Cat,
     room: RoomConfig,
-    assigned_cats: set[int],
     current_count: int,
 ) -> bool:
-    """Check if a single cat can fit in a room."""
-    if room.max_cats is not None:
-        if current_count + 1 > room.max_cats:
-            return False
+    """Check if a single cat can fit in a room. EY cats are invisible to capacity."""
+    if room.max_cats is None:
+        return True
+    return (current_count + 1) <= room.max_cats
 
-    if cat.db_key in assigned_cats:
-        return False
 
-    return True
+def _calculate_true_stim(room: RoomConfig, ey_cats: list[Cat]) -> float:
+    """Calculate true stimulation for a room (base + EY cats)."""
+    return room.base_stim + len(ey_cats)
 
 
 def optimize(
@@ -201,23 +196,15 @@ def optimize(
     params: OptimizationParams,
     ancestor_contribs: dict[int, dict[Cat, float]],
 ) -> OptimizationResult:
-    """Main optimization entry point."""
+    """Main optimization entry point using graph theory for optimal pairing."""
 
     filtered_cats = _filter_cats(cats, params.min_stats)
 
+    # Separate cats
     eternal_youth_cats = [c for c in filtered_cats if _has_eternalyouth(c)]
     breeding_cats = [c for c in filtered_cats if not _has_eternalyouth(c)]
 
-    pairs = _generate_pairs(breeding_cats)
-
-    scored_pairs: list[ScoredPair] = []
-    for cat_a, cat_b in pairs:
-        scored = score_pair(cat_a, cat_b, ancestor_contribs, params)
-        if scored is not None:
-            scored_pairs.append(scored)
-
-    scored_pairs.sort(key=lambda p: p.quality, reverse=True)
-
+    # Setup room lists
     breeding_rooms = [r for r in room_configs if r.room_type == RoomType.BREEDING]
     general_rooms = [r for r in room_configs if r.room_type == RoomType.GENERAL]
     fighting_rooms = [r for r in room_configs if r.room_type == RoomType.FIGHTING]
@@ -227,57 +214,102 @@ def optimize(
     room_eternal_youth: dict[str, list[Cat]] = {r.key: [] for r in room_configs}
     assigned_cats: set[int] = set()
 
-    for pair in scored_pairs:
-        if pair.cat_a.db_key in assigned_cats or pair.cat_b.db_key in assigned_cats:
-            continue
+    # --- PHASE 1: EY BUFF PLACEMENT ---
+    # Put all EY cats into the single best breeding room (highest base_stim)
+    if breeding_rooms and eternal_youth_cats:
+        best_breeding_room = max(breeding_rooms, key=lambda r: r.base_stim)
+        for ey_cat in eternal_youth_cats:
+            room_eternal_youth[best_breeding_room.key].append(ey_cat)
+            assigned_cats.add(ey_cat.db_key)
 
+    # Calculate True Stimulation for all breeding rooms
+    room_true_stim: dict[str, float] = {}
+    for room in breeding_rooms:
+        room_true_stim[room.key] = _calculate_true_stim(
+            room, room_eternal_youth[room.key]
+        )
+
+    # --- PHASE 2: GRAPH THEORY MATCHMAKING ---
+    pairs = _generate_pairs(breeding_cats)
+
+    # Score all pairs using baseline stimulation (50.0)
+    temp_params = replace(params, stimulation=50.0)
+
+    G = nx.Graph()
+    pair_lookup: dict[tuple[int, int], ScoredPair] = {}
+
+    for cat_a, cat_b in pairs:
+        scored = score_pair(cat_a, cat_b, ancestor_contribs, temp_params)
+        if scored is not None:
+            edge_key = tuple(sorted([cat_a.db_key, cat_b.db_key]))
+            G.add_edge(cat_a.db_key, cat_b.db_key, weight=scored.quality)
+            pair_lookup[edge_key] = scored
+
+    # Find maximum weight matching (maxcardinality=False = prioritize total quality)
+    optimal_edges = nx.max_weight_matching(G, maxcardinality=False)
+
+    # Reconstruct the chosen pairs
+    optimal_pairs: list[ScoredPair] = []
+    for u, v in optimal_edges:
+        edge_key = tuple(sorted([u, v]))
+        if edge_key in pair_lookup:
+            optimal_pairs.append(pair_lookup[edge_key])
+
+    # Sort pairs from highest quality to lowest
+    optimal_pairs.sort(key=lambda p: p.quality, reverse=True)
+
+    # --- PHASE 3: ROOM BOARDING ---
+    # Sort rooms from highest True Stimulation to lowest
+    breeding_rooms.sort(key=lambda r: room_true_stim[r.key], reverse=True)
+
+    for pair in optimal_pairs:
         for room in breeding_rooms:
-            current_cats = set(c.db_key for c in room_assignments[room.key])
-            if _can_fit_pair(pair, room, assigned_cats, current_cats):
-                room_assignments[room.key].extend([pair.cat_a, pair.cat_b])
-                room_pairs[room.key].append(pair)
-                assigned_cats.add(pair.cat_a.db_key)
-                assigned_cats.add(pair.cat_b.db_key)
-                break
+            current_breeding_count = len(room_assignments[room.key])
+            if _can_fit_pair(room, current_breeding_count):
+                # RE-SCORE the pair using the room's True Stimulation
+                actual_params = replace(params, stimulation=room_true_stim[room.key])
+                final_pair = score_pair(
+                    pair.cat_a,
+                    pair.cat_b,
+                    ancestor_contribs,
+                    actual_params,
+                )
 
+                # Only assign if still within max_risk after re-scoring
+                if final_pair is not None:
+                    room_assignments[room.key].extend([pair.cat_a, pair.cat_b])
+                    room_pairs[room.key].append(final_pair)
+                    assigned_cats.add(pair.cat_a.db_key)
+                    assigned_cats.add(pair.cat_b.db_key)
+                    break
+
+    # --- PHASE 4: UNMATCHED CATS ---
     unassigned = [c for c in filtered_cats if c.db_key not in assigned_cats]
 
-    for ey_cat in eternal_youth_cats:
-        for room in breeding_rooms + general_rooms:
-            current_count = len(room_assignments[room.key]) + len(
-                room_eternal_youth[room.key]
-            )
-            if _can_fit_single(ey_cat, room, assigned_cats, current_count):
-                room_eternal_youth[room.key].append(ey_cat)
-                assigned_cats.add(ey_cat.db_key)
-                break
-
-    unassigned = [c for c in filtered_cats if c.db_key not in assigned_cats]
-
+    # Trait cats go to general rooms
     trait_cats = [c for c in unassigned if _has_planner_trait(c, params)]
-    non_trait_cats = [c for c in unassigned if c not in trait_cats]
-
     for cat in trait_cats:
         for room in general_rooms:
             current_count = len(room_assignments[room.key])
-            if _can_fit_single(cat, room, assigned_cats, current_count):
+            if _can_fit_single(room, current_count):
                 room_assignments[room.key].append(cat)
                 assigned_cats.add(cat.db_key)
                 break
 
-    trait_assigned = [c for c in trait_cats if c.db_key in assigned_cats]
+    # Non-trait cats go to fighting rooms + general rooms
     remaining = [c for c in unassigned if c.db_key not in assigned_cats]
-
-    for cat in remaining + non_trait_cats:
+    non_trait_cats = [c for c in remaining if c not in trait_cats]
+    for cat in non_trait_cats:
         for room in fighting_rooms + general_rooms:
             current_count = len(room_assignments[room.key])
-            if _can_fit_single(cat, room, assigned_cats, current_count):
+            if _can_fit_single(room, current_count):
                 room_assignments[room.key].append(cat)
                 assigned_cats.add(cat.db_key)
                 break
 
     excluded = [c for c in filtered_cats if c.db_key not in assigned_cats]
 
+    # --- BUILD RESULTS ---
     room_results: list[RoomAssignment] = []
     breeding_rooms_used = 0
     general_rooms_used = 0
