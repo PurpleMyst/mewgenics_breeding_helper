@@ -697,6 +697,9 @@ def build_all_cats_tab(state: AppState):
 
             dpg.add_text("Load a save to see cats", tag="all_cats_placeholder")
 
+    if state.cats:
+        update_all_cats_table(state)
+
 
 def build_inspector_section(state: AppState):
     """Build the inspector panel."""
