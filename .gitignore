@@ -1,6 +1,9 @@
 # Created by https://www.toptal.com/developers/gitignore/api/windows,python,vim
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,python,vim
 
+### Project Specific ###
+-p/
+
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
