@@ -20,7 +20,6 @@ def build_ui(state: AppState):
                 build_room_config_section(state)
                 build_params_section(state)
                 build_traits_section(state)
-                build_optimize_button(state)
 
             with dpg.child_window(border=False):
                 build_results_section(state)
@@ -65,7 +64,14 @@ def build_toolbar(state: AppState):
             else f"Loaded: {state.last_save_path}",
             tag="status_text",
         )
+        dpg.add_text("|")
         dpg.add_text(f"Cats: {len(state.cats)}", tag="cat_count_text")
+        dpg.add_button(
+            label="Calculate Optimal Distribution",
+            tag="optimize_button",
+            callback=run_optimization,
+            user_data=state,
+        )
 
 
 def build_room_config_section(state: AppState):
@@ -159,54 +165,51 @@ def build_params_section(state: AppState):
 def build_traits_section(state: AppState):
     """Build the favorable traits selection section."""
     with dpg.collapsing_header(label="Favorable Traits", default_open=True):
-        with dpg.child_window(height=200, border=True, tag="traits_section"):
-            with dpg.group(horizontal=True):
-                with dpg.group():
-                    dpg.add_text("Mutations")
+        with dpg.child_window(border=True, tag="traits_section"):
+            with dpg.tab_bar():
+                with dpg.tab(label="Mutations"):
                     dpg.add_input_text(
                         tag="mutation_filter",
                         hint="Filter...",
-                        width=150,
+                        width=-1,
                         callback=on_mutation_filter,
                         user_data=state,
                     )
                     dpg.add_listbox(
                         tag="mutation_listbox",
-                        width=150,
+                        width=-1,
                         num_items=5,
                     )
                     dpg.add_button(
                         label="Add", callback=on_add_mutation, user_data=state
                     )
-                with dpg.group():
-                    dpg.add_text("Passives")
+                with dpg.tab(label="Passives"):
                     dpg.add_input_text(
                         tag="passive_filter",
                         hint="Filter...",
-                        width=150,
+                        width=-1,
                         callback=on_passive_filter,
                         user_data=state,
                     )
                     dpg.add_listbox(
                         tag="passive_listbox",
-                        width=150,
+                        width=-1,
                         num_items=5,
                     )
                     dpg.add_button(
                         label="Add", callback=on_add_passive, user_data=state
                     )
-                with dpg.group():
-                    dpg.add_text("Abilities")
+                with dpg.tab(label="Abilities"):
                     dpg.add_input_text(
                         tag="ability_filter",
                         hint="Filter...",
-                        width=150,
+                        width=-1,
                         callback=on_ability_filter,
                         user_data=state,
                     )
                     dpg.add_listbox(
                         tag="ability_listbox",
-                        width=150,
+                        width=-1,
                         num_items=5,
                     )
                     dpg.add_button(
@@ -377,16 +380,6 @@ def on_increment_weight(sender, app_data, user_data: tuple[int, AppState]):
     update_traits_display(state)
 
 
-def build_optimize_button(state: AppState):
-    """Build the optimize button."""
-    dpg.add_button(
-        label="Calculate Optimal Distribution",
-        tag="optimize_button",
-        callback=run_optimization,
-        user_data=state,
-    )
-
-
 def build_results_section(state: AppState):
     """Build the results section."""
     with dpg.collapsing_header(label="Results", default_open=True):
@@ -407,12 +400,17 @@ def build_results_section(state: AppState):
 
 
 def build_details_section(state: AppState):
-    """Build the selected room details section."""
-    with dpg.collapsing_header(label="Selected Room Details", default_open=True):
-        with dpg.child_window(height=250, border=True, tag="details_section"):
+    """Build the details and inspector panels."""
+    with dpg.collapsing_header(label="Room Details", default_open=True):
+        with dpg.child_window(height=200, border=True, tag="details_section"):
             dpg.add_text(
                 "Select a room from results to see details", tag="details_placeholder"
             )
+
+    with dpg.collapsing_header(label="Inspector", default_open=True):
+        with dpg.child_window(border=True, tag="inspector_section"):
+            dpg.add_text("Select a cat to inspect", tag="inspector_placeholder")
+            dpg.add_group(tag="inspector_container")
 
 
 def build_themes():
@@ -630,6 +628,13 @@ def clear_details_section():
                 dpg.delete_item(child)
 
 
+def clear_inspector():
+    """Clear the inspector panel and show placeholder."""
+    container = "inspector_container"
+    if dpg.does_item_exist(container):
+        dpg.delete_item(container, children_only=True)
+
+
 def on_room_selected(sender, app_data, user_data):
     """Handle room selection in results table."""
     selected_key, state = user_data
@@ -645,6 +650,9 @@ def on_room_selected(sender, app_data, user_data):
 
     # Update state
     state.selected_result_room_key = selected_key
+
+    # Clear inspector when room is selected
+    clear_inspector()
 
     if not state.results:
         return
@@ -712,20 +720,16 @@ def on_cat_selected(sender, app_data, user_data):
 
 
 def show_cat_detail_window(cat, state):
-    """Show a window with full cat details."""
+    """Show cat details in the inspector panel."""
     from mewgenics_parser.constants import STAT_NAMES
 
-    # Close existing window if open
-    if dpg.does_item_exist("cat_detail_window"):
-        dpg.delete_item("cat_detail_window")
+    container = "inspector_container"
+    if not dpg.does_item_exist(container):
+        return
 
-    with dpg.window(
-        label=f"Cat: {cat.name or 'Unnamed'}",
-        width=450,
-        height=550,
-        tag="cat_detail_window",
-    ):
-        # Basic info
+    dpg.delete_item(container, children_only=True)
+
+    with dpg.group(parent=container):
         dpg.add_text(f"Name: {cat.name or 'Unnamed'}")
         dpg.add_text(f"Gender: {cat.gender}")
         dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
@@ -734,14 +738,12 @@ def show_cat_detail_window(cat, state):
 
         dpg.add_separator()
 
-        # Stats
         dpg.add_text("Base Stats:")
         for i, stat in enumerate(cat.stat_base):
             dpg.add_text(f"  {STAT_NAMES[i]}: {stat}")
 
         dpg.add_separator()
 
-        # Abilities
         dpg.add_text("Active Abilities:")
         for ab in cat.abilities or []:
             desc = state.game_data.ability_descriptions.get(
@@ -753,7 +755,6 @@ def show_cat_detail_window(cat, state):
 
         dpg.add_separator()
 
-        # Passive Abilities
         dpg.add_text("Passive Abilities:")
         for ab in cat.passive_abilities or []:
             desc = state.game_data.ability_descriptions.get(
@@ -765,7 +766,6 @@ def show_cat_detail_window(cat, state):
 
         dpg.add_separator()
 
-        # Mutations
         dpg.add_text("Mutations:")
         for mut in cat.mutations or []:
             dpg.add_text(f"  {mut}")
