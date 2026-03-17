@@ -8,6 +8,8 @@ __all__ = [
     "COLLARLESS_PASSIVES",
     "DISORDERS",
     "SKILLSHARE_PLUS_ID",
+    "SKILLSHARE_BASE_ID",
+    "normalize_trait_name",
     "is_class_spell",
     "is_class_passive",
     "has_skillshare_plus",
@@ -93,6 +95,17 @@ DISORDERS = frozenset(
 # Only the UPGRADED SkillShare+ triggers guaranteed inheritance
 # TODO: Verify exact internal ID from game data
 SKILLSHARE_PLUS_ID = "skillshare_plus"
+
+# Base SkillShare (cannot be inherited by offspring)
+SKILLSHARE_BASE_ID = "skillshare"
+
+
+def normalize_trait_name(trait_id: str) -> str:
+    """Strips upgrade identifiers (e.g., trailing '2') to return the base trait."""
+    tid = trait_id.strip()
+    if tid.endswith("2"):
+        return tid[:-1]
+    return tid
 
 
 def is_class_spell(spell_id: str) -> bool:

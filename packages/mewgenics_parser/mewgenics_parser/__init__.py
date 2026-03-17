@@ -234,6 +234,7 @@ from .cat import Cat
 from .gpak import GameData
 from .data.abilities import ABILITY_LOOKUP, MUTATION_DISPLAY_NAMES, ABILITY_KEY_ALIASES
 from .data.visual_names import VISUAL_MUTATION_NAMES
+from .trait_dictionary import normalize_trait_name
 
 __all__ = [
     "parse_save",
@@ -245,4 +246,5 @@ __all__ = [
     "MUTATION_DISPLAY_NAMES",
     "ABILITY_KEY_ALIASES",
     "VISUAL_MUTATION_NAMES",
+    "normalize_trait_name",
 ]

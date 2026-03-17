@@ -54,6 +54,23 @@ def make_mock_cat(
     cat.haters = haters or []
     cat.parent_a = parent_a
     cat.parent_b = parent_b
+
+    # Add inheritable_ properties (normalized, lowercase, SkillShare excluded)
+    from mewgenics_parser.trait_dictionary import (
+        normalize_trait_name,
+        SKILLSHARE_BASE_ID,
+    )
+
+    cat.inheritable_abilities = [
+        normalize_trait_name(a).lower() for a in (abilities or [])
+    ]
+
+    cat.inheritable_passives = [
+        normalize_trait_name(p).lower()
+        for p in (passive_abilities or [])
+        if normalize_trait_name(p).lower() != SKILLSHARE_BASE_ID
+    ]
+
     return cat
 
 
@@ -314,9 +331,9 @@ class TestTraitInheritanceProbability:
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
-        # At 0 stim: 20% chance to inherit, mother has 1 spell = 100% pool share
-        assert result.probability == pytest.approx(0.2)
-        assert result.parent_source == "mother"
+        # At 0 stim: 50% parent pick * 20% inherit chance * 100% pool = 10%
+        # Parent selection is decoupled from trait possession
+        assert result.probability == pytest.approx(0.1)
 
     def test_ability_pool_dilution(self):
         # Mother has 4 spells, father has 1
@@ -326,8 +343,9 @@ class TestTraitInheritanceProbability:
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
-        # 20% inherit chance * (1/4 pool size) = 5%
-        assert result.probability == pytest.approx(0.05)
+        # 50% parent pick * 20% inherit chance * (1/4 pool size) = 2.5%
+        # Parent selection is decoupled from trait possession
+        assert result.probability == pytest.approx(0.025)
 
     def test_passive_skillshare_plus_guaranteed(self):
         mother = make_mock_cat(1, passive_abilities=["skillshare_plus", "Sturdy"])
@@ -373,6 +391,39 @@ class TestTraitInheritanceProbability:
         # 80% inherit * 60% favor = 48%
         expected = 0.8 * ((1.0 + 0.01 * 50) / (2.0 + 0.01 * 50))
         assert result.probability == pytest.approx(expected)
+
+    def test_passive_skillshare_not_inherited(self):
+        """Base SkillShare cannot be inherited - should always return 0%."""
+        mother = make_mock_cat(1, passive_abilities=["skillshare", "Sturdy"])
+        father = make_mock_cat(2, passive_abilities=[])
+        trait = TraitRequirement("passive", "skillshare")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # Base skillshare is excluded from inheritable pool
+        assert result.probability == 0.0
+
+    def test_passive_upgraded_ability_normalized(self):
+        """Querying for base passive matches parent's upgraded variant."""
+        mother = make_mock_cat(1, passive_abilities=["Sturdy2"])
+        father = make_mock_cat(2, passive_abilities=[])
+        trait = TraitRequirement("passive", "sturdy")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # Should match because normalized = "sturdy"
+        assert result.probability > 0.0
+
+    def test_ability_upgraded_ability_normalized(self):
+        """Querying for base ability matches parent's upgraded variant."""
+        mother = make_mock_cat(1, abilities=["PathOfTheHunter2"])
+        father = make_mock_cat(2, abilities=[])
+        trait = TraitRequirement("ability", "PathOfTheHunter")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # Should match because normalized = "paththehunter"
+        assert result.probability > 0.0
 
 
 class TestDisorderInheritance:

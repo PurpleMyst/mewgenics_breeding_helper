@@ -120,8 +120,9 @@ def _calc_ability_inheritance(
 ) -> TraitInheritanceProbability:
     """Ability inheritance with CORRECT class-favoring algebra and pool dilution."""
 
-    mother_spells = [a.lower() for a in (mother.abilities or [])]
-    father_spells = [a.lower() for a in (father.abilities or [])]
+    # Use normalized abilities for pool
+    mother_spells = [a.lower() for a in mother.inheritable_abilities]
+    father_spells = [a.lower() for a in father.inheritable_abilities]
 
     mother_has = trait_key in mother_spells
     father_has = trait_key in father_spells
@@ -135,27 +136,20 @@ def _calc_ability_inheritance(
     # Class favoring chance: 0.01 * stim
     favor_chance = _class_favoring_chance(stimulation)
 
-    # Determine class spell presence
+    # === CRITICAL FIX: Decouple parent selection from target trait ===
+    # 1. Determine class spell presence (NOT target trait)
     mother_class = any(is_class_spell(s) for s in mother_spells)
     father_class = any(is_class_spell(s) for s in father_spells)
 
-    # CORRECTED: mother_select_prob = 0.5 + (0.5 * favor_chance)
-    if mother_has and father_has:
-        if mother_class and not father_class:
-            # Favor mother
-            mother_select_prob = 0.5 + (0.5 * favor_chance)
-        elif father_class and not mother_class:
-            # Favor father
-            mother_select_prob = 0.5 - (0.5 * favor_chance)
-        else:
-            # Both or neither have class - even split
-            mother_select_prob = 0.5
-    elif mother_has:
-        mother_select_prob = 1.0
+    # 2. Calculate parent selection probability (based on class spells only)
+    if mother_class and not father_class:
+        mother_select_prob = 0.5 + (0.5 * favor_chance)
+    elif father_class and not mother_class:
+        mother_select_prob = 0.5 - (0.5 * favor_chance)
     else:
-        mother_select_prob = 0.0
+        mother_select_prob = 0.5
 
-    # Pool dilution: divide by parent's spell pool size
+    # 3. Apply pool dilution to target trait
     mother_pool_size = len(mother_spells)
     father_pool_size = len(father_spells)
 
@@ -189,63 +183,55 @@ def _calc_passive_inheritance(
 ) -> TraitInheritanceProbability:
     """Passive inheritance with SKILLSHARE+ guarantee and pool dilution."""
 
-    # No filtering needed - Cat.disorders already separated
-    mother_passives = [p.lower() for p in (mother.passive_abilities or [])]
-    father_passives = [p.lower() for p in (father.passive_abilities or [])]
+    # Use normalized passives for pool (already excludes SkillShare via property)
+    mother_passives_norm = [p.lower() for p in mother.inheritable_passives]
+    father_passives_norm = [p.lower() for p in father.inheritable_passives]
 
-    mother_has = trait_key in mother_passives
-    father_has = trait_key in father_passives
+    mother_has = trait_key in mother_passives_norm
+    father_has = trait_key in father_passives_norm
 
-    # SKILLSHARE+ SPECIAL: 100% guaranteed (no pool dilution)
-    if has_skillshare_plus(mother):
-        other_passives = [p for p in mother_passives if p != SKILLSHARE_PLUS_ID]
-        if trait_key in other_passives:
-            return TraitInheritanceProbability(
-                trait=trait,
-                probability=1.0,
-                parent_source="mother (SkillShare+)",
-                inherit_chance=1.0,
-                parent_favor_chance=0.0,
-            )
+    # SKILLSHARE+ SPECIAL: 100% guaranteed
+    # Check using RAW passives (must check for + variant)
+    if has_skillshare_plus(mother) and mother_has:
+        return TraitInheritanceProbability(
+            trait=trait,
+            probability=1.0,
+            parent_source="mother (SkillShare+)",
+            inherit_chance=1.0,
+            parent_favor_chance=0.0,
+        )
 
-    if has_skillshare_plus(father):
-        other_passives = [p for p in father_passives if p != SKILLSHARE_PLUS_ID]
-        if trait_key in other_passives:
-            return TraitInheritanceProbability(
-                trait=trait,
-                probability=1.0,
-                parent_source="father (SkillShare+)",
-                inherit_chance=1.0,
-                parent_favor_chance=0.0,
-            )
+    if has_skillshare_plus(father) and father_has:
+        return TraitInheritanceProbability(
+            trait=trait,
+            probability=1.0,
+            parent_source="father (SkillShare+)",
+            inherit_chance=1.0,
+            parent_favor_chance=0.0,
+        )
 
-    # Normal passive inheritance
     if not mother_has and not father_has:
         return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
 
     inherit_chance = _passive_inheritance_chance(stimulation)
     favor_chance = _class_favoring_chance(stimulation)
 
-    # Class passive presence
-    mother_class = any(is_class_passive(p) for p in mother_passives)
-    father_class = any(is_class_passive(p) for p in father_passives)
+    # === CRITICAL FIX: Same as abilities ===
+    # 1. Determine class passive presence (NOT target trait)
+    mother_class = any(is_class_passive(p) for p in mother_passives_norm)
+    father_class = any(is_class_passive(p) for p in father_passives_norm)
 
-    # Same class-favoring math as abilities
-    if mother_has and father_has:
-        if mother_class and not father_class:
-            mother_select_prob = 0.5 + (0.5 * favor_chance)
-        elif father_class and not mother_class:
-            mother_select_prob = 0.5 - (0.5 * favor_chance)
-        else:
-            mother_select_prob = 0.5
-    elif mother_has:
-        mother_select_prob = 1.0
+    # 2. Calculate parent selection probability (based on class passives only)
+    if mother_class and not father_class:
+        mother_select_prob = 0.5 + (0.5 * favor_chance)
+    elif father_class and not mother_class:
+        mother_select_prob = 0.5 - (0.5 * favor_chance)
     else:
-        mother_select_prob = 0.0
+        mother_select_prob = 0.5
 
-    # Pool dilution
-    mother_pool_size = len(mother_passives)
-    father_pool_size = len(father_passives)
+    # 3. Apply pool dilution to target trait
+    mother_pool_size = len(mother_passives_norm)
+    father_pool_size = len(father_passives_norm)
 
     final_prob = 0.0
     if mother_has:
@@ -291,6 +277,10 @@ def _calc_mutation_inheritance(
 
     # Mutation favoring: (1.0 + 0.01*Stim) / (2.0 + 0.01*Stim)
     mutation_favor_chance = _better_chance(stimulation)
+
+    # TODO: If Mom has "Frostbit" and Dad has "Horns" (different mutation same slot),
+    # both parents are "mutated" but current logic incorrectly favors Mom for Frostbit.
+    # Fix requires mapping mutations to body part slots.
 
     # If only one parent has mutation, apply favoring
     if mother_has and father_has:

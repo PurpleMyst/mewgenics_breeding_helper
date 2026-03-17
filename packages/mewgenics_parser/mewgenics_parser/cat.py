@@ -10,7 +10,7 @@ from typing import Optional
 
 from .binary import BinaryReader
 from .constants import STAT_NAMES, _JUNK_STRINGS, _IDENT_RE, ROOM_DISPLAY
-from .trait_dictionary import DISORDERS
+from .trait_dictionary import DISORDERS, normalize_trait_name, SKILLSHARE_BASE_ID
 from .visual import (
     _read_visual_mutation_entries,
     _visual_mutation_chip_items,
@@ -417,3 +417,17 @@ class Cat:
     def short_name(self) -> str:
         """First word of name for compact displays."""
         return self.name.split()[0] if self.name else "?"
+
+    @property
+    def inheritable_abilities(self) -> list[str]:
+        """Returns normalized abilities for inheritance math."""
+        return [normalize_trait_name(a) for a in self.abilities]
+
+    @property
+    def inheritable_passives(self) -> list[str]:
+        """Returns normalized passives, strictly excluding SkillShare."""
+        return [
+            normalize_trait_name(p)
+            for p in self.passive_abilities
+            if normalize_trait_name(p).lower() != SKILLSHARE_BASE_ID
+        ]
