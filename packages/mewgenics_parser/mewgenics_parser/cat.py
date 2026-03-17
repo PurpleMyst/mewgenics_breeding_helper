@@ -102,15 +102,15 @@ class Cat:
     visual_mutation_ids: list
     visual_mutation_slots: dict
     body_parts: dict
+    gender_token_fields: tuple
+    gender_token: str
+    name_tag: str
     parent_a: Optional[Cat] = field(default=None, repr=False)
     parent_b: Optional[Cat] = field(default=None, repr=False)
     children: list = field(default_factory=list, repr=False)
     lovers: list = field(default_factory=list, repr=False)
     haters: list = field(default_factory=list, repr=False)
     generation: int = field(default=0, repr=False)
-    gender_token_fields: tuple
-    gender_token: str
-    name_tag: str
 
     # Private attributes (not included in dataclass repr)
     _uid_int: int = field(repr=False, default=0)
@@ -148,7 +148,7 @@ class Cat:
         self.breed_id = r.u32()
         self._uid_int = r.u64()  # cat's own unique id (seed)
         self.unique_id = hex(self._uid_int)
-        self.name = r.utf16str()
+        self.name = r.utf16str() or "Unnamed"
 
         # Optional post-name tag string (empty for most cats). Some fields below
         # are anchored to the byte immediately after this string.

@@ -6,6 +6,8 @@ from mewgenics_room_optimizer import RoomType
 
 from .state import AppState
 
+LOCATION_COL_WIDTH = 125
+
 
 def substring_match(query: str, choices: list[str]) -> list[str]:
     """Return items containing query as substring (case-insensitive)."""
@@ -746,7 +748,7 @@ def build_all_cats_tab(state: AppState):
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(
-                    label="Location", width_fixed=True, init_width_or_weight=100
+                    label="Location", width_fixed=True, init_width_or_weight=LOCATION_COL_WIDTH
                 )
                 dpg.add_table_column(label="STR", width_fixed=True)
                 dpg.add_table_column(label="DEX", width_fixed=True)
@@ -1276,7 +1278,7 @@ def build_details_tabs(selected_room, state):
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(
-                    label="Location", width_fixed=True, init_width_or_weight=100
+                    label="Location", width_fixed=True, init_width_or_weight=LOCATION_COL_WIDTH
                 )
                 dpg.add_table_column(label="STR", width_fixed=True)
                 dpg.add_table_column(label="DEX", width_fixed=True)
@@ -1363,7 +1365,10 @@ def build_details_tabs(selected_room, state):
                         misplaced.append(
                             {
                                 "cat": cat,
-                                "assigned_room": assigned_room,
+                                "assigned_room": next(
+                                    (r.display_name for r in state.room_configs if r.key == assigned_room),
+                                    assigned_room,
+                                ),
                             }
                         )
 
@@ -1376,26 +1381,18 @@ def build_details_tabs(selected_room, state):
                 ):
                     dpg.add_table_column(label="Name", width_fixed=True)
                     dpg.add_table_column(
-                        label="In Save", width_fixed=True, init_width_or_weight=100
+                        label="In Save", width_fixed=True, init_width_or_weight=LOCATION_COL_WIDTH
                     )
                     dpg.add_table_column(
-                        label="Assigned", width_fixed=True, init_width_or_weight=100
+                        label="Assigned", width_fixed=True, init_width_or_weight=LOCATION_COL_WIDTH
                     )
-                    dpg.add_table_column(label="Total", width_fixed=True)
-                    dpg.add_table_column(label="Traits", width_stretch=True)
 
                     for item in misplaced:
                         cat = item["cat"]
-                        has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
-                        trait_badge = "[*] " if has_fav else ""
-                        total = sum(cat.total_stats.values())
-
                         with dpg.table_row():
                             dpg.add_text(cat.name or "Unnamed")
                             dpg.add_text(selected_room.room.display_name)
                             dpg.add_text(item["assigned_room"])
-                            dpg.add_text(str(total))
-                            dpg.add_text(trait_badge)
             else:
                 dpg.add_text("No misplaced cats in this room")
 
