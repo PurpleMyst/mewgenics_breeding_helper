@@ -1264,6 +1264,8 @@ def build_details_tabs(selected_room, state):
     # Cats tab - high-density table
     with dpg.tab(label="Cats", parent="details_tab_bar"):
         all_cats = list(selected_room.cats) + list(selected_room.eternal_youth_cats)
+        # Sort by age then name
+        all_cats.sort(key=lambda c: (c.age if c.age is not None else 999, c.name or ""))
         if all_cats:
             with dpg.table(
                 tag="cats_detail_table",
@@ -1274,7 +1276,17 @@ def build_details_tabs(selected_room, state):
                 dpg.add_table_column(label="Name", width_stretch=True)
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
-                dpg.add_table_column(label="Stats", width_fixed=True)
+                dpg.add_table_column(
+                    label="Location", width_fixed=True, init_width_or_weight=100
+                )
+                dpg.add_table_column(label="STR", width_fixed=True)
+                dpg.add_table_column(label="DEX", width_fixed=True)
+                dpg.add_table_column(label="CON", width_fixed=True)
+                dpg.add_table_column(label="INT", width_fixed=True)
+                dpg.add_table_column(label="SPD", width_fixed=True)
+                dpg.add_table_column(label="CHA", width_fixed=True)
+                dpg.add_table_column(label="LCK", width_fixed=True)
+                dpg.add_table_column(label="Total", width_fixed=True)
                 dpg.add_table_column(label="Traits", width_fixed=True)
 
                 for cat in all_cats:
@@ -1282,8 +1294,24 @@ def build_details_tabs(selected_room, state):
                     cat_name = cat.name or "Unnamed"
                     if is_ey:
                         cat_name = f"{cat_name} [EY]"
-                    total_stats = sum(cat.stat_base)
+                    total_stats = sum(cat.stat_base.values())
                     age = cat.age if cat.age is not None else "-"
+
+                    # Get assigned room and determine location color
+                    assigned_room = _get_assigned_room_key(cat.db_key, state.results)
+                    current_room = cat.room
+                    if assigned_room is None:
+                        location_color = (255, 200, 100, 255)  # Yellow - not assigned
+                    elif current_room == assigned_room:
+                        location_color = (100, 255, 100, 255)  # Green - correct
+                    else:
+                        location_color = (255, 100, 100, 255)  # Red - wrong room
+
+                    # Get individual stats
+                    stats = cat.stat_base
+                    stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
+                    stat_values = [stats.get(s, 0) for s in stat_order]
+
                     name_color = (
                         (0, 255, 255, 255) if is_ey else (255, 255, 255, 255)
                     )  # Teal for EY
@@ -1301,6 +1329,11 @@ def build_details_tabs(selected_room, state):
                         )
                         dpg.add_text(cat.gender)
                         dpg.add_text(str(age))
+                        dpg.add_text(
+                            cat.room_display or current_room, color=location_color
+                        )
+                        for sv in stat_values:
+                            dpg.add_text(str(sv))
                         dpg.add_text(str(total_stats))
                         dpg.add_text(
                             trait_badge,
