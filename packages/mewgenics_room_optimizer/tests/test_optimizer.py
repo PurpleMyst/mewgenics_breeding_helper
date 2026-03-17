@@ -11,7 +11,6 @@ from mewgenics_room_optimizer import (
     RoomType,
     can_pair_gay,
     optimize_sa,
-    score_pair,
 )
 from mewgenics_room_optimizer.optimizer import (
     PairCache,
@@ -21,7 +20,6 @@ from mewgenics_room_optimizer.optimizer import (
     _filter_cats,
     _generate_pairs,
     _has_eternalyouth,
-    _passes_throughput_cap,
 )
 
 # --- TEST FIXTURES & HELPERS ---
@@ -118,24 +116,6 @@ class TestConstraints:
         assert len(result) == 1
         assert result[0].db_key == 2
 
-    def test_throughput_cap_harem_prevention(self):
-        room = RoomConfig("b1", "B1", RoomType.BREEDING, max_cats=5, base_stim=50.0)
-        # Cap should be 5 - 2 = 3 max per gender
-        cats_in_room = [make_mock_cat(i, "male") for i in range(3)]
-
-        # Adding a 4th male should fail
-        assert (
-            _passes_throughput_cap(room, cats_in_room, make_mock_cat(4, "male"))  # ty:ignore[invalid-argument-type]
-            is False
-        )
-        # Adding a female should succeed
-        assert (
-            _passes_throughput_cap(room, cats_in_room, make_mock_cat(5, "female"))  # ty:ignore[invalid-argument-type]
-            is True
-        )
-        # Adding a spidercat should succeed
-        assert _passes_throughput_cap(room, cats_in_room, make_mock_cat(6, "?")) is True  # ty:ignore[invalid-argument-type]
-
 
 # --- INTEGRATION TESTS: SA LOGIC ---
 
@@ -209,7 +189,9 @@ class TestOptimizePipeline:
             PairCache(),
             {},
             params,
-            cats,  # ty:ignore[invalid-argument-type]
+            sa_cats=cats,  # ty:ignore[invalid-argument-type]
+            ey_assignments={},
+            filtered_cats=cats,  # ty:ignore[invalid-argument-type]
         )
 
         # Assert Breeding

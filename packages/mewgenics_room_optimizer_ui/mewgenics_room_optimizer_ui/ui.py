@@ -40,7 +40,6 @@ def render_cat_table_rows(
     row_tag_prefix: str = "row",
 ):
     """Universal renderer for cat table rows to enforce consistent UI."""
-    from mewgenics_parser.constants import STAT_NAMES
 
     for cat in cats:
         if is_ey_check and eternal_youth_cats:
@@ -49,7 +48,6 @@ def render_cat_table_rows(
             is_ey = hasattr(cat, "eternal_youth") and cat.eternal_youth
 
         cat_name = name_callback(cat) if name_callback else (cat.name or "Unnamed")
-        name_color = COLOR_EY_TEAL if is_ey else COLOR_DEFAULT_TEXT
 
         sex_display = (
             cat.gender.value if hasattr(cat.gender, "value") else str(cat.gender)
@@ -88,7 +86,6 @@ def render_cat_table_rows(
                 user_data=user_data,
                 tag=tag,
             )
-            dpg.bind_item_theme(dpg.last_item(), name_color)
 
             dpg.add_text(str(sex_display))
             dpg.add_text(age_display)
@@ -726,8 +723,6 @@ def update_all_cats_table(
             age_display = f"{age} [EY]"
         else:
             age_display = str(age)
-
-        status = cat.status if cat.status else "Unknown"
 
         # Get assigned room and determine location color
         assigned_room = _get_assigned_room_key(cat.db_key, state.results)
@@ -1426,10 +1421,6 @@ def build_details_tabs(selected_room, state):
                     stats = cat.total_stats
                     stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
                     stat_values = [stats.get(s, 0) for s in stat_order]
-
-                    name_color = (
-                        COLOR_EY_TEAL if is_ey else COLOR_DEFAULT_TEXT
-                    )  # Teal for EY
 
                     has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
                     trait_badge = "[*]" if has_fav else ""
