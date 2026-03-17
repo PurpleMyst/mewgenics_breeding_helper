@@ -1215,8 +1215,6 @@ def build_details_tabs(selected_room, state):
                         cat_name = f"{cat_name} [EY]"
                     total_stats = sum(cat.stat_base)
                     age = cat.age if cat.age is not None else "-"
-                    if age != "-":
-                        age = min(age, 100)
                     name_color = (
                         (0, 255, 255, 255) if is_ey else (255, 255, 255, 255)
                     )  # Teal for EY
