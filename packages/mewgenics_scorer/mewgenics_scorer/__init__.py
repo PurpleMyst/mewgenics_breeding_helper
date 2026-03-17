@@ -16,6 +16,7 @@ from .factors import (
     DEFAULT_STIMULATION,
 )
 from .ancestry import (
+    AncestorData,
     build_ancestor_contribs,
     coi_from_contribs,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "expected_disorder_inheritance",
     "build_ancestor_contribs",
     "coi_from_contribs",
+    "AncestorData",
     "can_breed",
     "is_hater_conflict",
     "is_lover_conflict",

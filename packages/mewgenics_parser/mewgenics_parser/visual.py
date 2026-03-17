@@ -137,7 +137,7 @@ def _parse_mutation_gon(
 def _read_visual_mutation_entries(
     table: list[int],
     gpak_data: dict[str, dict[int, tuple[str, str]]] | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, str | int]]:
     """Read visual mutation entries from a table.
 
     Args:
@@ -147,7 +147,7 @@ def _read_visual_mutation_entries(
     if gpak_data is None:
         gpak_data = {}
     fallback_names = VISUAL_MUTATION_NAMES
-    entries: list[dict[str, object]] = []
+    entries: list[dict[str, str | int]] = []
     for (
         slot_key,
         table_index,
@@ -194,10 +194,10 @@ def _read_visual_mutation_entries(
 
 
 def _visual_mutation_chip_items(
-    entries: list[dict[str, object]],
+    entries: list[dict[str, str | int]],
 ) -> list[tuple[str, str]]:
     """Convert visual mutation entries into chip items with tooltips."""
-    grouped: dict[tuple[str, int], list[dict[str, object]]] = {}
+    grouped: dict[tuple[str, int], list[dict[str, str | int]]] = {}
     order: list[tuple[str, int]] = []
     for entry in entries:
         key = (str(entry["group_key"]), int(entry["mutation_id"]))
@@ -206,7 +206,7 @@ def _visual_mutation_chip_items(
             order.append(key)
         grouped[key].append(entry)
 
-    groups: list[dict[str, object]] = []
+    groups: list[dict[str, str | int | list[str]]] = []
     for key in order:
         items = grouped[key]
         slot_labels = [str(item["slot_label"]) for item in items]
@@ -239,6 +239,6 @@ def _visual_mutation_chip_items(
     for group in groups:
         text = str(group["text"])
         if text_counts[text] > 1:
-            text = f"{text} ({' / '.join(group['slot_labels'])})"
+            text = f"{text} ({' / '.join(group['slot_labels'])})"  # type: ignore[union-attr]
         chip_items.append((text, str(group["tooltip"])))
     return chip_items

@@ -588,7 +588,8 @@ def update_all_cats_table(
 
     children = dpg.get_item_children(table)
     if children and 1 in children:
-        for row in children[1]:
+        for row in children[1]:  # type: ignore[iterable]
+            dpg.delete_item(row)
             dpg.delete_item(row)
 
     show_all = dpg.get_value("show_all_cats")
@@ -659,7 +660,7 @@ def update_all_cats_table(
                 user_data=(cat.db_key, state),
                 tag=f"all_cats_row_{cat.db_key}",
             )
-            dpg.add_text(sex_display)
+            dpg.add_text(str(sex_display))
             dpg.add_text(age_display)
             dpg.add_text(cat.room_display or current_room, color=location_color)
             for sv in stat_values:
@@ -748,7 +749,9 @@ def build_all_cats_tab(state: AppState):
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(
-                    label="Location", width_fixed=True, init_width_or_weight=LOCATION_COL_WIDTH
+                    label="Location",
+                    width_fixed=True,
+                    init_width_or_weight=LOCATION_COL_WIDTH,
                 )
                 dpg.add_table_column(label="STR", width_fixed=True)
                 dpg.add_table_column(label="DEX", width_fixed=True)
@@ -814,16 +817,20 @@ def on_global_enter(sender, app_data, user_data):
         on_add_ability(None, None, user_data)
 
 
-def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
+def scan_and_load_saves(sender=None, app_data=None, user_data: AppState | None = None):
     """Scan for saves and auto-load the newest."""
     from mewgenics_parser import find_save_files, parse_save
 
-    if user_data is None:
-        user_data = sender
-
     save_paths = find_save_files()
     save_names = [s.split("\\")[-1].split("/")[-1] for s in save_paths]
-    state = user_data
+    if isinstance(sender, AppState):
+        state = sender
+    elif isinstance(app_data, AppState):
+        state = app_data
+    elif isinstance(user_data, AppState):
+        state = user_data
+    else:
+        raise ValueError("No AppState provided to scan_and_load_saves")
 
     dpg.configure_item("saves_listbox", items=save_names)
 
@@ -841,7 +848,8 @@ def scan_and_load_saves(sender=None, app_data=None, user_data: AppState = None):
             )
             alive = len(state.alive_cats)
             dpg.set_value(
-                "cat_count_text", f"Cats: {len(state.cats)} ({alive} in house)"
+                "cat_count_text",
+                f"Cats: {len(state.cats)} ({alive} in house)",
             )
             dpg.configure_item("optimize_button", enabled=True)
             clear_results_table()
@@ -1062,7 +1070,7 @@ def clear_results_table():
     if dpg.does_item_exist(table):
         children = dpg.get_item_children(table)
         if children and 1 in children:
-            for row in children[1]:
+            for row in children[1]:  # type: ignore[iterable]
                 dpg.delete_item(row)
     dpg.show_item("results_placeholder")
 
@@ -1073,7 +1081,7 @@ def clear_details_section():
     if dpg.does_item_exist(section):
         children = dpg.get_item_children(section)
         if children and 1 in children:
-            for child in children[1]:
+            for child in children[1]:  # type: ignore[iterable]
                 dpg.delete_item(child)
 
 
@@ -1278,7 +1286,9 @@ def build_details_tabs(selected_room, state):
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(
-                    label="Location", width_fixed=True, init_width_or_weight=LOCATION_COL_WIDTH
+                    label="Location",
+                    width_fixed=True,
+                    init_width_or_weight=LOCATION_COL_WIDTH,
                 )
                 dpg.add_table_column(label="STR", width_fixed=True)
                 dpg.add_table_column(label="DEX", width_fixed=True)
@@ -1366,7 +1376,11 @@ def build_details_tabs(selected_room, state):
                             {
                                 "cat": cat,
                                 "assigned_room": next(
-                                    (r.display_name for r in state.room_configs if r.key == assigned_room),
+                                    (
+                                        r.display_name
+                                        for r in state.room_configs
+                                        if r.key == assigned_room
+                                    ),
                                     assigned_room,
                                 ),
                             }
@@ -1381,10 +1395,14 @@ def build_details_tabs(selected_room, state):
                 ):
                     dpg.add_table_column(label="Name", width_fixed=True)
                     dpg.add_table_column(
-                        label="In Save", width_fixed=True, init_width_or_weight=LOCATION_COL_WIDTH
+                        label="In Save",
+                        width_fixed=True,
+                        init_width_or_weight=LOCATION_COL_WIDTH,
                     )
                     dpg.add_table_column(
-                        label="Assigned", width_fixed=True, init_width_or_weight=LOCATION_COL_WIDTH
+                        label="Assigned",
+                        width_fixed=True,
+                        init_width_or_weight=LOCATION_COL_WIDTH,
                     )
 
                     for item in misplaced:

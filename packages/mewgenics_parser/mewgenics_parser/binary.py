@@ -1,5 +1,6 @@
 """Binary reading utilities for parsing Mewgenics save files."""
 
+import builtins
 import struct
 
 
@@ -51,7 +52,7 @@ class BinaryReader:
             self.pos = start
             return None
 
-    def utf16str(self) -> str:
+    def utf16str(self) -> builtins.str | None:
         """Read length-prefixed UTF-16LE string."""
         char_count = self.u64()
         byte_len = int(char_count * 2)

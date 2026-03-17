@@ -5,6 +5,7 @@ from dataclasses import replace
 from mewgenics_parser import Cat
 from mewgenics_parser.trait_dictionary import normalize_trait_name
 from mewgenics_scorer import (
+    AncestorData,
     calculate_pair_factors,
     can_breed,
     is_hater_conflict,
@@ -70,7 +71,7 @@ def _generate_pairs(
 def score_pair(
     cat_a: Cat,
     cat_b: Cat,
-    ancestor_contribs: dict[int, dict[Cat, float]],
+    ancestor_contribs: dict[int, dict[int, AncestorData]],
     params: OptimizationParams,
     skip_risk_check: bool = False,
 ) -> ScoredPair | None:
@@ -211,7 +212,7 @@ def optimize(
     cats: list[Cat],
     room_configs: list[RoomConfig],
     params: OptimizationParams,
-    ancestor_contribs: dict[int, dict[Cat, float]],
+    ancestor_contribs: dict[int, dict[int, AncestorData]],
 ) -> OptimizationResult:
     """Main optimization entry point using Seed and Pull algorithm."""
 

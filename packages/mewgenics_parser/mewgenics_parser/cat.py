@@ -6,7 +6,7 @@ import struct
 import lz4.block
 import math
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TypeGuard
 
 from .binary import BinaryReader
 from .constants import STAT_NAMES, _JUNK_STRINGS, _IDENT_RE, ROOM_DISPLAY
@@ -18,7 +18,7 @@ from .visual import (
 )
 
 
-def _valid_str(s: Optional[str]) -> bool:
+def _valid_str(s: str | None) -> TypeGuard[str]:
     """Reject None, empty, and game filler strings like 'none' or 'defaultmove'."""
     return bool(s) and s.strip().lower() not in _JUNK_STRINGS
 
@@ -35,7 +35,7 @@ def _split_passives_and_disorders(traits: list[str]) -> tuple[list[str], list[st
     return passives, disorders
 
 
-def _normalize_gender(raw_gender: Optional[str]) -> str:
+def _normalize_gender(raw_gender: str | None) -> str:
     """
     Normalize save-data gender variants to app-level values:
       - maleX   -> "male"
@@ -88,10 +88,10 @@ class Cat:
     stat_mod: list
     stat_sec: list
     total_stats: dict
-    age: Optional[int]
-    aggression: Optional[float]
-    libido: Optional[float]
-    coi: Optional[float]
+    age: int | None
+    aggression: float | None
+    libido: float | None
+    coi: float | None
     abilities: list
     passive_abilities: list
     disorders: list
@@ -105,8 +105,8 @@ class Cat:
     gender_token_fields: tuple
     gender_token: str
     name_tag: str
-    parent_a: Optional[Cat] = field(default=None, repr=False)
-    parent_b: Optional[Cat] = field(default=None, repr=False)
+    parent_a: Cat | None = field(default=None, repr=False)
+    parent_b: Cat | None = field(default=None, repr=False)
     children: list = field(default_factory=list, repr=False)
     lovers: list = field(default_factory=list, repr=False)
     haters: list = field(default_factory=list, repr=False)
@@ -125,7 +125,7 @@ class Cat:
         cat_key: int,
         house_info: dict,
         adventure_keys: set,
-        current_day: Optional[int] = None,
+        current_day: int | None = None,
     ):
         uncomp_size = struct.unpack("<I", blob[:4])[0]
         raw = lz4.block.decompress(blob[4:], uncompressed_size=uncomp_size)
@@ -186,8 +186,10 @@ class Cat:
         #   0 = male, 1 = female, 2 = undefined/both (ditto-like)
         # This byte follows the optional post-name tag string, so use the
         # tag-aware anchor (personality_anchor), not name_end + fixed offset.
-        sex_code = raw[personality_anchor] if personality_anchor < len(raw) else None
-        gender_from_code = {0: "male", 1: "female", 2: "?"}.get(sex_code)
+        sex_code: int | None = (
+            raw[personality_anchor] if personality_anchor < len(raw) else None
+        )
+        gender_from_code = {0: "male", 1: "female", 2: "?"}.get(sex_code)  # type: ignore[call-overload]
         if gender_from_code:
             self.gender = gender_from_code
             self.gender_source = "sex_code"
@@ -213,7 +215,7 @@ class Cat:
         self.libido = None
         self.coi = None
 
-        def _read_personality(offset: int) -> Optional[float]:
+        def _read_personality(offset: int) -> float | None:
             i = personality_anchor + offset
             if i + 8 > len(raw):
                 return None
