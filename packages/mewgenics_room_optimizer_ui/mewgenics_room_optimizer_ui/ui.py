@@ -1731,11 +1731,12 @@ def show_cat_detail_window(cat, state):
             default_open=True,
         ):
             for ab in cat.active_abilities or []:
-                desc = state.game_data.ability_text[ab].description or "No description"
+                nd = state.game_data.ability_text[ab]
+                desc = nd.description or "No description"
                 is_fav = _is_favorable_trait(ab, state.planner_traits)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{ab}", color=color)
+                dpg.add_text(f"{prefix}{nd.name or ab}", color=color)
                 if desc:
                     dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
@@ -1744,11 +1745,12 @@ def show_cat_detail_window(cat, state):
             default_open=True,
         ):
             for ab in cat.passive_abilities or []:
-                desc = state.game_data.ability_text[ab].description or "No description"
+                nd = state.game_data.ability_text[ab]
+                desc = nd.description or "No description"
                 is_fav = _is_favorable_trait(ab, state.planner_traits)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{ab}", color=color)
+                dpg.add_text(f"{prefix}{nd.name or ab}", color=color)
                 if desc:
                     dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
@@ -1756,11 +1758,11 @@ def show_cat_detail_window(cat, state):
             label=f"Disorders ({len(cat.disorders or [])})", default_open=True
         ):
             for dis in cat.disorders or []:
-                desc = state.game_data.disorder_text[dis].description or "No description"
+                nd = state.game_data.ability_text[dis]
                 color = COLOR_DANGER
-                dpg.add_text(f"  {dis}", color=color)
+                dpg.add_text(f"  {nd.name or dis}", color=color)
                 if desc:
-                    dpg.add_text(f"    {desc}", color=(255, 150, 150, 255))
+                    dpg.add_text(f"    {nd.description or 'No description'}", color=(255, 150, 150, 255))
 
         with dpg.tree_node(label=f"Mutations", default_open=True):
             # for mut in cat.mutations or []:

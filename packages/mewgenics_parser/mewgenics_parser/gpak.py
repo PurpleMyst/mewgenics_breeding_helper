@@ -1,10 +1,10 @@
 """GPAK file parsing utilities."""
-from collections import defaultdict
 
 import csv
 import io
 import re
 import struct
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import DefaultDict, Self
 
@@ -26,15 +26,50 @@ def _parse_gon_abilities(
     for ability_id, data in d.items():
         if not isinstance(data, dict):
             continue
-        name_val = _clean_game_text(
-            _resolve_game_string(data.get("name", ability_id.title()), game_strings)
+
+        # Seems to be that templates have their data under a "meta" key, IDK man.
+        raw_name = data.get("name", data.get("meta", {}).get("name", ""))
+        name = (
+            _clean_game_text(
+                _resolve_game_string(raw_name, game_strings)
+            )
         )
-        desc_val = _clean_game_text(
-            _resolve_game_string(data.get("desc", ""), game_strings)
+
+        raw_desc = data.get("desc", data.get("meta", {}).get("desc", ""))
+        desc = _clean_game_text(
+            _resolve_game_string(raw_desc, game_strings)
         )
-        if not name_val and not desc_val:
-            continue
-        result[ability_id] = NameAndDescription(name=name_val, description=desc_val)
+
+        # If both name and description are empty, try to look under variant_of or just go with sane
+        # defaults.
+        if not name and not desc:
+            variant_of = data.get("variant_of", "")
+            if isinstance(variant_of, str) and variant_of in result:
+                name = result[variant_of].name
+                desc = result[variant_of].description
+            else:
+                name = ability_id
+                desc = ""
+
+        # Load upgraded versions of the ability (e.g., "Fireball2" for "Fireball+") if they exist in
+        # the GON data, using the same description if not specified.
+        for i in range(2, 10):
+            if str(i) in data:
+                result[f"{ability_id}{i}"] = NameAndDescription(
+                    name=_clean_game_text(
+                        _resolve_game_string(
+                            data[str(i)].get("name", f"{name}{'+' * (i - 1)}"),
+                            game_strings,
+                        )
+                    ),
+                    description=_clean_game_text(
+                        _resolve_game_string(
+                            data[str(i)].get("desc", desc), game_strings
+                        )
+                    ),
+                )
+
+        result[ability_id] = NameAndDescription(name=name, description=desc)
     return result
 
 
@@ -148,9 +183,7 @@ class GameData:
                 ability_descriptions,
             ),
             mutation_text_by_part_and_id=defaultdict(
-                lambda: defaultdict(
-                    lambda: NameAndDescription()
-                ),
+                lambda: defaultdict(lambda: NameAndDescription()),
                 mutation_text,
             ),
             game_strings=game_strings,

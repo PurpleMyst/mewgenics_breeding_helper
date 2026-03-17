@@ -13,3 +13,9 @@ test = [
     "inline-snapshot>=0.6",
     "dirty-equals>=0.1",
 ]
+
+[dependency-groups]
+dev = [
+    "beautifulsoup4>=4.14.3",
+    "requests>=2.32.5",
+]

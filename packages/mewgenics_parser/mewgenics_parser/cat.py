@@ -12,7 +12,7 @@ import lz4.block
 
 from .binary import BinaryReader
 from .constants import _IDENT_RE, _JUNK_STRINGS, ROOM_DISPLAY, STAT_NAMES
-from .trait_dictionary import DISORDERS, SKILLSHARE_BASE_ID, normalize_trait_name
+from .trait_dictionary import is_disorder, SKILLSHARE_BASE_ID, normalize_trait_name
 
 Stats = tuple[int, int, int, int, int, int, int]
 
@@ -39,7 +39,7 @@ def _split_passives_and_disorders(traits: list[str]) -> tuple[list[str], list[st
     passives: list[str] = []
     disorders: list[str] = []
     for t in traits:
-        if t in DISORDERS:
+        if is_disorder(t):
             disorders.append(t)
         else:
             passives.append(t)

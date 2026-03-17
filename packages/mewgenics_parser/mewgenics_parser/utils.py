@@ -4,21 +4,17 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-_IMG_RE = re.compile(r"\[img:[^\]]+\]")
+_IMG_RE = re.compile(r"\[img:([^\]]+)\]")
 _SIZE_COLOR_RE = re.compile(r"\[[sc]:[^\]]*\]|\[/[sc]\]")
 _WS_RE = re.compile(r"\s+")
 
 _IMG_SUBS = {
     "cha": "CHA",
-    "champion": "Champion",
-    "comfort": "Comfort",
     "con": "CON",
     "dex": "DEX",
     "divineshield": "Holy Shield",
-    "elite": "Elite",
     "int": "INT",
     "lck": "LCK",
-    "shield": "Shield",
     "spd": "SPD",
     "str": "STR",
 }
@@ -26,11 +22,9 @@ _IMG_SUBS = {
 
 def _clean_game_text(text: str) -> str:
     """Clean formatting tags from game text strings, replacing known [img:...] tags with readable text."""
-
-    for key, sub in _IMG_SUBS.items():
-        text = re.sub(rf"\[img:{key}\]", sub, text, flags=re.IGNORECASE)
-
-    text = _IMG_RE.sub("", text)
+    text = _IMG_RE.sub(
+        lambda m: _IMG_SUBS.get(m.group(1).lower(), m.group(1).title()), text
+    )
     text = _SIZE_COLOR_RE.sub("", text)
     return _WS_RE.sub(" ", text).strip()
 
@@ -50,20 +44,20 @@ def _resolve_game_string(value: str, game_strings: dict[str, str]) -> str:
 
 def _parse_gon_to_dicts(text: str) -> dict[str, Any]:
     # 1. Lexical Analysis (Tokenization)
-    # Define the regex patterns for our syntax building blocks
     token_specification = [
-        ("COMMENT", r"//[^\n]*"),  # Comments (stop at newline)
-        ("STRING", r'"[^"]*"'),  # String literals enclosed in quotes
+        ("BLOCK_COMMENT", r"/\*[\s\S]*?\*/"),  # Multi-line or inline block comments
+        ("LINE_COMMENT", r"//[^\n]*"),  # Single-line comments
+        ("STRING", r'"[^"]*"'),  # String literals
         ("LBRACE", r"\{"),  # Block start
         ("RBRACE", r"\}"),  # Block end
-        ("LITERAL", r"[^\s\{\}]+"),  # Everything else (keys, numbers, unquoted strings)
-        ("SKIP", r"\s+"),  # Whitespace (spaces, tabs, newlines)
+        (
+            "LITERAL",
+            r"(?:(?!//|/\*)[^\s\{\}])+",
+        ),  # Keys/Values (stops if it hits a comment)
+        ("SKIP", r"\s+"),  # Whitespace
     ]
 
-    # Compile a master regex that tries to match any of the above
     tok_regex = "|".join(f"(?P<{pair[0]}>{pair[1]})" for pair in token_specification)
-
-    # Generate a flat list of tokens, dropping the whitespace
     tokens = [m for m in re.finditer(tok_regex, text) if m.lastgroup != "SKIP"]
 
     # 2. Parsing (State Machine)
@@ -79,12 +73,12 @@ def _parse_gon_to_dicts(text: str) -> dict[str, Any]:
         val = match.group()
 
         if kind == "RBRACE":
-            if len(stack) > 1:  # Step up the tree
+            if len(stack) > 1:
                 stack.pop()
             i += 1
 
-        elif kind == "COMMENT":
-            # Standalone comments can be ignored; block comments are handled in the LBRACE logic
+        elif kind in ("LINE_COMMENT", "BLOCK_COMMENT"):
+            # Standalone comments are ignored, but handled below if attached to a block
             i += 1
 
         elif kind == "LITERAL":
@@ -93,29 +87,33 @@ def _parse_gon_to_dicts(text: str) -> dict[str, Any]:
             if i >= n:
                 break
 
-            # Look ahead to the next token to determine if this is a block or a key-value pair
             next_match = tokens[i]
             next_kind = next_match.lastgroup
             next_val = next_match.group()
 
             if next_kind == "LBRACE":
-                # We are starting a new block
+                # Start new block
                 new_node = {}
                 stack[-1][key] = new_node
                 stack.append(new_node)
                 i += 1
 
-                # Check if there is an immediate inline comment to save
-                if i < n and tokens[i].lastgroup == "COMMENT":
-                    new_node["__comment__"] = tokens[i].group()[2:].strip()
+                # Check for an immediate comment to save as metadata
+                if i < n and tokens[i].lastgroup in ("LINE_COMMENT", "BLOCK_COMMENT"):
+                    comment_text = tokens[i].group()
+                    if tokens[i].lastgroup == "LINE_COMMENT":
+                        new_node["__comment__"] = comment_text[2:].strip()
+                    else:
+                        new_node["__comment__"] = comment_text[
+                            2:-2
+                        ].strip()  # Strip /* and */
                     i += 1
 
             elif next_kind in ("LITERAL", "STRING"):
-                # We have a key-value pair
+                # Assign Key-Value pair
                 if next_kind == "STRING":
-                    parsed_val = next_val[1:-1]  # Strip quotes
+                    parsed_val = next_val[1:-1]
                 else:
-                    # Type Coercion
                     try:
                         parsed_val = int(next_val)
                     except ValueError:
@@ -127,9 +125,7 @@ def _parse_gon_to_dicts(text: str) -> dict[str, Any]:
                 stack[-1][key] = parsed_val
                 i += 1
             else:
-                # If a literal is followed by an RBRACE, it's malformed or a boolean flag.
-                # We'll ignore it for this schema, but you could handle it here.
-                pass
+                pass  # Ignore malformed trailing literals
         else:
             i += 1
 
