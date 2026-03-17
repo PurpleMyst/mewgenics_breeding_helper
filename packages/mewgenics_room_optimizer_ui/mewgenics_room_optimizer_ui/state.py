@@ -141,7 +141,7 @@ class AppState:
     game_data: GameData = field(default_factory=lambda: _GAME_DATA)
 
     min_stats: int = 0
-    max_risk: float = 20.0
+    max_risk: float = 0.2  # Probability (0.0-1.0), displayed as percentage in UI
     minimize_variance: bool = True
     avoid_lovers: bool = True
     prefer_low_aggression: bool = True
@@ -155,6 +155,13 @@ class AppState:
     sim_cat_b_key: int | None = None
 
     is_loading: bool = False
+
+    @staticmethod
+    def _convert_max_risk(value: float) -> float:
+        """Convert saved max_risk from percentage (0-100) to probability (0-1)."""
+        if value > 1.0:
+            return value / 100.0
+        return value
 
     @classmethod
     def from_config(cls) -> "AppState":
@@ -184,7 +191,7 @@ class AppState:
             planner_traits=planner_traits_from_dict(config.get("planner_traits", [])),
             last_save_path=config.get("last_save_path"),
             min_stats=config.get("min_stats", 0),
-            max_risk=config.get("max_risk", 20.0),
+            max_risk=cls._convert_max_risk(config.get("max_risk", 0.2)),
             minimize_variance=config.get("minimize_variance", True),
             avoid_lovers=config.get("avoid_lovers", True),
             prefer_low_aggression=config.get("prefer_low_aggression", True),
@@ -200,7 +207,8 @@ class AppState:
             "planner_traits": planner_traits_to_dict(self.planner_traits),
             "last_save_path": self.last_save_path,
             "min_stats": self.min_stats,
-            "max_risk": self.max_risk,
+            "max_risk": self.max_risk
+            * 100,  # Convert probability to percentage for backwards compatibility
             "minimize_variance": self.minimize_variance,
             "avoid_lovers": self.avoid_lovers,
             "prefer_low_aggression": self.prefer_low_aggression,

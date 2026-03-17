@@ -8,12 +8,13 @@ from .factors import (
     aggression_factor,
     libido_factor,
     trait_coverage,
+    expected_disorder_chance,
+    expected_part_defect_chance,
     DEFAULT_STIMULATION,
 )
 from .ancestry import (
     build_ancestor_contribs,
     coi_from_contribs,
-    risk_percent,
 )
 from .compatibility import (
     can_breed,
@@ -31,9 +32,10 @@ __all__ = [
     "aggression_factor",
     "libido_factor",
     "trait_coverage",
+    "expected_disorder_chance",
+    "expected_part_defect_chance",
     "build_ancestor_contribs",
     "coi_from_contribs",
-    "risk_percent",
     "can_breed",
     "is_hater_conflict",
     "is_lover_conflict",

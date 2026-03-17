@@ -100,7 +100,7 @@ def score_pair(
         planner_traits=params.planner_traits,
     )
 
-    if not skip_risk_check and factors.risk_percent > params.max_risk:
+    if not skip_risk_check and factors.combined_malady_chance > params.max_risk:
         return None
 
     quality = _calculate_quality(factors, params)
@@ -117,7 +117,8 @@ def _calculate_quality(factors, params: OptimizationParams) -> float:
     """Calculate quality score from pair factors."""
     avg_stats = factors.total_expected_stats / 7.0
 
-    risk_factor = 1.0 - factors.risk_percent / 200.0
+    # At max combined risk (1.0), quality penalty is 50%
+    risk_factor = 1.0 - factors.combined_malady_chance / 2.0
 
     variance_penalty = 0.0
     if params.minimize_variance:
@@ -394,7 +395,7 @@ def optimize(
             total_pairs += len(pairs_in_room)
             for p in pairs_in_room:
                 total_pair_quality += p.quality
-                total_risk += p.factors.risk_percent
+                total_risk += p.factors.combined_malady_chance * 100
 
     avg_quality = total_pair_quality / total_pairs if total_pairs > 0 else 0.0
     avg_risk = total_risk / total_pairs if total_pairs > 0 else 0.0

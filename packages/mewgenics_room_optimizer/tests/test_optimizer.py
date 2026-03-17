@@ -137,7 +137,9 @@ class TestOptimize:
     def mock_scorer(self):
         with patch("mewgenics_room_optimizer.optimizer.calculate_pair_factors") as mock:
             mock_factors = MagicMock()
-            mock_factors.risk_percent = 0.0
+            mock_factors.expected_disorder_chance = 0.0
+            mock_factors.expected_part_defect_chance = 0.0
+            mock_factors.combined_malady_chance = 0.0
             mock_factors.total_expected_stats = 35.0
             mock_factors.expected_stats = [5.0] * 7
             mock_factors.aggression_factor = 0.5
@@ -190,7 +192,7 @@ class TestOptimize:
         ]
         params = OptimizationParams(max_risk=0.0)
 
-        mock_scorer.return_value.risk_percent = 50.0
+        mock_scorer.return_value.combined_malady_chance = 0.5  # 50% = 0.5 probability
 
         result = optimize(cats, rooms, params, {})
 
@@ -204,7 +206,9 @@ class TestOptimizationResultSchema:
     def mock_scorer(self):
         with patch("mewgenics_room_optimizer.optimizer.calculate_pair_factors") as mock:
             mock_factors = MagicMock()
-            mock_factors.risk_percent = 5.0
+            mock_factors.expected_disorder_chance = 0.02
+            mock_factors.expected_part_defect_chance = 0.03
+            mock_factors.combined_malady_chance = 0.05  # 5% combined
             mock_factors.total_expected_stats = 35.0
             mock_factors.expected_stats = [5.0] * 7
             mock_factors.aggression_factor = 0.5
@@ -264,7 +268,9 @@ class TestSnapshotResults:
     def mock_scorer(self):
         with patch("mewgenics_room_optimizer.optimizer.calculate_pair_factors") as mock:
             mock_factors = MagicMock()
-            mock_factors.risk_percent = 5.0
+            mock_factors.expected_disorder_chance = 0.02
+            mock_factors.expected_part_defect_chance = 0.03
+            mock_factors.combined_malady_chance = 0.05  # 5% combined
             mock_factors.total_expected_stats = 35.0
             mock_factors.expected_stats = [5.0] * 7
             mock_factors.aggression_factor = 0.5

@@ -52,7 +52,7 @@ class OptimizationParams:
     """Optimizer configuration."""
 
     min_stats: int = 0
-    max_risk: float = 20.0
+    max_risk: float = 0.2  # Maximum combined malady probability (0.0-1.0)
     minimize_variance: bool = True
     avoid_lovers: bool = True
     prefer_low_aggression: bool = True

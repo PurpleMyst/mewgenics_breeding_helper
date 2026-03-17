@@ -12,13 +12,28 @@ from .compatibility import (
     is_lover_conflict,
     is_mutual_lovers,
 )
-from .ancestry import build_ancestor_contribs, coi_from_contribs, risk_percent
+from .ancestry import build_ancestor_contribs, coi_from_contribs, AncestorData
 
 DEFAULT_STIMULATION = 50.0
 
 
 def _better_chance(stimulation: float) -> float:
     return (1.0 + 0.01 * stimulation) / (2.0 + 0.01 * stimulation)
+
+
+def expected_disorder_chance(coi: float) -> float:
+    """Game Step 7: Base 2% chance. CoI > 0.20 adds up to 40% (capped)."""
+    # Exact game math: 0.02 + 0.4 * min(max(coi - 0.2, 0.0), 1.0)
+    coi_penalty = min(max(coi - 0.20, 0.0), 1.0)
+    return 0.02 + (0.4 * coi_penalty)
+
+
+def expected_part_defect_chance(coi: float) -> float:
+    """Game Step 8, 13: If CoI > 0.05, chance = 1.5 * CoI."""
+    if coi <= 0.05:
+        return 0.0
+    # Cap at 1.0 (by COI > 0.90, first pass is already guaranteed)
+    return min(1.5 * coi, 1.0)
 
 
 def _default_01(v: float | None) -> float:
@@ -34,7 +49,9 @@ class PairFactors:
     hater_conflict: bool
     lover_conflict: bool
     mutual_lovers: bool
-    risk_percent: float
+
+    expected_disorder_chance: float
+    expected_part_defect_chance: float
 
     expected_stats: list[float]
     total_expected_stats: float
@@ -46,6 +63,13 @@ class PairFactors:
     charisma_factor: float
 
     trait_matches: list[TraitRequirement]
+
+    @property
+    def combined_malady_chance(self) -> float:
+        """Probability of any birth malady (disorder OR part defect)."""
+        return 1.0 - (1.0 - self.expected_disorder_chance) * (
+            1.0 - self.expected_part_defect_chance
+        )
 
 
 def expected_stats(
@@ -111,7 +135,7 @@ def _cat_has_trait(cat: Cat, category: str, key: str) -> bool:
 def calculate_pair_factors(
     a: Cat,
     b: Cat,
-    ancestor_contribs: dict[int, dict[int, float]],
+    ancestor_contribs: dict[int, dict[int, AncestorData]],
     stimulation: float = DEFAULT_STIMULATION,
     avoid_lovers: bool = True,
     planner_traits: list[TraitRequirement] | None = None,
@@ -128,7 +152,8 @@ def calculate_pair_factors(
         hater_conflict=is_hater_conflict(a, b),
         lover_conflict=is_lover_conflict(a, b, avoid_lovers),
         mutual_lovers=is_mutual_lovers(a, b),
-        risk_percent=risk_percent(coi),
+        expected_disorder_chance=expected_disorder_chance(coi),
+        expected_part_defect_chance=expected_part_defect_chance(coi),
         expected_stats=exp_stats,
         total_expected_stats=sum(exp_stats),
         stat_variance=stat_variance(a, b),

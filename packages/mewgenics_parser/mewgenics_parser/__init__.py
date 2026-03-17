@@ -70,7 +70,7 @@ Cat Object Attributes:
         - age: Age in days (int or None)
         - aggression: 0.0-1.0 float (or None if unknown)
         - libido: 0.0-1.0 float (or None)
-        - inbredness: 0.0-1.0 float (or None)
+        - coi: 0.0-1.0 float (or None)
 
     Relationships:
         - parent_a: Parent Cat object (or None)

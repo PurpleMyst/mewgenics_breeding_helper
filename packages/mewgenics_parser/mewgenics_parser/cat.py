@@ -78,7 +78,7 @@ class Cat:
     age: Optional[int]
     aggression: Optional[float]
     libido: Optional[float]
-    inbredness: Optional[float]
+    coi: Optional[float]
     abilities: list
     passive_abilities: list
     equipment: list
@@ -191,13 +191,13 @@ class Cat:
             for i, n in enumerate(STAT_NAMES)
         }
 
-        # Personality stats (age, aggression, libido, inbredness).
-        # Libido and inbredness are doubles anchored after the post-name tag string.
+        # Personality stats (age, aggression, libido, coi).
+        # Libido and coi are doubles anchored after the post-name tag string.
         # Age is stored as creation_day at offset (blob_len - 103), then calculated as (current_day - creation_day).
         self.age = None
         self.aggression = None  # None = unknown
         self.libido = None
-        self.inbredness = None
+        self.coi = None
 
         def _read_personality(offset: int) -> Optional[float]:
             i = personality_anchor + offset
@@ -212,7 +212,7 @@ class Cat:
             return float(v)
 
         self.libido = _read_personality(32)
-        self.inbredness = _read_personality(40)
+        self.coi = _read_personality(40)
         self.aggression = _read_personality(64)
 
         # Relationship slots: direct db_key references relative to the byte

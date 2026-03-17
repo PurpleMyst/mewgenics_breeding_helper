@@ -9,74 +9,133 @@ MAX_DEPTH = 14
 COI_THRESHOLD = 0.25
 
 
-def _ancestor_contributions(cat: Cat | None) -> dict[int, tuple[Cat, float]]:
-    """Compute Σ(0.5^depth) for each ancestor of cat. Returns dict of id(cat) -> (cat, contribution)."""
+@dataclass
+class AncestorData:
+    """Tracks structural lineage data for Mewgenics-specific CoI calculations."""
+
+    cat: Cat
+    prob: float
+    min_depth: int
+
+
+def _ancestor_contributions(cat: Cat | None) -> dict[int, AncestorData]:
+    """
+    Compute Σ(0.5^depth) and track minimum depth for each ancestor of cat.
+    Returns dict of id(cat) -> AncestorData.
+    """
     if cat is None:
         return {}
-    contribs: dict[int, tuple[Cat, float]] = {}
+
+    contribs: dict[int, AncestorData] = {}
+    # Stack stores: (Node, Depth, Probability)
     stack: list[tuple[Cat, int, float]] = [(cat, 0, 1.0)]
+
     while stack:
         node, depth, prob = stack.pop()
         node_id = id(node)
-        existing = contribs.get(node_id)
-        if existing:
-            contribs[node_id] = (existing[0], existing[1] + prob)
+
+        # Aggregate probabilities and keep the shortest path depth
+        if node_id in contribs:
+            existing = contribs[node_id]
+            existing.prob += prob
+            existing.min_depth = min(existing.min_depth, depth)
         else:
-            contribs[node_id] = (node, prob)
+            contribs[node_id] = AncestorData(node, prob, depth)
+
         if depth >= MAX_DEPTH:
             continue
+
         half_prob = prob * 0.5
         if half_prob < MIN_CONTRIB:
             continue
+
         for parent in (node.parent_a, node.parent_b):
             if parent is not None:
                 stack.append((parent, depth + 1, half_prob))
+
     return contribs
 
 
-def build_ancestor_contribs(cats: list[Cat]) -> dict[int, dict[int, float]]:
-    """Batch compute ancestor contributions for all cats.
-
-    Returns dict[db_key, dict[id(cat), contribution]].
+def build_ancestor_contribs(cats: list[Cat]) -> dict[int, dict[int, AncestorData]]:
+    """
+    Batch compute ancestor contributions for all cats.
+    Returns dict[db_key, dict[id(cat), AncestorData]].
     """
     ordered = sorted(cats, key=lambda c: c.generation)
-    memo: dict[int, dict[int, float]] = {}
-    result: dict[int, dict[int, float]] = {}
+    memo: dict[int, dict[int, AncestorData]] = {}
+    result: dict[int, dict[int, AncestorData]] = {}
+
     for cat in ordered:
-        contribs: dict[int, float] = {id(cat): 1.0}
+        # Initialize the contribution dictionary with the cat itself
+        contribs: dict[int, AncestorData] = {id(cat): AncestorData(cat, 1.0, 0)}
+
         for parent in (cat.parent_a, cat.parent_b):
             if parent is None:
                 continue
+
             parent_id = id(parent)
             pc = memo.get(parent_id)
+
+            # If parent isn't memoized yet, compute it (fallback for safety)
             if pc is None:
-                raw_contribs = _ancestor_contributions(parent)
-                pc = {cid: prob for cid, (_, prob) in raw_contribs.items()}
+                pc = _ancestor_contributions(parent)
                 memo[parent_id] = pc
-            for anc_id, prob in pc.items():
-                new_prob = prob * 0.5
+
+            # Merge parent's ancestors into the current cat's ancestors
+            for anc_id, anc_data in pc.items():
+                new_prob = anc_data.prob * 0.5
+                new_depth = anc_data.min_depth + 1
+
                 if new_prob < MIN_CONTRIB:
                     continue
-                contribs[anc_id] = contribs.get(anc_id, 0.0) + new_prob
+
+                if anc_id in contribs:
+                    existing = contribs[anc_id]
+                    existing.prob += new_prob
+                    existing.min_depth = min(existing.min_depth, new_depth)
+                else:
+                    contribs[anc_id] = AncestorData(anc_data.cat, new_prob, new_depth)
+
         memo[id(cat)] = contribs
         result[cat.db_key] = contribs
+
     return result
 
 
-def coi_from_contribs(ca: dict[int, float], cb: dict[int, float]) -> float:
-    """Compute raw COI from two ancestor-contribution dicts."""
+def coi_from_contribs(
+    ca: dict[int, AncestorData], cb: dict[int, AncestorData]
+) -> float:
+    """
+    Compute Mewgenics-adjusted COI from two ancestor-contribution dicts.
+    Applies the Closeness >= 5 cutoff and the (1 + fA) ancestor penalty.
+    """
     if not ca or not cb:
         return 0.0
+
     if len(ca) > len(cb):
         ca, cb = cb, ca
+
     coi = 0.0
-    for anc_id, prob_a in ca.items():
-        prob_b = cb.get(anc_id)
-        if prob_b is not None:
-            coi += prob_a * prob_b
-    return coi * 0.5
+    for anc_id, data_a in ca.items():
+        data_b = cb.get(anc_id)
+        if data_b is not None:
+            d_a = data_a.min_depth
+            d_b = data_b.min_depth
 
+            # Mewgenics logic: Condense sibling relations from 2 lines to 1
+            if d_a == 0 or d_b == 0:
+                closeness = d_a + d_b
+            else:
+                closeness = d_a + d_b - 1
 
-def risk_percent(coi: float) -> float:
-    """Convert raw COI to risk percentage (0.25 CoI = 100%)."""
-    return max(0.0, min(100.0, (coi / COI_THRESHOLD) * 100.0))
+            # Circuit breaker: Closeness of 5 or higher drops CoI to 0
+            if closeness >= 5:
+                continue
+
+            # Fetch ancestor's CoI (fA). Default to 0.0 if not yet assigned.
+            f_a = getattr(data_a.cat, "coi", 0.0)
+
+            # Base probability overlap * Wright's 0.5 * Mewgenics Ancestor Multiplier
+            coi += 0.5 * (data_a.prob * data_b.prob) * (1.0 + f_a)
+
+    return coi

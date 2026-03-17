@@ -166,7 +166,8 @@ def build_params_section(state: AppState):
                 dpg.add_slider_float(
                     label="Max Risk %",
                     tag="max_risk",
-                    default_value=state.max_risk,
+                    default_value=state.max_risk
+                    * 100,  # Convert probability to percentage for display
                     max_value=100.0,
                     width=200,
                     callback=on_param_changed,
@@ -233,7 +234,7 @@ def on_param_changed(sender, app_data, user_data: AppState):
     if tag == "min_stats":
         user_data.min_stats = app_data
     elif tag == "max_risk":
-        user_data.max_risk = app_data
+        user_data.max_risk = app_data / 100.0  # Convert percentage to probability
     elif tag == "minimize_variance":
         user_data.minimize_variance = app_data
     elif tag == "avoid_lovers":
@@ -904,7 +905,7 @@ def run_optimization(sender, app_data, user_data: AppState):
     dpg.render_dearpygui_frame()
 
     min_stats = dpg.get_value("min_stats")
-    max_risk = dpg.get_value("max_risk")
+    max_risk = dpg.get_value("max_risk") / 100.0  # Convert percentage to probability
     minimize_variance = dpg.get_value("minimize_variance")
     avoid_lovers = dpg.get_value("avoid_lovers")
     prefer_low_aggression = dpg.get_value("prefer_low_aggression")
@@ -946,7 +947,9 @@ def update_results_table(results, state):
         avg_risk = 0.0
         if room.pairs:
             avg_stats = sum(p.quality for p in room.pairs) / len(room.pairs)
-            avg_risk = sum(p.factors.risk_percent for p in room.pairs) / len(room.pairs)
+            avg_risk = sum(
+                p.factors.combined_malady_chance * 100 for p in room.pairs
+            ) / len(room.pairs)
 
         row_color = (50, 30, 30, 255) if avg_risk > 15 else (0, 0, 0, 0)
 
@@ -1084,9 +1087,11 @@ def build_details_tabs(selected_room, state):
                 for pair in selected_room.pairs:
                     name_a = pair.cat_a.name or "Unnamed"
                     name_b = pair.cat_b.name or "Unnamed"
-                    risk = pair.factors.risk_percent
+                    disorder = pair.factors.expected_disorder_chance * 100
+                    part_defect = pair.factors.expected_part_defect_chance * 100
+                    combined = pair.factors.combined_malady_chance * 100
                     risk_color = (
-                        (255, 100, 100, 255) if risk > 15 else (100, 255, 100, 255)
+                        (255, 100, 100, 255) if combined > 15 else (100, 255, 100, 255)
                     )
 
                     combined_traits = set()
@@ -1107,7 +1112,10 @@ def build_details_tabs(selected_room, state):
                     with dpg.table_row():
                         dpg.add_text(f"{name_a} + {name_b}")
                         dpg.add_text(f"{pair.quality:.1f}")
-                        dpg.add_text(f"{risk:.0f}%", color=risk_color)
+                        dpg.add_text(
+                            f"D:{disorder:.0f}% P:{part_defect:.0f}% C:{combined:.0f}%",
+                            color=risk_color,
+                        )
 
                         with dpg.group(horizontal=True):
                             if pair.factors.mutual_lovers:
@@ -1124,7 +1132,7 @@ def build_details_tabs(selected_room, state):
                                 badge = dpg.add_text("[-]", color=(100, 200, 255, 255))
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Aggression")
-                            if risk > 10:
+                            if combined > 10:
                                 badge = dpg.add_text("[!]", color=(255, 100, 100, 255))
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Inbreeding Risk")
@@ -1466,13 +1474,14 @@ def on_sandbox_changed(sender, app_data, user_data):
             dpg.add_text("Could not score this pair.", color=(255, 100, 100, 255))
             return
 
-        risk_color = (
-            (255, 100, 100, 255)
-            if pair_result.factors.risk_percent > 15
-            else (100, 255, 100, 255)
-        )
+        disorder = pair_result.factors.expected_disorder_chance * 100
+        part_defect = pair_result.factors.expected_part_defect_chance * 100
+        combined = pair_result.factors.combined_malady_chance * 100
+
+        risk_color = (255, 100, 100, 255) if combined > 15 else (100, 255, 100, 255)
         dpg.add_text(
-            f"Expected Quality: {pair_result.quality:.1f} | Risk: {pair_result.factors.risk_percent:.0f}%",
+            f"Expected Quality: {pair_result.quality:.1f} | "
+            f"Disorder: {disorder:.0f}% | Part Defect: {part_defect:.0f}% | Combined: {combined:.0f}%",
             color=risk_color,
         )
 
@@ -1483,11 +1492,11 @@ def on_sandbox_changed(sender, app_data, user_data):
                 dpg.add_text("[+ Libido]", color=(255, 200, 100, 255))
             if pair_result.factors.aggression_factor > 0.6:
                 dpg.add_text("[- Aggro]", color=(100, 200, 255, 255))
-            if pair_result.factors.risk_percent > 10:
+            if combined > 10:
                 dpg.add_text("[! Inbred]", color=(255, 100, 100, 255))
-            if pair_result.factors.risk_percent > state.max_risk:
+            if pair_result.factors.combined_malady_chance > state.max_risk:
                 dpg.add_text(
-                    f"[! High Risk (>{state.max_risk}%)]",
+                    f"[! High Risk (>{state.max_risk * 100:.0f}%)]",
                     color=(255, 100, 100, 255),
                 )
 

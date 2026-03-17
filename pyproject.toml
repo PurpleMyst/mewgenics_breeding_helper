@@ -8,6 +8,7 @@ dependencies = [
     "mewgenics_scorer",
     "mewgenics_room_optimizer",
     "mewgenics_room_optimizer_ui",
+    "inline-snapshot>=0.32.5",
 ]
 
 [tool.uv.sources]
@@ -25,4 +26,11 @@ pythonpath = [
     "packages/mewgenics_parser",
     "packages/mewgenics_room_optimizer",
     "packages/mewgenics_room_optimizer_ui",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.15.6",
+    "ty>=0.0.23",
 ]

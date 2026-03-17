@@ -1,19 +1,20 @@
 """Tests for mewgenics_scorer factors module."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from mewgenics_scorer.factors import (
+    DEFAULT_STIMULATION,
+    PairFactors,
     _better_chance,
     _default_01,
-    expected_stats,
-    stat_variance,
     aggression_factor,
-    libido_factor,
-    trait_coverage,
     calculate_pair_factors,
-    PairFactors,
-    DEFAULT_STIMULATION,
+    expected_stats,
+    libido_factor,
+    stat_variance,
+    trait_coverage,
 )
 from mewgenics_scorer.types import TraitRequirement
 
@@ -165,14 +166,17 @@ class TestTraitCoverage:
         b = make_mock_cat(2)
         traits = [TraitRequirement("mutation", "Frostbit")]
         result = trait_coverage(a, b, traits)
-        assert "Frostbit" in result
+        # Check the key of the returned TraitRequirement
+        assert len(result) == 1
+        assert result[0].key == "Frostbit"
 
     def test_b_has_trait(self):
         a = make_mock_cat(1)
         b = make_mock_cat(2, mutations=["Frostbit"])
         traits = [TraitRequirement("mutation", "Frostbit")]
         result = trait_coverage(a, b, traits)
-        assert "Frostbit" in result
+        assert len(result) == 1
+        assert result[0].key == "Frostbit"
 
     def test_neither_has_trait(self):
         a = make_mock_cat(1)
@@ -186,7 +190,8 @@ class TestTraitCoverage:
         b = make_mock_cat(2)
         traits = [TraitRequirement("passive", "Sturdy")]
         result = trait_coverage(a, b, traits)
-        assert "Sturdy" in result
+        assert len(result) == 1
+        assert result[0].key == "Sturdy"
 
 
 class TestCalculatePairFactors:
@@ -212,7 +217,11 @@ class TestCalculatePairFactors:
 
         result = calculate_pair_factors(a, b, contribs)
 
-        assert result.risk_percent == 0.0
+        # Unrelated cats have CoI = 0.0, so:
+        # - disorder chance = 2% (base)
+        # - part defect chance = 0% (CoI <= 0.05)
+        assert result.expected_disorder_chance == 0.02
+        assert result.expected_part_defect_chance == 0.0
 
     def test_total_expected_stats(self):
         a = make_mock_cat(1, gender="male", stat_base=[10, 0, 0, 0, 0, 0, 0])
