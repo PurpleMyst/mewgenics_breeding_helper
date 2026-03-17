@@ -564,6 +564,16 @@ def _cat_has_favorable_trait(cat, planner_traits: list) -> bool:
     return False
 
 
+def _get_assigned_room_key(cat_db_key: int, results) -> str | None:
+    """Get the room key a cat is assigned to in optimization results."""
+    if not results:
+        return None
+    for room in results.rooms:
+        if any(c.db_key == cat_db_key for c in room.cats):
+            return room.room.key
+    return None
+
+
 def update_all_cats_table(
     state: AppState, name_filter: str = "", trait_filter: str = ""
 ):
@@ -621,6 +631,22 @@ def update_all_cats_table(
 
         status = cat.status if cat.status else "Unknown"
 
+        # Get assigned room and determine location color
+        assigned_room = _get_assigned_room_key(cat.db_key, state.results)
+        current_room = cat.room
+        if assigned_room is None:
+            location_color = (255, 200, 100, 255)  # Yellow - not assigned
+        elif current_room == assigned_room:
+            location_color = (100, 255, 100, 255)  # Green - correct
+        else:
+            location_color = (255, 100, 100, 255)  # Red - wrong room
+
+        # Get individual stats
+        stats = cat.stat_base
+        stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
+        stat_values = [stats.get(s, 0) for s in stat_order]
+        total_stats = sum(stat_values)
+
         has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
         trait_badge = "[*] " if has_fav else ""
 
@@ -634,8 +660,10 @@ def update_all_cats_table(
             )
             dpg.add_text(sex_display)
             dpg.add_text(age_display)
+            dpg.add_text(cat.room_display or current_room, color=location_color)
+            for sv in stat_values:
+                dpg.add_text(str(sv))
             dpg.add_text(str(total_stats))
-            dpg.add_text(status)
             dpg.add_text(trait_badge)
 
 
@@ -718,8 +746,17 @@ def build_all_cats_tab(state: AppState):
                 dpg.add_table_column(label="Name", width_stretch=True)
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
-                dpg.add_table_column(label="Stats", width_fixed=True)
-                dpg.add_table_column(label="Status", width_fixed=True)
+                dpg.add_table_column(
+                    label="Location", width_fixed=True, init_width_or_weight=100
+                )
+                dpg.add_table_column(label="STR", width_fixed=True)
+                dpg.add_table_column(label="DEX", width_fixed=True)
+                dpg.add_table_column(label="CON", width_fixed=True)
+                dpg.add_table_column(label="INT", width_fixed=True)
+                dpg.add_table_column(label="SPD", width_fixed=True)
+                dpg.add_table_column(label="CHA", width_fixed=True)
+                dpg.add_table_column(label="LCK", width_fixed=True)
+                dpg.add_table_column(label="Total", width_fixed=True)
                 dpg.add_table_column(label="Traits", width_stretch=True)
 
             dpg.add_text("Load a save to see cats", tag="all_cats_placeholder")
@@ -1273,6 +1310,58 @@ def build_details_tabs(selected_room, state):
                         )
         else:
             dpg.add_text("No cats in this room")
+
+    # Misplaced tab - show cats in this room that shouldn't be here
+    with dpg.tab(label="Misplaced", parent="details_tab_bar"):
+        if not state.results:
+            dpg.add_text("Run optimization first to see misplaced cats.")
+        else:
+            # Find cats in current room that are assigned to a different room
+            misplaced = []
+            for cat in selected_room.cats:
+                assigned_room = _get_assigned_room_key(cat.db_key, state.results)
+                if (
+                    assigned_room is not None
+                    and assigned_room != selected_room.room.key
+                ):
+                    misplaced.append(
+                        {
+                            "cat": cat,
+                            "assigned_room": assigned_room,
+                        }
+                    )
+
+            if misplaced:
+                with dpg.table(
+                    tag="misplaced_table",
+                    header_row=True,
+                    borders_innerH=True,
+                    row_background=True,
+                ):
+                    dpg.add_table_column(label="Name", width_stretch=True)
+                    dpg.add_table_column(
+                        label="In Save", width_fixed=True, init_width_or_weight=100
+                    )
+                    dpg.add_table_column(
+                        label="Assigned", width_fixed=True, init_width_or_weight=100
+                    )
+                    dpg.add_table_column(label="Total", width_fixed=True)
+                    dpg.add_table_column(label="Traits", width_stretch=True)
+
+                    for item in misplaced:
+                        cat = item["cat"]
+                        has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
+                        trait_badge = "[*] " if has_fav else ""
+                        total = sum(cat.stat_base.values())
+
+                        with dpg.table_row():
+                            dpg.add_text(cat.name or "Unnamed")
+                            dpg.add_text(selected_room.room.display_name)
+                            dpg.add_text(item["assigned_room"])
+                            dpg.add_text(str(total))
+                            dpg.add_text(trait_badge)
+            else:
+                dpg.add_text("No misplaced cats in this room")
 
     # Sandbox tab - simulate breeding pairs
     with dpg.tab(label="Sandbox", parent="details_tab_bar"):
