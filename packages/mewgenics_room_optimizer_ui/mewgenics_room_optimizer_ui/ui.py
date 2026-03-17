@@ -113,7 +113,6 @@ def build_room_config_section(state: AppState):
                 dpg.add_table_column(label="Base Stim")
 
             room_types = ["breeding", "fighting", "general", "none"]
-            print(state.room_configs)
             for room in state.room_configs:
                 with dpg.table_row(parent="room_config_table"):
                     dpg.add_text(room.key, tag=f"room_key_{room.key}")
@@ -1398,7 +1397,6 @@ def build_details_tabs(selected_room, state):
                     trait_badge = "[*]" if has_fav else ""
 
                     with dpg.table_row():
-                        print(cat)
                         dpg.add_selectable(
                             label=cat_name,
                             span_columns=True,
