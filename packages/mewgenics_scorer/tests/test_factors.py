@@ -7,7 +7,6 @@ import pytest
 from mewgenics_scorer.factors import (
     DEFAULT_STIMULATION,
     PairFactors,
-    TraitInheritanceProbability,
     _better_chance,
     _default_01,
     _spell_inheritance_chance,

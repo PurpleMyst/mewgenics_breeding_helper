@@ -3,12 +3,10 @@
 from dataclasses import dataclass
 
 from mewgenics_parser import Cat
-from mewgenics_parser.constants import STAT_NAMES
 from mewgenics_parser.trait_dictionary import (
     is_class_spell,
     is_class_passive,
     has_skillshare_plus,
-    SKILLSHARE_PLUS_ID,
 )
 
 from .types import TraitRequirement, ScoringPreferences
@@ -18,7 +16,7 @@ from .compatibility import (
     is_lover_conflict,
     is_mutual_lovers,
 )
-from .ancestry import build_ancestor_contribs, coi_from_contribs, AncestorData
+from .ancestry import coi_from_contribs, AncestorData
 
 DEFAULT_STIMULATION = 50.0
 

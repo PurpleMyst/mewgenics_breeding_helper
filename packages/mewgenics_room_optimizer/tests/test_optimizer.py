@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from inline_snapshot import snapshot
-from mewgenics_scorer import PairFactors
 
 from mewgenics_room_optimizer import (
     DEFAULT_ROOM_CONFIGS,
@@ -21,9 +20,7 @@ from mewgenics_room_optimizer.optimizer import (
     _filter_cats,
     _generate_pairs,
     _get_neighbor,
-    _evaluate_state,
     _generate_random_valid_state,
-    PairCache,
 )
 
 
@@ -397,14 +394,14 @@ class TestGetNeighbor:
         state = {1: "room_a"}
         rooms = ["room_a", "room_b"]
         random.seed(42)
-        result = _get_neighbor(state, rooms)
+        _get_neighbor(state, rooms)
         # Should have moved to a different room (given the random seed)
 
     def test_swap_changes_both(self):
         state = {1: "room_a", 2: "room_b"}
         rooms = ["room_a", "room_b"]
         random.seed(123)  # Seed for swap operation
-        result = _get_neighbor(state, rooms)
+        _get_neighbor(state, rooms)
         # With proper seed, should swap
 
 
@@ -422,7 +419,7 @@ class TestGenerateRandomValidState:
         cats = [make_mock_cat(i, gender="male") for i in range(10)]
         rooms = [RoomConfig("test", "Test", RoomType.BREEDING, 4)]
         random.seed(42)
-        result = _generate_random_valid_state(cats, rooms)
+        _generate_random_valid_state(cats, rooms)
         # Should not crash
 
     def test_empty_cats_returns_empty(self):
@@ -474,3 +471,18 @@ class TestOptimizeSA:
         params = OptimizationParams(min_stats=35)
         result = optimize_sa(cats, rooms, params, {})
         assert result.stats.total_cats == 1
+
+    def test_excludes_none_type_rooms(self):
+        cats = [
+            make_mock_cat(1, gender="male"),
+            make_mock_cat(2, gender="female"),
+        ]
+        rooms = [
+            RoomConfig("breeding", "Breeding", RoomType.BREEDING, 6),
+            RoomConfig("floor2_none1", "Floor 2 Left", RoomType.NONE),
+            RoomConfig("floor2_none2", "Floor 2 Right", RoomType.NONE),
+        ]
+        params = OptimizationParams()
+        result = optimize_sa(cats, rooms, params, {})
+        for room in result.rooms:
+            assert room.room.room_type != RoomType.NONE

@@ -2,7 +2,6 @@
 
 import math
 import random
-from dataclasses import replace
 from typing import Callable
 
 from mewgenics_parser import Cat
@@ -327,9 +326,10 @@ def _run_sa_worker(
     best_score = current_score
 
     iteration = 0
+    valid_rooms = [r.key for r in room_configs if r.room_type != RoomType.NONE]
     while T > T_min:
         for _ in range(neighbors_per_temp):
-            neighbor = _get_neighbor(current_state, [r.key for r in room_configs])
+            neighbor = _get_neighbor(current_state, valid_rooms)
             neighbor_score = _evaluate_state(
                 neighbor,
                 cats_by_id,
@@ -421,9 +421,6 @@ def optimize_sa(
 
     cats_by_id = {c.db_key: c for c in filtered_cats}
     pair_cache = PairCache()
-
-    eternal_youth_cats = [c for c in filtered_cats if _has_eternalyouth(c)]
-    breeding_cats = [c for c in filtered_cats if not _has_eternalyouth(c)]
 
     num_workers = max(1, multiprocessing.cpu_count() - 1)
     initial_states = [

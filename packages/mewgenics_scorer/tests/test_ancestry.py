@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
 
 from mewgenics_scorer.ancestry import (
     _ancestor_contributions,
