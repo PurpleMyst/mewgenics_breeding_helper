@@ -1,6 +1,5 @@
 """Integration tests for GPAK functions requiring a real GPAK file."""
 
-
 from mewgenics_parser.gpak import GameData
 
 

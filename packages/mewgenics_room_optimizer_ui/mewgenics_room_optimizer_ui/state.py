@@ -185,6 +185,7 @@ class AppState:
     prefer_low_aggression: bool = True
     prefer_high_libido: bool = True
     prefer_high_charisma: bool = True
+    maximize_throughput: bool = False
 
     planner_traits: list[TraitRequirement] = field(default_factory=list)
     gay_flags: dict[int, bool] = field(default_factory=dict)
@@ -239,6 +240,7 @@ class AppState:
             prefer_low_aggression=config.get("prefer_low_aggression", True),
             prefer_high_libido=config.get("prefer_high_libido", True),
             prefer_high_charisma=config.get("prefer_high_charisma", True),
+            maximize_throughput=config.get("maximize_throughput", False),
             gay_flags=config.get("gay_flags", {}),
         )
 
@@ -256,6 +258,7 @@ class AppState:
             "prefer_low_aggression": self.prefer_low_aggression,
             "prefer_high_libido": self.prefer_high_libido,
             "prefer_high_charisma": self.prefer_high_charisma,
+            "maximize_throughput": self.maximize_throughput,
             "gay_flags": self.gay_flags,
         }
 

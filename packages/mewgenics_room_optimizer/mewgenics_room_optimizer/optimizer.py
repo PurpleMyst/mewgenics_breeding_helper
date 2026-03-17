@@ -2,6 +2,7 @@
 
 import math
 import random
+from dataclasses import replace
 from typing import Callable
 
 from mewgenics_parser import Cat
@@ -17,15 +18,14 @@ from mewgenics_scorer import (
 )
 
 from .types import (
-    RoomType,
-    RoomConfig,
-    RoomAssignment,
-    ScoredPair,
     OptimizationParams,
     OptimizationResult,
     OptimizationStats,
+    RoomAssignment,
+    RoomConfig,
+    RoomType,
+    ScoredPair,
 )
-
 
 PairCacheKey = tuple[int, int, float]
 
@@ -59,9 +59,6 @@ def can_pair_gay(cat_a: Cat, cat_b: Cat, gay_flags: dict[int, bool]) -> bool:
     """Check if gay cats can breed based on gender restrictions."""
     is_a_gay = gay_flags.get(cat_a.db_key, False)
     is_b_gay = gay_flags.get(cat_b.db_key, False)
-
-    if not is_a_gay and not is_b_gay:
-        return True
 
     return (not (is_a_gay or is_b_gay)) or "?" in {cat_a.gender, cat_b.gender}
 
@@ -136,42 +133,6 @@ def score_pair(
         factors=factors,
         quality=quality,
     )
-
-
-def _calculate_quality(factors, params: OptimizationParams) -> float:
-    """Calculate quality score from pair factors."""
-    avg_stats = factors.total_expected_stats / 7.0
-
-    # At max combined risk (1.0), quality penalty is 50%
-    risk_factor = 1.0 - factors.combined_malady_chance / 2.0
-
-    variance_penalty = 0.0
-    if True:
-        for diff in [
-            abs(a - b)
-            for a, b in zip(factors.expected_stats[:3], factors.expected_stats[3:])
-        ]:
-            if diff > 2:
-                variance_penalty += diff * 2.0
-
-    personality_bonus = 0.0
-    if True:
-        personality_bonus += factors.aggression_factor * 2.5
-    if True:
-        personality_bonus += factors.libido_factor * 2.5
-    if True:
-        personality_bonus += factors.charisma_factor * 2.5
-
-    trait_bonus = sum(t.weight for t in factors.trait_matches) * 5.0
-
-    quality = (
-        (avg_stats + risk_factor * 20)
-        - variance_penalty
-        + personality_bonus
-        + trait_bonus
-    )
-
-    return quality
 
 
 def _has_planner_trait(cat: Cat, params: OptimizationParams) -> bool:
@@ -271,12 +232,35 @@ def _evaluate_state(
             continue
 
         pairs = _generate_pairs(breeding_cats)
+        room_quality = 0.0
         for a, b in pairs:
+            effective_params = replace(params, stimulation=true_stim)
             scored = pair_cache.get_score(
-                a, b, true_stim, lambda: score_pair(a, b, ancestor_contribs, params)
+                a,
+                b,
+                true_stim,
+                lambda: score_pair(a, b, ancestor_contribs, effective_params),
             )
             if scored:
-                total_quality += scored.quality
+                room_quality += scored.quality
+
+        # --- Throughput Soft Constraint ---
+        # Boosts the room's score if it can produce multiple pregnancies simultaneously
+        if (params.scoring_prefs or ScoringPreferences()).maximize_throughput:
+            males = sum(1 for c in breeding_cats if c.gender == "male")
+            females = sum(1 for c in breeding_cats if c.gender == "female")
+            spiders = sum(1 for c in breeding_cats if c.gender == "?")
+
+            # Calculate max simultaneous breeding pairs (spiders can act as either gender)
+            concurrent_breeds = min(
+                len(breeding_cats) // 2, males + spiders, females + spiders
+            )
+
+            if concurrent_breeds > 1:
+                # E.g., 2 concurrent breeds = 1.2x multiplier, 3 breeds = 1.4x multiplier
+                room_quality *= 1.0 + (concurrent_breeds - 1) * 0.2
+
+        total_quality += room_quality
 
     return total_quality
 
@@ -326,7 +310,9 @@ def _run_sa_worker(
     best_score = current_score
 
     iteration = 0
-    valid_rooms = [r.key for r in room_configs if r.room_type != RoomType.NONE]
+    valid_rooms = [r.key for r in room_configs if r.room_type == RoomType.BREEDING] + [
+        ""
+    ]
     while T > T_min:
         for _ in range(neighbors_per_temp):
             neighbor = _get_neighbor(current_state, valid_rooms)
@@ -367,27 +353,27 @@ def _generate_random_valid_state(
     if seed is not None:
         random.seed(seed)
 
-    breeding_rooms = [r for r in room_configs if r.room_type == RoomType.BREEDING]
-    general_rooms = [r for r in room_configs if r.room_type == RoomType.GENERAL]
-    fighting_rooms = [r for r in room_configs if r.room_type == RoomType.FIGHTING]
-    all_rooms = breeding_rooms + general_rooms + fighting_rooms
+    # Initialize only into Breeding rooms
+    valid_rooms = [r for r in room_configs if r.room_type == RoomType.BREEDING]
 
-    if not all_rooms:
+    if not valid_rooms:
         return {c.db_key: "" for c in cats}
 
     state: dict[int, str] = {}
-    room_cats: dict[str, list[Cat]] = {r.key: [] for r in all_rooms}
+    room_cats: dict[str, list[Cat]] = {r.key: [] for r in valid_rooms}
 
     for cat in cats:
-        valid_rooms = []
-        for room in all_rooms:
+        available_rooms = []
+        for room in valid_rooms:
             if _can_fit_single(room, len(room_cats[room.key])):
-                valid_rooms.append(room.key)
+                available_rooms.append(room.key)
 
-        if valid_rooms:
-            chosen_room = random.choice(valid_rooms)
+        if available_rooms:
+            chosen_room = random.choice(available_rooms)
             state[cat.db_key] = chosen_room
             room_cats[chosen_room].append(cat)
+        else:
+            state[cat.db_key] = ""  # Leave unassigned if no breeding rooms fit
 
     return state
 
@@ -501,11 +487,40 @@ def _build_results_from_state_dict(
 
         pairs = _generate_pairs(breeding_cats)
         for a, b in pairs:
+            effective_params = replace(params, stimulation=true_stim)
             scored = pair_cache.get_score(
-                a, b, true_stim, lambda: score_pair(a, b, ancestor_contribs, params)
+                a,
+                b,
+                true_stim,
+                lambda: score_pair(a, b, ancestor_contribs, effective_params),
             )
             if scored:
                 room_pairs[room.key].append(scored)
+
+    # --- POST-PROCESSING CLEANUP ---
+    # Pack remaining cats into Fighting and General rooms deterministically
+    unassigned = [c for c in filtered_cats if c.db_key not in assigned_cats]
+    general_rooms = [r for r in room_configs if r.room_type == RoomType.GENERAL]
+    fighting_rooms = [r for r in room_configs if r.room_type == RoomType.FIGHTING]
+
+    # Trait carriers to General rooms first
+    trait_cats = [c for c in unassigned if _has_planner_trait(c, params)]
+    for cat in trait_cats:
+        for room in general_rooms:
+            if _can_fit_single(room, len(rooms_content[room.key])):
+                rooms_content[room.key].append(cat)
+                assigned_cats.add(cat.db_key)
+                break
+
+    # Remaining high-stat cats to Fighting, then General
+    remaining = [c for c in unassigned if c.db_key not in assigned_cats]
+    remaining.sort(key=lambda c: sum(c.stat_base), reverse=True)
+    for cat in remaining:
+        for room in fighting_rooms + general_rooms:
+            if _can_fit_single(room, len(rooms_content[room.key])):
+                rooms_content[room.key].append(cat)
+                assigned_cats.add(cat.db_key)
+                break
 
     excluded = [c for c in filtered_cats if c.db_key not in assigned_cats]
 
@@ -521,12 +536,14 @@ def _build_results_from_state_dict(
         pairs_in_room = room_pairs[config.key]
 
         if cats_in_room or pairs_in_room:
+            ey_cats = [c for c in cats_in_room if _has_eternalyouth(c)]
+
             room_results.append(
                 RoomAssignment(
                     room=config,
                     cats=cats_in_room,
                     pairs=pairs_in_room,
-                    eternal_youth_cats=[],
+                    eternal_youth_cats=ey_cats,
                 )
             )
 

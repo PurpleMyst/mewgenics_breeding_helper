@@ -8,3 +8,15 @@ run:
 [windows]
 test-all:
     fd tests | % { uv run pytest $_ }
+
+# Run the type checker.
+ty:
+    uv run ty check packages
+
+# Run the linter.
+lint:
+    uv run ruff check packages
+
+# Run the linter with auto-fix.
+fix:
+    uv run ruff check packages --fix

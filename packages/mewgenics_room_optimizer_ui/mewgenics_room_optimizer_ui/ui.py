@@ -226,6 +226,17 @@ def build_params_section(state: AppState):
                     dpg.add_text(
                         "Favors pairs with higher combined charisma for better breeding odds."
                     )
+                dpg.add_checkbox(
+                    label="Maximize Throughput",
+                    tag="maximize_throughput",
+                    default_value=state.maximize_throughput,
+                    callback=on_param_changed,
+                    user_data=state,
+                )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Prioritizes pairing cats in rooms with higher throughput caps for faster breeding."
+                    )
             with dpg.group(horizontal=True):
                 dpg.add_text("SA Temperature:")
                 dpg.add_input_float(
@@ -278,6 +289,8 @@ def on_param_changed(sender, app_data, user_data: AppState):
         user_data.prefer_high_libido = app_data
     elif tag == "prefer_high_charisma":
         user_data.prefer_high_charisma = app_data
+    elif tag == "maximize_throughput":
+        user_data.maximize_throughput = app_data
 
     user_data.save()
 
@@ -1036,12 +1049,14 @@ def run_optimization(sender, app_data, user_data: AppState):
     prefer_low_aggression = dpg.get_value("prefer_low_aggression")
     prefer_high_libido = dpg.get_value("prefer_high_libido")
     prefer_high_charisma = dpg.get_value("prefer_high_charisma")
+    maximize_throughput = dpg.get_value("maximize_throughput")
 
     scoring_prefs = ScoringPreferences(
         minimize_variance=minimize_variance,
         prefer_low_aggression=prefer_low_aggression,
         prefer_high_libido=prefer_high_libido,
         prefer_high_charisma=prefer_high_charisma,
+        maximize_throughput=maximize_throughput,
     )
 
     params = OptimizationParams(
@@ -1821,6 +1836,7 @@ def on_sandbox_changed(sender, app_data, user_data):
                 prefer_low_aggression=state.prefer_low_aggression,
                 prefer_high_libido=state.prefer_high_libido,
                 prefer_high_charisma=state.prefer_high_charisma,
+                maximize_throughput=state.maximize_throughput,
             ),
             planner_traits=state.planner_traits,
             gay_flags=state.gay_flags,

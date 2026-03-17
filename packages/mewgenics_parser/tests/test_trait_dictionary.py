@@ -1,6 +1,5 @@
 """Tests for mewgenics_parser trait_dictionary module."""
 
-
 from mewgenics_parser.trait_dictionary import (
     BASIC_ATTACK_TYPES,
     COLLARLESS_SPELLS,

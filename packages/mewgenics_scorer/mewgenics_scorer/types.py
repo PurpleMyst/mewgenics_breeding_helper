@@ -20,3 +20,4 @@ class ScoringPreferences:
     prefer_low_aggression: bool = False
     prefer_high_libido: bool = False
     prefer_high_charisma: bool = False
+    maximize_throughput: bool = False
