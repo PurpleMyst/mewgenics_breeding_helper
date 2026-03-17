@@ -134,6 +134,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "dirty-equals" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
@@ -151,6 +152,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "dirty-equals", specifier = ">=0.11" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "ruff", specifier = ">=0.15.6" },
     { name = "ty", specifier = ">=0.0.23" },
@@ -196,6 +198,11 @@ test = [
     { name = "pytest-mock" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "dirty-equals" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "inline-snapshot", marker = "extra == 'test'", specifier = ">=0.6" },
@@ -205,6 +212,9 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14" },
 ]
 provides-extras = ["test"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "dirty-equals", specifier = ">=0.11" }]
 
 [[package]]
 name = "mewgenics-room-optimizer-ui"

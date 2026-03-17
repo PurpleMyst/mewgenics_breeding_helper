@@ -1,6 +1,5 @@
 """Tests for mewgenics_parser cat module disorder separation."""
 
-from unittest.mock import MagicMock
 
 from mewgenics_parser.cat import _split_passives_and_disorders
 

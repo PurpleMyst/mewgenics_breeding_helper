@@ -954,7 +954,7 @@ def save_config_callback(sender, app_data, user_data: AppState):
 
 def on_room_config_changed(sender, app_data, user_data: AppState):
     """Handle room config change - auto-save immediately."""
-    from mewgenics_room_optimizer import RoomConfig, RoomType
+    from mewgenics_room_optimizer import RoomConfig
 
     is_valid = True
 
@@ -1730,7 +1730,7 @@ def on_sandbox_changed(sender, app_data, user_data):
     """Handle sandbox dropdown changes."""
     import re
 
-    from mewgenics_room_optimizer import can_pair_gay, score_pair
+    from mewgenics_room_optimizer import score_pair
     from mewgenics_room_optimizer.types import OptimizationParams
     from mewgenics_scorer import (
         build_ancestor_contribs,

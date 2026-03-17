@@ -1,7 +1,6 @@
 """Entry point for room optimizer UI."""
 
 import argparse
-import sys
 
 import dearpygui.dearpygui as dpg
 

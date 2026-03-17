@@ -1,13 +1,10 @@
 """Tests for mewgenics_parser trait_dictionary module."""
 
-import pytest
 
 from mewgenics_parser.trait_dictionary import (
     BASIC_ATTACK_TYPES,
     COLLARLESS_SPELLS,
-    COLLARLESS_PASSIVES,
     DISORDERS,
-    SKILLSHARE_PLUS_ID,
     is_class_spell,
     is_class_passive,
 )

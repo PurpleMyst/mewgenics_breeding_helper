@@ -30,7 +30,7 @@ def gpak_path(request):
         return path
 
     pytest.skip(
-        f"No GPAK file provided. Use --gpak-path or MEWGENICS_GPAK_PATH env var."
+        "No GPAK file provided. Use --gpak-path or MEWGENICS_GPAK_PATH env var."
     )
 
 

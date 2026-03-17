@@ -14,3 +14,8 @@ test = [
     "pytest-mock>=3.14",
     "inline-snapshot>=0.6",
 ]
+
+[dependency-groups]
+dev = [
+    "dirty-equals>=0.11",
+]

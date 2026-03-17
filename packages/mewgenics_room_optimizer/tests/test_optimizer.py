@@ -4,12 +4,12 @@ import random
 from unittest.mock import MagicMock, patch
 
 import pytest
+from dirty_equals import HasAttributes
 from inline_snapshot import snapshot
 
 from mewgenics_room_optimizer import (
     DEFAULT_ROOM_CONFIGS,
     OptimizationParams,
-    OptimizationResult,
     OptimizationStats,
     RoomConfig,
     RoomType,
@@ -19,8 +19,8 @@ from mewgenics_room_optimizer.optimizer import (
     _cat_stats_sum,
     _filter_cats,
     _generate_pairs,
-    _get_neighbor,
     _generate_random_valid_state,
+    _get_neighbor,
 )
 
 
@@ -384,25 +384,11 @@ class TestGetNeighbor:
         rooms = ["room_a", "room_b", "room_c"]
         random.seed(42)
         result = _get_neighbor(state, rooms)
-        assert set(result.keys()) == {1, 2, 3}
+        assert result == snapshot({1: "room_b", 2: "room_a", 3: "room_c"})
 
     def test_empty_state_returns_empty(self):
         result = _get_neighbor({}, ["room_a"])
-        assert result == {}
-
-    def test_single_cat_moves(self):
-        state = {1: "room_a"}
-        rooms = ["room_a", "room_b"]
-        random.seed(42)
-        _get_neighbor(state, rooms)
-        # Should have moved to a different room (given the random seed)
-
-    def test_swap_changes_both(self):
-        state = {1: "room_a", 2: "room_b"}
-        rooms = ["room_a", "room_b"]
-        random.seed(123)  # Seed for swap operation
-        _get_neighbor(state, rooms)
-        # With proper seed, should swap
+        assert result == snapshot({})
 
 
 class TestGenerateRandomValidState:
@@ -413,25 +399,25 @@ class TestGenerateRandomValidState:
         rooms = [RoomConfig("test", "Test", RoomType.BREEDING, 6)]
         random.seed(42)
         result = _generate_random_valid_state(cats, rooms)
-        assert isinstance(result, dict)
+        assert result == snapshot({1: "test", 2: "test"})
 
     def test_respects_capacity(self):
         cats = [make_mock_cat(i, gender="male") for i in range(10)]
         rooms = [RoomConfig("test", "Test", RoomType.BREEDING, 4)]
-        random.seed(42)
-        _generate_random_valid_state(cats, rooms)
-        # Should not crash
+        assert _generate_random_valid_state(cats, rooms) == snapshot(
+            {0: "test", 1: "test", 2: "test", 3: "test"}
+        )
 
     def test_empty_cats_returns_empty(self):
         result = _generate_random_valid_state([], [])
-        assert result == {}
+        assert result == snapshot({})
 
     def test_all_cats_assigned_when_possible(self):
         cats = [make_mock_cat(1, gender="male"), make_mock_cat(2, gender="female")]
         rooms = [RoomConfig("test", "Test", RoomType.BREEDING, 6)]
         random.seed(42)
         result = _generate_random_valid_state(cats, rooms)
-        assert len(result) == 2
+        assert result == snapshot({1: "test", 2: "test"})
 
 
 class TestOptimizeSA:
@@ -445,12 +431,37 @@ class TestOptimizeSA:
         rooms = [RoomConfig("test", "Test", RoomType.BREEDING, 6)]
         params = OptimizationParams()
         result = optimize_sa(cats, rooms, params, {})
-        assert isinstance(result, OptimizationResult)
+        assert result.rooms == snapshot([])
+        assert result.excluded_cats == snapshot(
+            [HasAttributes(db_key=1), HasAttributes(db_key=2)]
+        )
+        assert result.stats == snapshot(
+            OptimizationStats(
+                total_cats=2,
+                assigned_cats=0,
+                total_pairs=0,
+                breeding_rooms_used=0,
+                general_rooms_used=0,
+                avg_pair_quality=0.0,
+                avg_risk_percent=0.0,
+            )
+        )
 
     def test_empty_cats_returns_empty_result(self):
         result = optimize_sa([], [], OptimizationParams(), {})
-        assert result.stats.total_cats == 0
-        assert result.stats.assigned_cats == 0
+        assert result.rooms == snapshot([])
+        assert result.excluded_cats == snapshot([])
+        assert result.stats == snapshot(
+            OptimizationStats(
+                total_cats=0,
+                assigned_cats=0,
+                total_pairs=0,
+                breeding_rooms_used=0,
+                general_rooms_used=0,
+                avg_pair_quality=0.0,
+                avg_risk_percent=0.0,
+            )
+        )
 
     def test_filters_gone_cats(self):
         cats = [
@@ -460,7 +471,19 @@ class TestOptimizeSA:
         rooms = [RoomConfig("test", "Test", RoomType.BREEDING, 6)]
         params = OptimizationParams()
         result = optimize_sa(cats, rooms, params, {})
-        assert result.stats.total_cats == 1
+        assert result.rooms == snapshot([])
+        assert result.excluded_cats[0].db_key == snapshot(1)
+        assert result.stats == snapshot(
+            OptimizationStats(
+                total_cats=1,
+                assigned_cats=0,
+                total_pairs=0,
+                breeding_rooms_used=0,
+                general_rooms_used=0,
+                avg_pair_quality=0.0,
+                avg_risk_percent=0.0,
+            )
+        )
 
     def test_respects_min_stats(self):
         cats = [
@@ -470,7 +493,19 @@ class TestOptimizeSA:
         rooms = [RoomConfig("test", "Test", RoomType.BREEDING, 6)]
         params = OptimizationParams(min_stats=35)
         result = optimize_sa(cats, rooms, params, {})
-        assert result.stats.total_cats == 1
+        assert result.rooms == snapshot([])
+        assert result.excluded_cats[0].db_key == snapshot(1)
+        assert result.stats == snapshot(
+            OptimizationStats(
+                total_cats=1,
+                assigned_cats=0,
+                total_pairs=0,
+                breeding_rooms_used=0,
+                general_rooms_used=0,
+                avg_pair_quality=0.0,
+                avg_risk_percent=0.0,
+            )
+        )
 
     def test_excludes_none_type_rooms(self):
         cats = [
