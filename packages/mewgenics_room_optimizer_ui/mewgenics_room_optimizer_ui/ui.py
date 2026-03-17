@@ -499,13 +499,15 @@ def update_traits_display(state: AppState):
     for i, trait in enumerate(state.planner_traits):
         with dpg.group(horizontal=True, parent=container):
             trait_text = dpg.add_text(
-                f"[{int(trait.weight)}] {trait.category}: {trait.key}"
+                    f"[{int(trait.weight):2}] {trait.category}: {trait.key}"
             )
             desc = state.game_data.ability_descriptions.get(
                 trait.key.lower(), "No description"
             )
             with dpg.tooltip(trait_text):
                 dpg.add_text(desc if desc else "No description")
+            # TODO: make these buttons flush with the right edge of the container instead of right
+            # next to the text
             dpg.add_button(
                 label="-",
                 width=25,
@@ -1160,7 +1162,7 @@ def build_details_tabs(selected_room, state):
                         )
                         dpg.add_text(f"{pair.quality:.1f}")
                         dpg.add_text(
-                            f"D:{disorder:.0f}% P:{part_defect:.0f}% C:{combined:.0f}%",
+                            f"D:{disorder:2.0f}% P:{part_defect:2.0f}% C:{combined:2.0f}%",
                             color=risk_color,
                         )
 
