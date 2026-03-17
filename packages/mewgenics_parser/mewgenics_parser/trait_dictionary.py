@@ -370,4 +370,4 @@ def is_disorder(passive_id: str) -> bool:
 
 def has_skillshare_plus(cat) -> bool:
     """Check if cat has the upgraded SkillShare+ passive."""
-    return p in cat.passive_abilities
+    return SKILLSHARE_PLUS_ID in cat.passive_abilities

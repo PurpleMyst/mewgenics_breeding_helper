@@ -48,30 +48,6 @@ class TestParseSaveIntegration:
         assert cat.lovers == snapshot([])
         assert cat.haters == snapshot([])
 
-    def test_cat_mutation_string(self, savefile_path, gpak_path):
-        """Test Cat.mutation_string produces expected result."""
-        save = parse_save(savefile_path)
-
-        min_mouth_mutation_id = 1000
-        max_mouth_mutation_id = 0000
-        for cat in save.cats:
-            mouth_mutation_ids = cat.mutation_ids_by_category.get("mouth", [])
-            for mid in mouth_mutation_ids:
-                if mid < min_mouth_mutation_id:
-                    min_mouth_mutation_id = mid
-                if mid > max_mouth_mutation_id:
-                    max_mouth_mutation_id = mid
-        print(f"Min mouth mutation ID: {min_mouth_mutation_id}")
-        print(f"Max mouth mutation ID: {max_mouth_mutation_id}")
-
-        cat = save.cats[0]
-
-        gd = GameData.from_gpak(gpak_path)
-        result = gd.mutation_text_by_part_and_id["mouth"].get(cat.mutation_ids_by_category["mouth"][0])
-        assert False
-
-
-
 class TestGpakIntegration:
     """Integration tests requiring a real GPAK file."""
 

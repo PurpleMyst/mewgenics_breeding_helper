@@ -23,7 +23,7 @@ CONFIG_DIR = Path.home() / ".mewgenics_room_optimizer"
 
 def normalize_trait_key(trait_key: str) -> str:
     """Normalize trait key to base form for consistent matching."""
-    return normalize_trait_name(trait_key).lower()
+    return normalize_trait_name(trait_key)
 
 
 CONFIG_FILE = CONFIG_DIR / "config.json"

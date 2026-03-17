@@ -149,6 +149,9 @@ class Cat:
         def _stats() -> Stats:
             return (r.u32(), r.u32(), r.u32(), r.u32(), r.u32(), r.u32(), r.u32())
 
+        def _stats_signed() -> Stats:
+            return (r.i32(), r.i32(), r.i32(), r.i32(), r.i32(), r.i32(), r.i32())
+
         self.db_key = cat_key
 
         # Location / status
@@ -226,8 +229,8 @@ class Cat:
         r.f64()
 
         self.stat_base = _stats()
-        stat_mod = _stats()
-        stat_sec = _stats()
+        stat_mod = _stats_signed()
+        stat_sec = _stats_signed()
         self.stat_total = tuple(
             b + m + s for b, m, s in zip(self.stat_base, stat_mod, stat_sec)
         )
@@ -444,11 +447,7 @@ class Cat:
     def all_normalized_traits(self) -> set[str]:
         """Returns a unified set of all normalized abilities, passives, and mutations."""
         traits: set[str] = set()
-        traits.update(
-            normalize_trait_name(t) for t in (self.active_abilities or [])
-        )
-        traits.update(
-            normalize_trait_name(t) for t in (self.passive_abilities or [])
-        )
+        traits.update(normalize_trait_name(t) for t in (self.active_abilities or []))
+        traits.update(normalize_trait_name(t) for t in (self.passive_abilities or []))
         # traits.update(normalize_trait_name(t) for t in (self.mutations or []))
         return traits

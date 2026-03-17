@@ -42,7 +42,7 @@ def _resolve_game_string(value: str, game_strings: dict[str, str]) -> str:
     return resolved
 
 
-def _parse_gon_to_dicts(text: str) -> dict[str, Any]:
+def _parse_gon_to_dicts(text: str, *, comment_key: str = "name") -> dict[str, Any]:
     # 1. Lexical Analysis (Tokenization)
     token_specification = [
         ("BLOCK_COMMENT", r"/\*[\s\S]*?\*/"),  # Multi-line or inline block comments
@@ -98,13 +98,13 @@ def _parse_gon_to_dicts(text: str) -> dict[str, Any]:
                 stack.append(new_node)
                 i += 1
 
-                # Check for an immediate comment to save as metadata
+                # Check for an immediate comment to save as name
                 if i < n and tokens[i].lastgroup in ("LINE_COMMENT", "BLOCK_COMMENT"):
                     comment_text = tokens[i].group()
                     if tokens[i].lastgroup == "LINE_COMMENT":
-                        new_node["__comment__"] = comment_text[2:].strip()
+                        new_node[comment_key] = comment_text[2:].strip()
                     else:
-                        new_node["__comment__"] = comment_text[
+                        new_node[comment_key] = comment_text[
                             2:-2
                         ].strip()  # Strip /* and */
                     i += 1

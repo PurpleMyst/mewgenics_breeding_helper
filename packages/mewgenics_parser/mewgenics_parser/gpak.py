@@ -42,14 +42,13 @@ def _parse_gon_abilities(
 
         # If both name and description are empty, try to look under variant_of or just go with sane
         # defaults.
-        if not name and not desc:
+        if not name or not desc:
             variant_of = data.get("variant_of", "")
             if isinstance(variant_of, str) and variant_of in result:
-                name = result[variant_of].name
-                desc = result[variant_of].description
-            else:
-                name = ability_id
-                desc = ""
+                name = name or result[variant_of].name
+                desc = desc or result[variant_of].description
+
+        name = name or ability_id
 
         # Load upgraded versions of the ability (e.g., "Fireball2" for "Fireball+") if they exist in
         # the GON data, using the same description if not specified.
