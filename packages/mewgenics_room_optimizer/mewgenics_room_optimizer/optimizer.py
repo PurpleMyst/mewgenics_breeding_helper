@@ -3,6 +3,7 @@
 from dataclasses import replace
 
 from mewgenics_parser import Cat
+from mewgenics_parser.trait_dictionary import normalize_trait_name
 from mewgenics_scorer import (
     calculate_pair_factors,
     can_breed,
@@ -33,9 +34,8 @@ def can_pair_gay(cat_a: Cat, cat_b: Cat, gay_flags: dict[int, bool]) -> bool:
 
     if not is_a_gay and not is_b_gay:
         return True
-    
-    return (not (is_a_gay or is_b_gay)) or "?" in {cat_a.gender, cat_b.gender}
 
+    return (not (is_a_gay or is_b_gay)) or "?" in {cat_a.gender, cat_b.gender}
 
 
 def _cat_stats_sum(cat: Cat) -> int:
@@ -149,13 +149,13 @@ def _has_planner_trait(cat: Cat, params: OptimizationParams) -> bool:
     """Check if cat has any planner-selected traits."""
     for trait in params.planner_traits:
         for mutation in cat.mutations or []:
-            if mutation.lower() == trait.key.lower():
+            if normalize_trait_name(mutation).lower() == trait.key.lower():
                 return True
         for passive in cat.passive_abilities or []:
-            if passive.lower() == trait.key.lower():
+            if normalize_trait_name(passive).lower() == trait.key.lower():
                 return True
         for ability in cat.abilities or []:
-            if ability.lower() == trait.key.lower():
+            if normalize_trait_name(ability).lower() == trait.key.lower():
                 return True
     return False
 
