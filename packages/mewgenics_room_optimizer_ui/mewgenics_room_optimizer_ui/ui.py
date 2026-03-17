@@ -65,10 +65,8 @@ def render_cat_table_rows(
         else:
             loc_color = COLOR_DANGER
 
-        stats = cat.total_stats
-        stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
-        stat_values = [stats.get(s, 0) for s in stat_order]
-        total = sum(cat.total_stats.values())
+        stat_values = cat.stat_total
+        total = sum(stat_values)
 
         has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
         trait_badge = "[*]" if has_fav else ""
@@ -735,9 +733,7 @@ def update_all_cats_table(
             location_color = COLOR_DANGER
 
         # Get individual stats from total_stats dict
-        stats = cat.total_stats
-        stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
-        stat_values = [stats.get(s, 0) for s in stat_order]
+        stat_values = cat.stat_total
 
         has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
         trait_badge = "[*] " if has_fav else ""
@@ -752,7 +748,7 @@ def update_all_cats_table(
             )
             dpg.add_text(str(sex_display))
             dpg.add_text(age_display)
-            dpg.add_text(cat.room_display or current_room, color=location_color)
+            dpg.add_text(cat.room_display, color=location_color)
             for sv in stat_values:
                 dpg.add_text(str(sv))
             dpg.add_text(str(total_stats))
@@ -850,7 +846,7 @@ def build_all_cats_tab(state: AppState):
                 dpg.add_table_column(label="SPD", width_fixed=True)
                 dpg.add_table_column(label="CHA", width_fixed=True)
                 dpg.add_table_column(label="LCK", width_fixed=True)
-                dpg.add_table_column(label="Total", width_fixed=True)
+                dpg.add_table_column(label="Sum", width_fixed=True)
                 dpg.add_table_column(label="Traits", width_stretch=True)
 
             dpg.add_text("Load a save to see cats", tag="all_cats_placeholder")
@@ -1396,7 +1392,7 @@ def build_details_tabs(selected_room, state):
                 dpg.add_table_column(label="SPD", width_fixed=True)
                 dpg.add_table_column(label="CHA", width_fixed=True)
                 dpg.add_table_column(label="LCK", width_fixed=True)
-                dpg.add_table_column(label="Total", width_fixed=True)
+                dpg.add_table_column(label="Sum", width_fixed=True)
                 dpg.add_table_column(label="Traits", width_fixed=True)
 
                 for cat in all_cats:
@@ -1404,7 +1400,7 @@ def build_details_tabs(selected_room, state):
                     cat_name = cat.name or "Unnamed"
                     if is_ey:
                         cat_name = f"{cat_name} [EY]"
-                    total_stats = sum(cat.total_stats.values())
+                    total_stats = sum(cat.stat_total)
                     age = cat.age if cat.age is not None else "-"
 
                     # Get assigned room and determine location color
@@ -1418,9 +1414,7 @@ def build_details_tabs(selected_room, state):
                         location_color = COLOR_DANGER
 
                     # Get individual stats from total_stats dict
-                    stats = cat.total_stats
-                    stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
-                    stat_values = [stats.get(s, 0) for s in stat_order]
+                    stat_values = cat.stat_total
 
                     has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
                     trait_badge = "[*]" if has_fav else ""

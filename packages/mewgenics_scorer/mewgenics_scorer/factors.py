@@ -396,7 +396,7 @@ def _cat_has_trait(cat: Cat, category: str, key: str) -> bool:
     elif category == "passive":
         return any(p.lower() == key_lower for p in (cat.passive_abilities or []))
     elif category == "ability":
-        return any(a.lower() == key_lower for a in (cat.abilities or []))
+        return any(a.lower() == key_lower for a in (cat.active_abilities or []))
     return False
 
 

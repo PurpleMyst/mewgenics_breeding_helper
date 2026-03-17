@@ -139,15 +139,14 @@ def parse_save(path: str) -> SaveData:
         cat = Cat(blob, key, house, adv, current_day)
         cats.append(cat)
 
-    key_to_cat: dict = {c.db_key: c for c in cats}
-
+    cats_by_key: dict = {c.db_key: c for c in cats}
     for cat in cats:
         pa: Optional[Cat] = None
         pb: Optional[Cat] = None
         if cat.db_key in ped_map:
             pa_k, pb_k = ped_map[cat.db_key]
-            pa = key_to_cat.get(pa_k)
-            pb = key_to_cat.get(pb_k)
+            pa = cats_by_key.get(pa_k)
+            pb = cats_by_key.get(pb_k)
             if pa is cat:
                 pa = None
             if pb is cat:
@@ -157,44 +156,15 @@ def parse_save(path: str) -> SaveData:
 
         cat.lovers = []
         for key in getattr(cat, "_lover_uids", []):
-            other = key_to_cat.get(key)
+            other = cats_by_key.get(key)
             if other is not None and other is not cat and other not in cat.lovers:
                 cat.lovers.append(other)
 
         cat.haters = []
         for key in getattr(cat, "_hater_uids", []):
-            other = key_to_cat.get(key)
+            other = cats_by_key.get(key)
             if other is not None and other is not cat and other not in cat.haters:
                 cat.haters.append(other)
-
-    for cat in cats:
-        cat.children = []
-    for cat in cats:
-        for parent in (cat.parent_a, cat.parent_b):
-            if parent is not None and cat not in parent.children:
-                parent.children.append(cat)
-
-    for c in cats:
-        c.generation = 0 if (c.parent_a is None and c.parent_b is None) else -1
-
-    for _ in range(len(cats) + 1):
-        changed = False
-        for c in cats:
-            pa_g = c.parent_a.generation if c.parent_a is not None else -1
-            pb_g = c.parent_b.generation if c.parent_b is not None else -1
-
-            if pa_g >= 0 or pb_g >= 0:
-                g = max(pa_g, pb_g) + 1
-                if c.generation != g:
-                    c.generation = g
-                    changed = True
-
-        if not changed:
-            break
-
-    for c in cats:
-        if c.generation < 0:
-            c.generation = 0
 
     house_count = sum(1 for c in cats if c.status == "In House")
     adventure_count = sum(1 for c in cats if c.status == "Adventure")

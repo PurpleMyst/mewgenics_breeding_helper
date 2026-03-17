@@ -144,7 +144,7 @@ def _has_planner_trait(cat: Cat, params: OptimizationParams) -> bool:
         for passive in cat.passive_abilities or []:
             if normalize_trait_name(passive).lower() == trait.key.lower():
                 return True
-        for ability in cat.abilities or []:
+        for ability in cat.active_abilities or []:
             if normalize_trait_name(ability).lower() == trait.key.lower():
                 return True
     return False

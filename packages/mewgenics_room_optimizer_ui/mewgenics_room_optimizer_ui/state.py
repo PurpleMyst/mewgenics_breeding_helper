@@ -300,6 +300,6 @@ class AppState:
         """Extract unique normalized active abilities from alive cats."""
         abilities = set()
         for cat in self.alive_cats:
-            for a in cat.abilities or []:
+            for a in cat.active_abilities or []:
                 abilities.add(normalize_trait_key(a))
         return sorted(abilities)

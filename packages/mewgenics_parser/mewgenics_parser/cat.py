@@ -2,20 +2,36 @@
 
 from __future__ import annotations
 
-import struct
-import lz4.block
 import math
+import struct
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import TypeGuard
 
+import lz4.block
+
 from .binary import BinaryReader
-from .constants import STAT_NAMES, _JUNK_STRINGS, _IDENT_RE, ROOM_DISPLAY
-from .trait_dictionary import DISORDERS, normalize_trait_name, SKILLSHARE_BASE_ID
+from .constants import _IDENT_RE, _JUNK_STRINGS, ROOM_DISPLAY, STAT_NAMES
+from .trait_dictionary import DISORDERS, SKILLSHARE_BASE_ID, normalize_trait_name
 from .visual import (
+    _VISUAL_MUTATION_FIELDS,
     _read_visual_mutation_entries,
     _visual_mutation_chip_items,
-    _VISUAL_MUTATION_FIELDS,
 )
+
+Stats = tuple[int, int, int, int, int, int, int]
+
+
+class CatGender(StrEnum):
+    MALE = "male"
+    FEMALE = "female"
+    NONBINARY = "?"
+
+
+class CatStatus(StrEnum):
+    IN_HOUSE = "In House"
+    ADVENTURE = "Adventure"
+    GONE = "Gone"
 
 
 def _valid_str(s: str | None) -> TypeGuard[str]:
@@ -35,7 +51,7 @@ def _split_passives_and_disorders(traits: list[str]) -> tuple[list[str], list[st
     return passives, disorders
 
 
-def _normalize_gender(raw_gender: str | None) -> str:
+def _normalize_gender(raw_gender: str | None) -> CatGender:
     """
     Normalize save-data gender variants to app-level values:
       - maleX   -> "male"
@@ -44,12 +60,10 @@ def _normalize_gender(raw_gender: str | None) -> str:
     """
     g = (raw_gender or "").strip().lower()
     if g.startswith("male"):
-        return "male"
+        return CatGender.MALE
     if g.startswith("female"):
-        return "female"
-    if g == "spidercat":
-        return "?"
-    return "?"
+        return CatGender.FEMALE
+    return CatGender.NONBINARY
 
 
 def _read_db_key_candidates(
@@ -70,54 +84,59 @@ def _read_db_key_candidates(
             keys.append(value)
     return keys
 
-
 @dataclass(init=False, slots=True)
 class Cat:
     """Main data model representing a cat in Mewgenics."""
 
     db_key: int
-    unique_id: str
+    # unique_id: str
     name: str
-    gender: str
-    gender_source: str
-    breed_id: int
-    collar: str
-    status: str
-    room: str
-    stat_base: list
-    stat_mod: list
-    stat_sec: list
-    total_stats: dict
+    gender: CatGender
+    # gender_source: str
+    # breed_id: int
+    # collar: str
+    status: CatStatus
+    room: str | None
+    stat_base: Stats
+    # stat_mod: list
+    # stat_sec: list
+    stat_total: Stats
     age: int | None
+
     aggression: float | None
     libido: float | None
     coi: float | None
-    abilities: list
+
+    active_abilities: list
     passive_abilities: list
     disorders: list
-    equipment: list
+
+    # equipment: list
     mutations: list
-    mutation_chip_items: list
-    visual_mutation_entries: list
-    visual_mutation_ids: list
-    visual_mutation_slots: dict
-    body_parts: dict
-    gender_token_fields: tuple
-    gender_token: str
-    name_tag: str
+    # mutation_chip_items: list
+    # visual_mutation_entries: list
+    # visual_mutation_ids: list
+    # visual_mutation_slots: dict
+    # body_parts: dict
+    # gender_token_fields: tuple
+    # gender_token: str
+    # name_tag: str
+
     parent_a: Cat | None = field(default=None, repr=False)
     parent_b: Cat | None = field(default=None, repr=False)
-    children: list = field(default_factory=list, repr=False)
+    # children: list = field(default_factory=list, repr=False)
+
     lovers: list = field(default_factory=list, repr=False)
     haters: list = field(default_factory=list, repr=False)
-    generation: int = field(default=0, repr=False)
+
+    # generation: int = field(default=0, repr=False)
 
     # Private attributes (not included in dataclass repr)
-    _uid_int: int = field(repr=False, default=0)
-    _parent_uid_a: int = field(repr=False, default=0)
-    _parent_uid_b: int = field(repr=False, default=0)
-    _lover_uids: list = field(repr=False, default_factory=list)
-    _hater_uids: list = field(repr=False, default_factory=list)
+    # _uid_int: int = field(repr=False, default=0)
+    # _parent_uid_a: int = field(repr=False, default=0)
+    # _parent_uid_b: int = field(repr=False, default=0)
+    # _lover_uids: list = field(repr=False, default_factory=list)
+    # _hater_uids: list = field(repr=False, default_factory=list)
 
     def __init__(
         self,
@@ -131,57 +150,61 @@ class Cat:
         raw = lz4.block.decompress(blob[4:], uncompressed_size=uncomp_size)
         r = BinaryReader(raw)
 
+        def _stats() -> Stats:
+            return (r.u32(), r.u32(), r.u32(), r.u32(), r.u32(), r.u32(), r.u32())
+
+
         self.db_key = cat_key
 
         # Location / status
         if cat_key in adventure_keys:
-            self.status = "Adventure"
-            self.room = "Adventure"
+            self.status = CatStatus.ADVENTURE
+            self.room = None
         elif cat_key in house_info:
-            self.status = "In House"
+            self.status = CatStatus.IN_HOUSE
             self.room = house_info[cat_key]
         else:
-            self.status = "Gone"
-            self.room = ""
+            self.status = CatStatus.GONE
+            self.room = None
 
         # Blob fields
-        self.breed_id = r.u32()
-        self._uid_int = r.u64()  # cat's own unique id (seed)
-        self.unique_id = hex(self._uid_int)
+        _breed_id = r.u32()
+        _uid_int = r.u64()  # cat's own unique id (seed)
         self.name = r.utf16str() or "Unnamed"
 
         # Optional post-name tag string (empty for most cats). Some fields below
         # are anchored to the byte immediately after this string.
-        self.name_tag = r.str() or ""
+        _name_tag = r.str() or ""
         personality_anchor = r.pos
 
         # Possible parent UIDs — fixed-position attempt.
         # parse_save will run a blob scan as a fallback if these don't resolve.
-        self._parent_uid_a = r.u64()
-        self._parent_uid_b = r.u64()
+        _parent_uid_a = r.u64()
+        _parent_uid_b = r.u64()
 
-        self.collar = r.str() or ""
+        # ↓ this seems to always be empty so idk
+        _collar = r.str() or ""
         r.u32()
 
         r.skip(64)
         T = [r.u32() for _ in range(72)]
-        self.body_parts = {"texture": T[0], "bodyShape": T[3], "headShape": T[8]}
-        self.visual_mutation_slots = {
+        _body_parts = {"texture": T[0], "bodyShape": T[3], "headShape": T[8]}
+        _visual_mutation_slots = {
             slot_key: T[table_index]
             for slot_key, table_index, *_ in _VISUAL_MUTATION_FIELDS
             if table_index < len(T)
         }
         visual_entries = _read_visual_mutation_entries(T)
         visual_items = _visual_mutation_chip_items(visual_entries)
-        self.visual_mutation_entries = visual_entries
-        self.visual_mutation_ids = [
+        _visual_mutation_entries = visual_entries
+        _visual_mutation_ids = [
             int(entry["mutation_id"]) for entry in visual_entries
         ]
         visual_display_names = [text for text, _ in visual_items]
 
-        self.gender_token_fields = tuple(r.u32() for _ in range(3))
+        _gender_token_fields = tuple(r.u32() for _ in range(3))
         raw_gender = r.str()
-        self.gender_token = (raw_gender or "").strip().lower()
+        _gender_token = (raw_gender or "").strip().lower()
         # Authoritative sex enum near the name block:
         #   0 = male, 1 = female, 2 = undefined/both (ditto-like)
         # This byte follows the optional post-name tag string, so use the
@@ -189,23 +212,20 @@ class Cat:
         sex_code: int | None = (
             raw[personality_anchor] if personality_anchor < len(raw) else None
         )
-        gender_from_code = {0: "male", 1: "female", 2: "?"}.get(sex_code)  # type: ignore[call-overload]
+        gender_from_code: CatGender | None = {0: CatGender.MALE, 1: CatGender.FEMALE, 2: CatGender.NONBINARY}.get(sex_code)  # type: ignore[call-overload]
         if gender_from_code:
             self.gender = gender_from_code
-            self.gender_source = "sex_code"
+            # self.gender_source = "sex_code"
         else:
             self.gender = _normalize_gender(raw_gender)
-            self.gender_source = "token_fallback"
+            # self.gender_source = "token_fallback"
         r.f64()
 
-        self.stat_base = [r.u32() for _ in range(7)]
-        self.stat_mod = [r.i32() for _ in range(7)]
-        self.stat_sec = [r.i32() for _ in range(7)]
+        self.stat_base = _stats()
+        stat_mod = _stats()
+        stat_sec = _stats()
+        self.stat_total = tuple(b + m + s for b, m, s in zip(self.stat_base, stat_mod, stat_sec))
 
-        self.total_stats = {
-            n: self.stat_base[i] + self.stat_mod[i] + self.stat_sec[i]
-            for i, n in enumerate(STAT_NAMES)
-        }
 
         # Personality stats (age, aggression, libido, coi).
         # Libido and coi are doubles anchored after the post-name tag string.
@@ -233,15 +253,15 @@ class Cat:
 
         # Relationship slots: direct db_key references relative to the byte
         # immediately after the optional post-name tag string.
-        self._lover_uids = _read_db_key_candidates(
+        _lover_uids = _read_db_key_candidates(
             raw, self.db_key, (48,), base_offset=personality_anchor
         )
-        self._hater_uids = _read_db_key_candidates(
+        _hater_uids = _read_db_key_candidates(
             raw, self.db_key, (72,), base_offset=personality_anchor
         )
         self.lovers = []
         self.haters = []
-        self.children = []  # direct offspring; assigned by parse_save
+        # self.children = []  # direct offspring; assigned by parse_save
 
         # ── Ability run — anchored on "DefaultMove" ─────────────────────────
         # The ability block is a u64-length-prefixed ASCII identifier run.
@@ -280,7 +300,7 @@ class Cat:
                 run_items.append(item)
 
             # Active abilities: items[1-5] (skip DefaultMove at [0])
-            self.abilities = [x for x in run_items[1:6] if _valid_str(x)]
+            self.active_abilities = [x for x in run_items[1:6] if _valid_str(x)]
 
             # Passive1 is in run_items[10] (if the run is long enough)
             passives: list[str] = []
@@ -313,9 +333,11 @@ class Cat:
             self.passive_abilities, self.disorders = _split_passives_and_disorders(
                 passives
             )
-            self.equipment = []  # equipment parsing requires separate byte-marker logic
+            _equipment = []  # equipment parsing requires separate byte-marker logic
 
         else:
+            raise RuntimeError
+
             # Fallback: old heuristic scan for any uppercase-starting ASCII string
             found = -1
             for i in range(curr, min(curr + 500, len(raw) - 9)):
@@ -330,7 +352,7 @@ class Cat:
             if found != -1:
                 r.seek(found)
 
-            self.abilities = [a for a in [r.str() for _ in range(6)] if _valid_str(a)]
+            self.active_abilities = [a for a in [r.str() for _ in range(6)] if _valid_str(a)]
             self.equipment = [s for s in [r.str() for _ in range(4)] if _valid_str(s)]
 
             all_passives: list[str] = []
@@ -352,7 +374,7 @@ class Cat:
             )
 
         self.mutations = visual_display_names
-        self.mutation_chip_items = visual_items
+        _mutation_chip_items = visual_items
 
         # Extract age from creation_day stored near the end of the blob (around blob_len - 103).
         # Search a small window around the typical offset to handle varying blob structures.
@@ -385,60 +407,39 @@ class Cat:
                             for p in (self.passive_abilities or [])
                         )
                         # Cap age at 100 unless cat has EternalYouth
-                        if has_ey:
-                            if 0 <= age <= 500:
-                                self.age = age
-                                break
-                        else:
-                            if 0 <= age <= 100:
-                                self.age = age
-                                break
+                        age_limit = 500 if has_ey else 100
+                        if 0 <= age <= age_limit:
+                            self.age = age
+                            break
             except Exception:
                 pass
 
     @property
     def room_display(self) -> str:
-        if not self.room or self.room == "Adventure":
-            return self.room or ""
-        return ROOM_DISPLAY.get(self.room, self.room)
+        if (s := ROOM_DISPLAY.get(self.room or "")) is not None:
+            return s
+        return "N/A"
 
-    @property
-    def gender_display(self) -> str:
-        g = (self.gender or "").strip().lower()
-        if g.startswith("male"):
-            return "M"
-        if g.startswith("female"):
-            return "F"
-        return "?"
-
-    @property
-    def can_move(self) -> bool:
-        return self.status == "In House"
-
-    @property
-    def short_name(self) -> str:
-        """First word of name for compact displays."""
-        return self.name.split()[0] if self.name else "?"
 
     @property
     def inheritable_abilities(self) -> list[str]:
         """Returns normalized abilities for inheritance math."""
-        return [normalize_trait_name(a) for a in self.abilities]
+        return [normalize_trait_name(a) for a in self.active_abilities]
 
     @property
     def inheritable_passives(self) -> list[str]:
         """Returns normalized passives, strictly excluding SkillShare."""
         return [
-            normalize_trait_name(p)
+            n
             for p in self.passive_abilities
-            if normalize_trait_name(p).lower() != SKILLSHARE_BASE_ID
+            if (n := normalize_trait_name(p)).lower() != SKILLSHARE_BASE_ID
         ]
 
     @property
     def all_normalized_traits(self) -> set[str]:
         """Returns a unified set of all normalized abilities, passives, and mutations."""
         traits: set[str] = set()
-        traits.update(normalize_trait_name(t).lower() for t in (self.abilities or []))
+        traits.update(normalize_trait_name(t).lower() for t in (self.active_abilities or []))
         traits.update(
             normalize_trait_name(t).lower() for t in (self.passive_abilities or [])
         )
