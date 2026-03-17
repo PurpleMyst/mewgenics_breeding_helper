@@ -8,8 +8,8 @@ A Python-based tool for optimizing breeding operations in the game Mewgenics. Fe
 
 ## Features
 
-- **Room Optimization**: Algorithm for optimal cat placement across breeding, general, and fighting rooms
-- **Seed & Pull Algorithm**: Multi-partner breeding support with throughput caps (prevents gender imbalance)
+- **Room Optimization**: Parallel Simulated Annealing optimizer with Metropolis acceptance
+- **SA Optimizer**: Configurable temperature, cooling rate, and neighbor evaluation
 - **EY Support**: Eternal Youth cats treated as free room buffs (+1 stim each, 0 capacity cost)
 - **Risk Assessment**: Game-accurate inbreeding risk calculation with configurable thresholds
   - **Disorder Chance**: Probability of birth defect disorder (base 2% + CoI penalty)
@@ -22,7 +22,7 @@ A Python-based tool for optimizing breeding operations in the game Mewgenics. Fe
 
 ## Requirements
 
-- Python 3.13+
+- Python 3.14+
 - [uv](https://github.com/astral-sh/uv) package manager
 - Mewgenics game (for `resources.gpak`)
 
@@ -30,14 +30,16 @@ A Python-based tool for optimizing breeding operations in the game Mewgenics. Fe
 
 ```
 mewgenics_breeding_helper/
+├── pyproject.toml                 # Root workspace config (uv)
+├── justfile                       # Development commands
 ├── packages/
-│   ├── mewgenics_parser/           # Save file parsing
-│   ├── mewgenics_scorer/           # Pair scoring logic
-│   ├── mewgenics_room_optimizer/  # Optimization algorithm
+│   ├── mewgenics_parser/          # Save file parsing
+│   ├── mewgenics_scorer/          # Pair scoring logic
+│   ├── mewgenics_room_optimizer/ # Optimization algorithm
 │   └── mewgenics_room_optimizer_ui/  # DearPyGui UI
-├── MewgenicsBreedingManager/       # Reference submodule (do not modify)
-├── .github/screenshots/            # UI screenshots
-└── pyproject.toml                 # Workspace config
+├── MewgenicsBreedingManager/      # Reference submodule (do not modify)
+├── .github/screenshots/           # UI screenshots
+└── tests/                        # Test suites
 ```
 
 ## Installation
@@ -51,7 +53,8 @@ cd mewgenics_breeding_helper
 uv sync
 
 # Run the UI
-uv run room-optimizer
+just run
+# Or: uv run room-optimizer
 ```
 
 The application will look for `resources.gpak` in:
@@ -76,6 +79,10 @@ The application will look for `resources.gpak` in:
 | General | Mixed use / storage | Yes (configurable) |
 | None | Disabled / unused | - |
 
+### Misplaced Tab
+
+The Room Details panel includes a "Misplaced" tab showing cats currently in a room but assigned to a different room by the optimizer. Use this to identify cats that weren't moved to their optimal locations.
+
 ## Stimulation
 
 - **Base Stimulation**: Default 50.0, configurable per room
@@ -89,9 +96,17 @@ The application will look for `resources.gpak` in:
 | `[<3]` | Mutual lovers (breeding pair) | Pink |
 | `[+]` | High libido bonus | Gold |
 | `[-]` | Low aggression bonus | Blue |
-| `[!]` | Inbred (shared ancestors) | Red |
+| `[!]` | High inbreeding risk (50%+ combined malady) | Red |
 | `[*]` | Favorable trait match | Green |
 | `[EY]` | Eternal Youth passive | Teal |
+
+### Location Colors (in tables)
+
+| Color | Meaning |
+|-------|---------|
+| Green | Cat is in the correct assigned room |
+| Red | Cat is in the wrong room |
+| Yellow | Cat is not assigned to any room |
 
 ## Configuration
 
@@ -100,12 +115,21 @@ The application will look for `resources.gpak` in:
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | Min Stats | Minimum total base stats for breeding candidates | 0 |
-| Max Risk % | Maximum combined malady probability allowed (0-100, stored as 0.0-1.0) | 20 |
+| Max Risk % | Maximum combined malady probability allowed (0-100) | 20 |
 | Minimize Variance | Prioritize pairs with similar stats for consistent offspring | On |
 | Avoid Lovers | Exclude mutual lover pairs from breeding | On |
 | Prefer High Libido | Favor high libido cats for faster breeding cycles | On |
 | Prefer High Charisma | Favor high charisma for better breeding odds | On |
 | Base Stimulation | Default stimulation for unconfigured rooms | 50.0 |
+| Density Bonus | Apply exponent boost (`concurrent_breeds ^ 1.5`) to room quality | Off |
+
+### SA Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| Temperature | Initial temperature for SA (higher = more exploration) | 100.0 |
+| Cooling Rate | Temperature multiplier per step (0.8-0.99) | 0.95 |
+| Neighbors/Temp | Number of neighbor states evaluated per temperature | 200 |
 
 ### Favorable Traits (Breeding Planner)
 
@@ -135,7 +159,7 @@ To prevent gender imbalance in breeding rooms, each gender is limited to `max_ca
 Click any cat to view detailed information:
 
 - **Bio**: Name, Gender, Age, Status, Room, Lovers, Haters
-- **Stats**: All 7 base stats
+- **Stats**: All 7 base stats (STR, DEX, CON, INT, SPD, CHA, LCK)
 - **Abilities**: Active Abilities, Passive Abilities, Mutations
 - **Options**: Same-Sex Breeder toggle
 
@@ -152,6 +176,41 @@ The third tab in Room Details lets you test any breeding combination:
    - Risk breakdown: Disorder %, Part Defect %, Combined %
    - Badges (Lovers, Libido, Aggression, Inbred, Favorable Traits)
 
+## Algorithm
+
+The optimizer uses Parallel Simulated Annealing:
+
+1. **Parallel Workers**: Uses `cpu_count() - 1` workers running independent SA searches
+
+2. **Temperature Schedule**: Exponential cooling from configured temperature (default 100.0) down to 0.1
+
+3. **Neighbor Generation**: 
+   - 50% move operation: Move one cat to a different room
+   - 50% swap operation: Swap two cats between rooms
+
+4. **Metropolis Acceptance**: Accepts worse solutions with probability `exp(delta / T)`
+
+5. **Evaluation**:
+   - Expected breed quality = average quality per valid pair
+   - Dilution penalty = `valid_cats / total_cats` (penalizes gender imbalance)
+   - Density bonus (when enabled) = `concurrent_breeds ^ 1.5`
+
+## Development
+
+```bash
+# Run all tests
+just test-all
+
+# Run type checker
+just ty
+
+# Run linter
+just lint
+
+# Auto-fix lint issues
+just fix
+```
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -161,27 +220,8 @@ The third tab in Room Details lets you test any breeding combination:
 | Empty cat list | Ensure save file has cats with "In House" status |
 | Age shows 100 | Age is capped at 100 unless cat has Eternal Youth passive |
 
-## Algorithm
-
-The optimizer uses a "Seed and Pull" clustering approach:
-
-1. **EY Buff Placement**: All Eternal Youth cats are placed in the breeding room with highest base stimulation (they cost 0 capacity)
-
-2. **True Stimulation**: Each room's final stimulation = base_stim + EY_cats_count
-
-3. **Seed & Pull**:
-   - Score all valid pairs using baseline stimulation (50.0)
-   - Sort pairs by quality
-   - Seed unassigned pairs into rooms
-   - Pull unpaired cats into existing rooms when compatible
-
-4. **Throughput Cap**: Each gender limited to max_cats - 2 in breeding rooms
-
-5. **Cross-Product Rescoring**: Final pairs re-scored with room's actual True Stimulation
-
 ## Known Issues
 
-- Age parsing may occasionally show incorrect values (capped at 100 unless Eternal Youth)
 - Large save files may take time to parse
 
 ## Credits
