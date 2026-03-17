@@ -1,8 +1,8 @@
 """DearPyGui UI components for room optimizer."""
 
 import dearpygui.dearpygui as dpg
-from mewgenics_room_optimizer import RoomType
 from mewgenics_parser.trait_dictionary import normalize_trait_name
+from mewgenics_room_optimizer import RoomType
 
 from .state import AppState
 
@@ -742,7 +742,7 @@ def build_all_cats_tab(state: AppState):
                 row_background=True,
                 height=280,
             ):
-                dpg.add_table_column(label="Name", width_stretch=True)
+                dpg.add_table_column(label="Name", width_fixed=True)
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(
@@ -1184,7 +1184,7 @@ def build_details_tabs(selected_room, state):
                 borders_innerH=True,
                 row_background=True,
             ):
-                dpg.add_table_column(label="Names", width_stretch=True)
+                dpg.add_table_column(label="Names", width_fixed=True)
                 dpg.add_table_column(label="Quality", width_fixed=True)
                 dpg.add_table_column(label="Risk", width_fixed=True)
                 dpg.add_table_column(label="Badges", width_stretch=True)
@@ -1272,7 +1272,7 @@ def build_details_tabs(selected_room, state):
                 borders_innerH=True,
                 row_background=True,
             ):
-                dpg.add_table_column(label="Name", width_stretch=True)
+                dpg.add_table_column(label="Name", width_fixed=True)
                 dpg.add_table_column(label="Sex", width_fixed=True)
                 dpg.add_table_column(label="Age", width_fixed=True)
                 dpg.add_table_column(
@@ -1348,20 +1348,24 @@ def build_details_tabs(selected_room, state):
         if not state.results:
             dpg.add_text("Run optimization first to see misplaced cats.")
         else:
-            # Find cats in current room that are assigned to a different room
+            # Find cats currently physically in this room that the optimizer assigned elsewhere
             misplaced = []
-            for cat in selected_room.cats:
-                assigned_room = _get_assigned_room_key(cat.db_key, state.results)
-                if (
-                    assigned_room is not None
-                    and assigned_room != selected_room.room.key
-                ):
-                    misplaced.append(
-                        {
-                            "cat": cat,
-                            "assigned_room": assigned_room,
-                        }
-                    )
+            for cat in state.alive_cats:
+                # Check if the cat is actually living in this room right now
+                if cat.room == selected_room.room.key:
+                    assigned_room = _get_assigned_room_key(cat.db_key, state.results)
+
+                    # If the optimizer put them in a different room, flag them as misplaced
+                    if (
+                        assigned_room is not None
+                        and assigned_room != selected_room.room.key
+                    ):
+                        misplaced.append(
+                            {
+                                "cat": cat,
+                                "assigned_room": assigned_room,
+                            }
+                        )
 
             if misplaced:
                 with dpg.table(
@@ -1370,7 +1374,7 @@ def build_details_tabs(selected_room, state):
                     borders_innerH=True,
                     row_background=True,
                 ):
-                    dpg.add_table_column(label="Name", width_stretch=True)
+                    dpg.add_table_column(label="Name", width_fixed=True)
                     dpg.add_table_column(
                         label="In Save", width_fixed=True, init_width_or_weight=100
                     )
