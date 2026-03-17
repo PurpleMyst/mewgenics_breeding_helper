@@ -1,14 +1,17 @@
 """Tests for room optimizer."""
 
-import pytest
-from inline_snapshot import snapshot
 from unittest.mock import MagicMock, patch
 
+import pytest
+from inline_snapshot import snapshot
+from mewgenics_scorer import PairFactors
+
 from mewgenics_room_optimizer import (
-    RoomType,
-    RoomConfig,
-    OptimizationParams,
     DEFAULT_ROOM_CONFIGS,
+    OptimizationParams,
+    OptimizationStats,
+    RoomConfig,
+    RoomType,
     optimize,
 )
 from mewgenics_room_optimizer.optimizer import (
@@ -17,7 +20,27 @@ from mewgenics_room_optimizer.optimizer import (
     _generate_pairs,
 )
 
-from mewgenics_room_optimizer import OptimizationStats
+
+@pytest.fixture
+def mock_scorer():
+    with patch("mewgenics_room_optimizer.optimizer.calculate_pair_factors") as mock:
+        mock_factors = MagicMock()
+        mock_factors.can_breed = True
+        mock_factors.hater_conflict = False
+        mock_factors.lover_conflict = False
+        mock_factors.mutual_lovers = False
+        mock_factors.expected_disorder_chance = 0.02
+        mock_factors.expected_part_defect_chance = 0.03
+        mock_factors.expected_stats = [5.0] * 7
+        mock_factors.total_expected_stats = 35.0
+        mock_factors.stat_variance = 0.0
+        mock_factors.aggression_factor = 0.5
+        mock_factors.libido_factor = 0.5
+        mock_factors.charisma_factor = 0.5
+        mock_factors.trait_matches = []
+        mock_factors.combined_malady_chance = 0.05
+        mock.return_value = mock_factors
+        yield mock
 
 
 def make_mock_cat(
@@ -35,6 +58,7 @@ def make_mock_cat(
 ):
     cat = MagicMock()
     cat.db_key = db_key
+    cat.name = f"Cat{db_key}"
     cat.gender = gender
     cat.status = status
     cat.stat_base = stat_base or [5, 5, 5, 5, 5, 5, 5]
@@ -110,7 +134,7 @@ class TestDefaultRoomConfigs:
     """Tests for default room configurations."""
 
     def test_has_three_rooms(self):
-        assert len(DEFAULT_ROOM_CONFIGS) == 3
+        assert len(DEFAULT_ROOM_CONFIGS) == 5
 
     def test_fighting_room(self):
         fighting = [r for r in DEFAULT_ROOM_CONFIGS if r.room_type == RoomType.FIGHTING]
@@ -132,21 +156,6 @@ class TestDefaultRoomConfigs:
 
 class TestOptimize:
     """Tests for optimize function."""
-
-    @pytest.fixture
-    def mock_scorer(self):
-        with patch("mewgenics_room_optimizer.optimizer.calculate_pair_factors") as mock:
-            mock_factors = MagicMock()
-            mock_factors.expected_disorder_chance = 0.0
-            mock_factors.expected_part_defect_chance = 0.0
-            mock_factors.combined_malady_chance = 0.0
-            mock_factors.total_expected_stats = 35.0
-            mock_factors.expected_stats = [5.0] * 7
-            mock_factors.aggression_factor = 0.5
-            mock_factors.libido_factor = 0.5
-            mock_factors.trait_matches = []
-            mock.return_value = mock_factors
-            yield mock
 
     def test_basic_optimization(self, mock_scorer):
         cats = [
@@ -202,21 +211,6 @@ class TestOptimize:
 class TestOptimizationResultSchema:
     """Snapshot-style tests for result schema."""
 
-    @pytest.fixture
-    def mock_scorer(self):
-        with patch("mewgenics_room_optimizer.optimizer.calculate_pair_factors") as mock:
-            mock_factors = MagicMock()
-            mock_factors.expected_disorder_chance = 0.02
-            mock_factors.expected_part_defect_chance = 0.03
-            mock_factors.combined_malady_chance = 0.05  # 5% combined
-            mock_factors.total_expected_stats = 35.0
-            mock_factors.expected_stats = [5.0] * 7
-            mock_factors.aggression_factor = 0.5
-            mock_factors.libido_factor = 0.5
-            mock_factors.trait_matches = []
-            mock.return_value = mock_factors
-            yield mock
-
     def test_result_has_required_fields(self, mock_scorer):
         cats = [
             make_mock_cat(1, gender="male"),
@@ -264,21 +258,6 @@ class TestOptimizationResultSchema:
 class TestSnapshotResults:
     """Snapshot tests for optimization results."""
 
-    @pytest.fixture
-    def mock_scorer(self):
-        with patch("mewgenics_room_optimizer.optimizer.calculate_pair_factors") as mock:
-            mock_factors = MagicMock()
-            mock_factors.expected_disorder_chance = 0.02
-            mock_factors.expected_part_defect_chance = 0.03
-            mock_factors.combined_malady_chance = 0.05  # 5% combined
-            mock_factors.total_expected_stats = 35.0
-            mock_factors.expected_stats = [5.0] * 7
-            mock_factors.aggression_factor = 0.5
-            mock_factors.libido_factor = 0.5
-            mock_factors.trait_matches = []
-            mock.return_value = mock_factors
-            yield mock
-
     def test_optimization_stats_snapshot(self, mock_scorer):
         cats = [
             make_mock_cat(1, gender="male"),
@@ -299,10 +278,10 @@ class TestSnapshotResults:
             OptimizationStats(
                 total_cats=4,
                 assigned_cats=4,
-                total_pairs=2,
+                total_pairs=4,
                 breeding_rooms_used=1,
                 general_rooms_used=0,
-                avg_pair_quality=27.0,
+                avg_pair_quality=28.25,
                 avg_risk_percent=5.0,
             )
         )
@@ -337,7 +316,7 @@ class TestSnapshotResults:
                     "room_key": "breeding",
                     "room_type": "breeding",
                     "num_cats": 4,
-                    "num_pairs": 2,
+                    "num_pairs": 4,
                 }
             ]
         )
