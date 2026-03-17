@@ -500,11 +500,25 @@ def update_traits_display(state: AppState):
             trait_text = dpg.add_text(
                 f"[{int(trait.weight):2}] {trait.category}: {trait.key}"
             )
-            desc = state.game_data.ability_descriptions.get(
-                trait.key.lower(), "No description"
+
+            base_key = trait.key.lower()
+            upgraded_key = base_key + "2"
+
+            base_desc = state.game_data.ability_descriptions.get(base_key, "")
+            upgraded_desc = state.game_data.ability_descriptions.get(upgraded_key, "")
+
+            tooltip_lines = []
+            if base_desc:
+                tooltip_lines.append(f"Base: {base_desc}")
+            if upgraded_desc:
+                tooltip_lines.append(f"Upgraded: {upgraded_desc}")
+
+            tooltip_text = (
+                "\n".join(tooltip_lines) if tooltip_lines else "No description"
             )
+
             with dpg.tooltip(trait_text):
-                dpg.add_text(desc if desc else "No description")
+                dpg.add_text(tooltip_text)
             # TODO: make these buttons flush with the right edge of the container instead of right
             # next to the text
             dpg.add_button(

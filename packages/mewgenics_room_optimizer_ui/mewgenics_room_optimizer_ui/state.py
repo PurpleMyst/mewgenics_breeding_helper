@@ -7,6 +7,7 @@ from pathlib import Path
 
 from mewgenics_parser import Cat
 from mewgenics_parser.gpak import GameData
+from mewgenics_parser.trait_dictionary import normalize_trait_name
 from mewgenics_room_optimizer import (
     OptimizationResult,
     RoomConfig,
@@ -18,6 +19,13 @@ from mewgenics_scorer import TraitRequirement
 
 
 CONFIG_DIR = Path.home() / ".mewgenics_room_optimizer"
+
+
+def normalize_trait_key(trait_key: str) -> str:
+    """Normalize trait key to base form for consistent matching."""
+    return normalize_trait_name(trait_key).lower()
+
+
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 
@@ -106,15 +114,44 @@ def room_configs_to_dict(configs: list[RoomConfig]) -> list[dict]:
 
 
 def planner_traits_from_dict(data: list[dict]) -> list[TraitRequirement]:
-    """Convert dictionary list to TraitRequirement objects."""
+    """Convert dictionary list to TraitRequirement objects with normalized keys."""
     return [
         TraitRequirement(
             category=t["category"],
-            key=t["key"],
+            key=normalize_trait_key(t["key"]),
             weight=t.get("weight", 5.0),
         )
         for t in data
     ]
+
+
+def migrate_planner_traits(traits: list[TraitRequirement]) -> list[TraitRequirement]:
+    """Migrate traits to normalized form and deduplicate.
+
+    If a user had both 'sturdy' and 'sturdy2', this will merge them
+    into a single normalized entry.
+    """
+    seen: dict[tuple[str, str], TraitRequirement] = {}
+
+    for t in traits:
+        normalized_key = normalize_trait_key(t.key)
+        key = (t.category, normalized_key)
+
+        if key not in seen:
+            seen[key] = TraitRequirement(
+                category=t.category,
+                key=normalized_key,
+                weight=t.weight,
+            )
+        else:
+            existing = seen[key]
+            seen[key] = TraitRequirement(
+                category=t.category,
+                key=normalized_key,
+                weight=max(existing.weight, t.weight),
+            )
+
+    return list(seen.values())
 
 
 def planner_traits_to_dict(traits: list[TraitRequirement]) -> list[dict]:
@@ -191,7 +228,9 @@ class AppState:
 
         return cls(
             room_configs=room_configs,
-            planner_traits=planner_traits_from_dict(config.get("planner_traits", [])),
+            planner_traits=migrate_planner_traits(
+                planner_traits_from_dict(config.get("planner_traits", []))
+            ),
             last_save_path=config.get("last_save_path"),
             min_stats=config.get("min_stats", 0),
             max_risk=cls._convert_max_risk(config.get("max_risk", 0.2)),
@@ -238,25 +277,25 @@ class AppState:
         return [c for c in self.cats if c.status == "In House"]
 
     def get_available_mutations(self) -> list[str]:
-        """Extract unique mutations from alive cats."""
+        """Extract unique normalized mutations from alive cats."""
         mutations = set()
         for cat in self.alive_cats:
             for m in cat.mutations or []:
-                mutations.add(m)
+                mutations.add(normalize_trait_key(m))
         return sorted(mutations)
 
     def get_available_passives(self) -> list[str]:
-        """Extract unique passive abilities from alive cats."""
+        """Extract unique normalized passive abilities from alive cats."""
         passives = set()
         for cat in self.alive_cats:
             for p in cat.passive_abilities or []:
-                passives.add(p)
+                passives.add(normalize_trait_key(p))
         return sorted(passives)
 
     def get_available_abilities(self) -> list[str]:
-        """Extract unique active abilities from alive cats."""
+        """Extract unique normalized active abilities from alive cats."""
         abilities = set()
         for cat in self.alive_cats:
             for a in cat.abilities or []:
-                abilities.add(a)
+                abilities.add(normalize_trait_key(a))
         return sorted(abilities)
