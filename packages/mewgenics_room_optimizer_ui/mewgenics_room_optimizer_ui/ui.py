@@ -2,6 +2,7 @@
 
 import dearpygui.dearpygui as dpg
 from mewgenics_room_optimizer import RoomType
+from mewgenics_parser.trait_dictionary import normalize_trait_name
 
 from .state import AppState
 
@@ -458,7 +459,10 @@ def on_clear_traits(sender, app_data, user_data: AppState):
 
 def _is_favorable_trait(trait_key: str, planner_traits: list) -> bool:
     """Check if a trait is in the favorable traits list."""
-    return any(t.key.lower() == trait_key.lower() for t in planner_traits)
+    normalized = normalize_trait_name(trait_key).lower()
+    return any(
+        normalize_trait_name(t.key).lower() == normalized for t in planner_traits
+    )
 
 
 def on_toggle_gay(sender, app_data, user_data: tuple[int, AppState]):
@@ -544,12 +548,19 @@ def update_traits_display(state: AppState):
 def _cat_has_favorable_trait(cat, planner_traits: list) -> bool:
     """Check if cat has any favorable trait from planner."""
     for trait in planner_traits:
-        if trait.category == "mutation" and trait.key in (cat.mutations or []):
-            return True
-        if trait.category == "passive" and trait.key in (cat.passive_abilities or []):
-            return True
-        if trait.category == "ability" and trait.key in (cat.abilities or []):
-            return True
+        norm_trait_key = normalize_trait_name(trait.key).lower()
+        if trait.category == "mutation":
+            for m in cat.mutations or []:
+                if normalize_trait_name(m).lower() == norm_trait_key:
+                    return True
+        if trait.category == "passive":
+            for p in cat.passive_abilities or []:
+                if normalize_trait_name(p).lower() == norm_trait_key:
+                    return True
+        if trait.category == "ability":
+            for a in cat.abilities or []:
+                if normalize_trait_name(a).lower() == norm_trait_key:
+                    return True
     return False
 
 
@@ -1154,16 +1165,23 @@ def build_details_tabs(selected_room, state):
 
                     combined_traits = set()
                     for cat in (pair.cat_a, pair.cat_b):
-                        combined_traits.update(t.lower() for t in (cat.mutations or []))
                         combined_traits.update(
-                            t.lower() for t in (cat.passive_abilities or [])
+                            normalize_trait_name(t).lower()
+                            for t in (cat.mutations or [])
                         )
-                        combined_traits.update(t.lower() for t in (cat.abilities or []))
+                        combined_traits.update(
+                            normalize_trait_name(t).lower()
+                            for t in (cat.passive_abilities or [])
+                        )
+                        combined_traits.update(
+                            normalize_trait_name(t).lower()
+                            for t in (cat.abilities or [])
+                        )
 
                     hits = sum(
                         1
                         for pt in state.planner_traits
-                        if pt.key.lower() in combined_traits
+                        if normalize_trait_name(pt.key).lower() in combined_traits
                     )
                     total = len(state.planner_traits)
 
@@ -1657,12 +1675,21 @@ def on_sandbox_changed(sender, app_data, user_data):
         if state.planner_traits:
             combined_traits = set()
             for cat in (cat_a, cat_b):
-                combined_traits.update(t.lower() for t in (cat.mutations or []))
-                combined_traits.update(t.lower() for t in (cat.passive_abilities or []))
-                combined_traits.update(t.lower() for t in (cat.abilities or []))
+                combined_traits.update(
+                    normalize_trait_name(t).lower() for t in (cat.mutations or [])
+                )
+                combined_traits.update(
+                    normalize_trait_name(t).lower()
+                    for t in (cat.passive_abilities or [])
+                )
+                combined_traits.update(
+                    normalize_trait_name(t).lower() for t in (cat.abilities or [])
+                )
 
             hits = sum(
-                1 for pt in state.planner_traits if pt.key.lower() in combined_traits
+                1
+                for pt in state.planner_traits
+                if normalize_trait_name(pt.key).lower() in combined_traits
             )
             total = len(state.planner_traits)
 
