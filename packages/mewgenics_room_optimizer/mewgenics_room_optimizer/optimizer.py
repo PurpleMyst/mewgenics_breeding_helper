@@ -181,20 +181,15 @@ def _evaluate_state(
             continue
 
         cats_in_room = rooms_content[room.key]
+        if room.max_cats is not None and len(cats_in_room) > room.max_cats:
+            return -float("inf")
+
         if len(cats_in_room) < 2:
             continue
 
-        if not _can_fit_single(room, len(cats_in_room) - 1):
-            return -float("inf")
+        true_stim = room.base_stim
 
-        ey_cats = [c for c in cats_in_room if _has_eternalyouth(c)]
-        breeding_cats = [c for c in cats_in_room if not _has_eternalyouth(c)]
-        true_stim = room.base_stim + len(ey_cats)
-
-        if len(breeding_cats) < 2:
-            continue
-
-        pairs = _generate_pairs(breeding_cats)
+        pairs = _generate_pairs(cats_in_room)
         room_quality = 0.0
         for a, b in pairs:
             effective_params = replace(params, stimulation=true_stim)
@@ -210,13 +205,13 @@ def _evaluate_state(
         # --- Throughput Soft Constraint ---
         # Boosts the room's score if it can produce multiple pregnancies simultaneously
         if (params.scoring_prefs or ScoringPreferences()).maximize_throughput:
-            males = sum(1 for c in breeding_cats if c.gender == "male")
-            females = sum(1 for c in breeding_cats if c.gender == "female")
-            spiders = sum(1 for c in breeding_cats if c.gender == "?")
+            males = sum(1 for c in cats_in_room if c.gender == "male")
+            females = sum(1 for c in cats_in_room if c.gender == "female")
+            spiders = sum(1 for c in cats_in_room if c.gender == "?")
 
             # Calculate max simultaneous breeding pairs (spiders can act as either gender)
             concurrent_breeds = min(
-                len(breeding_cats) // 2, males + spiders, females + spiders
+                len(cats_in_room) // 2, males + spiders, females + spiders
             )
 
             if concurrent_breeds > 1:
@@ -368,12 +363,31 @@ def optimize_sa(
             ),
         )
 
-    cats_by_id = {c.db_key: c for c in filtered_cats}
+    sa_cats = [c for c in filtered_cats if not _has_eternalyouth(c)]
+    ey_cats = [c for c in filtered_cats if _has_eternalyouth(c)]
+
+    # Deterministically place EY cats into the best breeding room
+    breeding_rooms = [r for r in room_configs if r.room_type == RoomType.BREEDING]
+    ey_assignments: dict[str, list[Cat]] = {r.key: [] for r in breeding_rooms}
+    if breeding_rooms and ey_cats:
+        best_room = max(breeding_rooms, key=lambda r: r.base_stim)
+        ey_assignments[best_room.key] = ey_cats
+
+    # Create boosted configs for the SA loop
+    sa_room_configs = []
+    for r in room_configs:
+        if r.room_type == RoomType.BREEDING:
+            bonus = len(ey_assignments.get(r.key, []))
+            sa_room_configs.append(replace(r, base_stim=r.base_stim + bonus))
+        else:
+            sa_room_configs.append(r)
+
+    cats_by_id = {c.db_key: c for c in sa_cats}
     pair_cache = PairCache()
 
     num_workers = max(1, multiprocessing.cpu_count() - 1)
     initial_states = [
-        _generate_random_valid_state(filtered_cats, room_configs, seed=i)
+        _generate_random_valid_state(sa_cats, sa_room_configs, seed=i)
         for i in range(num_workers)
     ]
 
@@ -386,7 +400,7 @@ def optimize_sa(
                 _run_sa_worker,
                 state,
                 cats_by_id,
-                room_configs,
+                sa_room_configs,
                 pair_cache,
                 ancestor_contribs,
                 params,
@@ -410,10 +424,12 @@ def optimize_sa(
     return _build_results_from_state_dict(
         best_overall_state,
         cats_by_id,
-        room_configs,
+        sa_room_configs,
         pair_cache,
         ancestor_contribs,
         params,
+        sa_cats,
+        ey_assignments,
         filtered_cats,
     )
 
@@ -425,6 +441,8 @@ def _build_results_from_state_dict(
     pair_cache: PairCache,
     ancestor_contribs: dict[int, dict[int, AncestorData]],
     params: OptimizationParams,
+    sa_cats: list[Cat],
+    ey_assignments: dict[str, list[Cat]],
     filtered_cats: list[Cat],
 ) -> OptimizationResult:
     """Build OptimizationResult from a state dictionary."""
@@ -444,11 +462,9 @@ def _build_results_from_state_dict(
         if len(cats_in_room) < 2:
             continue
 
-        ey_cats = [c for c in cats_in_room if _has_eternalyouth(c)]
-        breeding_cats = [c for c in cats_in_room if not _has_eternalyouth(c)]
-        true_stim = room.base_stim + len(ey_cats)
+        true_stim = room.base_stim
 
-        pairs = _generate_pairs(breeding_cats)
+        pairs = _generate_pairs(cats_in_room)
         for a, b in pairs:
             effective_params = replace(params, stimulation=true_stim)
             scored = pair_cache.get_score(
@@ -462,7 +478,7 @@ def _build_results_from_state_dict(
 
     # --- POST-PROCESSING CLEANUP ---
     # Pack remaining cats into Fighting and General rooms deterministically
-    unassigned = [c for c in filtered_cats if c.db_key not in assigned_cats]
+    unassigned = [c for c in sa_cats if c.db_key not in assigned_cats]
     general_rooms = [r for r in room_configs if r.room_type == RoomType.GENERAL]
     fighting_rooms = [r for r in room_configs if r.room_type == RoomType.FIGHTING]
 
@@ -485,7 +501,7 @@ def _build_results_from_state_dict(
                 assigned_cats.add(cat.db_key)
                 break
 
-    excluded = [c for c in filtered_cats if c.db_key not in assigned_cats]
+    excluded = [c for c in sa_cats if c.db_key not in assigned_cats]
 
     room_results: list[RoomAssignment] = []
     breeding_rooms_used = 0
@@ -497,10 +513,9 @@ def _build_results_from_state_dict(
     for config in room_configs:
         cats_in_room = rooms_content[config.key]
         pairs_in_room = room_pairs[config.key]
+        ey_cats = ey_assignments.get(config.key, [])
 
-        if cats_in_room or pairs_in_room:
-            ey_cats = [c for c in cats_in_room if _has_eternalyouth(c)]
-
+        if cats_in_room or pairs_in_room or ey_cats:
             room_results.append(
                 RoomAssignment(
                     room=config,
