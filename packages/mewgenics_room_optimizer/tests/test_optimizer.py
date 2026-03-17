@@ -119,7 +119,7 @@ class TestConstraints:
         assert result[0].db_key == 2
 
     def test_throughput_cap_harem_prevention(self):
-        room = RoomConfig("b1", "B1", RoomType.BREEDING, max_cats=5)
+        room = RoomConfig("b1", "B1", RoomType.BREEDING, max_cats=5, base_stim=50.0)
         # Cap should be 5 - 2 = 3 max per gender
         cats_in_room = [make_mock_cat(i, "male") for i in range(3)]
 
@@ -204,7 +204,7 @@ class TestOptimizePipeline:
 
         result = _build_results_from_state_dict(
             simulated_best_state,
-            cats_by_id,
+            cats_by_id,  # ty:ignore[invalid-argument-type]
             basic_rooms,
             PairCache(),
             {},

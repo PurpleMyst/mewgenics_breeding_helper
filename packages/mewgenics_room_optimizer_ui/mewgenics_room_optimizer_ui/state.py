@@ -222,6 +222,7 @@ class AppState:
                             saved.get("room_type", default.room_type.value)
                         ),
                         max_cats=saved.get("max_cats", default.max_cats),
+                        base_stim=saved.get("base_stim", default.base_stim),
                     )
                 )
             else:

@@ -464,7 +464,7 @@ def calculate_pair_quality(factors: PairFactors, prefs: ScoringPreferences) -> f
     )
 
     return (
-        (avg_stats + risk_factor * 20)
+        (avg_stats + risk_factor * 10)
         - variance_penalty
         + personality_bonus
         + trait_bonus

@@ -23,8 +23,8 @@ class RoomConfig:
     key: str
     display_name: str
     room_type: RoomType
-    max_cats: int | None = None  # None = unlimited for FIGHTING
-    base_stim: float = 50.0
+    max_cats: int | None
+    base_stim: float
 
 
 @dataclass

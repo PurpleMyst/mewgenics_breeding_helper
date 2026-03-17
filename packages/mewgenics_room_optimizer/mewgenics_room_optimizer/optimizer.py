@@ -150,16 +150,6 @@ def _has_planner_trait(cat: Cat, params: OptimizationParams) -> bool:
     return False
 
 
-def _can_fit_pair(
-    room: RoomConfig,
-    current_breeding_count: int,
-) -> bool:
-    """Check if a pair can fit in a room. EY cats are invisible to capacity."""
-    if room.max_cats is None:
-        return True
-    return (current_breeding_count + 2) <= room.max_cats
-
-
 def _can_fit_single(
     room: RoomConfig,
     current_count: int,
@@ -168,33 +158,6 @@ def _can_fit_single(
     if room.max_cats is None:
         return True
     return (current_count + 1) <= room.max_cats
-
-
-def _calculate_true_stim(room: RoomConfig, ey_cats: list[Cat]) -> float:
-    """Calculate true stimulation for a room (base + EY cats)."""
-    return room.base_stim + len(ey_cats)
-
-
-def _passes_throughput_cap(
-    room: RoomConfig,
-    current_cats_in_room: list[Cat],
-    new_cat: Cat,
-) -> bool:
-    """Ensures no single gender hogs the room, maximizing breeds per night.
-
-    Example: In a 5-cat room, max 3 of one gender, guaranteeing at least 2M/3F or 3M/2F.
-    """
-    if room.max_cats is None or room.max_cats <= 2:
-        return True
-    if new_cat.gender == "?":
-        return True  # Non-binary cats are universally compatible
-
-    gender_cap = max(1, room.max_cats - 2)
-    same_gender_count = sum(
-        1 for c in current_cats_in_room if c.gender == new_cat.gender
-    )
-
-    return (same_gender_count + 1) <= gender_cap
 
 
 def _evaluate_state(

@@ -113,6 +113,7 @@ def build_room_config_section(state: AppState):
                 dpg.add_table_column(label="Base Stim")
 
             room_types = ["breeding", "fighting", "general", "none"]
+            print(state.room_configs)
             for room in state.room_configs:
                 with dpg.table_row(parent="room_config_table"):
                     dpg.add_text(room.key, tag=f"room_key_{room.key}")
@@ -226,6 +227,8 @@ def build_params_section(state: AppState):
                     dpg.add_text(
                         "Favors pairs with higher combined charisma for better breeding odds."
                     )
+
+            with dpg.group(horizontal=True):
                 dpg.add_checkbox(
                     label="Maximize Throughput",
                     tag="maximize_throughput",
@@ -235,8 +238,9 @@ def build_params_section(state: AppState):
                 )
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
-                        "Prioritizes pairing cats in rooms with higher throughput caps for faster breeding."
+                        "Favors having many distinct pairs to maximize the number of offspring produced per generation."
                     )
+
             with dpg.group(horizontal=True):
                 dpg.add_text("SA Temperature:")
                 dpg.add_input_float(
@@ -744,7 +748,7 @@ def build_results_tab(state: AppState):
                 dpg.add_table_column(label="Cats")
                 dpg.add_table_column(label="Pairs")
                 dpg.add_table_column(label="EY")
-                dpg.add_table_column(label="Avg Stats")
+                dpg.add_table_column(label="Avg Quality")
                 dpg.add_table_column(label="Risk %")
 
             dpg.add_text("Run optimization to see results", tag="results_placeholder")
@@ -1015,6 +1019,8 @@ def on_room_config_changed(sender, app_data, user_data: AppState):
         user_data.results = None
         user_data.save()
         clear_results_table()
+    else:
+        dpg.set_value("status_text", "Invalid room config - fix errors and try again")
 
 
 def exit_callback(sender, app_data, user_data):
@@ -1090,10 +1096,10 @@ def update_results_table(results, state):
     dpg.hide_item("results_placeholder")
 
     for i, room in enumerate(results.rooms):
-        avg_stats = 0.0
+        avg_quality = 0.0
         avg_risk = 0.0
         if room.pairs:
-            avg_stats = sum(p.quality for p in room.pairs) / len(room.pairs)
+            avg_quality = sum(p.quality for p in room.pairs) / len(room.pairs)
             avg_risk = sum(
                 p.factors.combined_malady_chance * 100 for p in room.pairs
             ) / len(room.pairs)
@@ -1115,9 +1121,9 @@ def update_results_table(results, state):
                 f"{ey_count}",
                 color=(100, 200, 255, 255) if ey_count > 0 else (200, 200, 200, 255),
             )
-            dpg.add_text(f"{avg_stats:.1f}")
+            dpg.add_text(f"{avg_quality:.1f}")
             dpg.add_text(
-                f"{avg_risk:.0f}%",
+                f"{avg_risk:2.0f}%",
                 color=(255, 100, 100, 255) if avg_risk > 15 else (200, 200, 200, 255),
             )
 
@@ -1392,6 +1398,7 @@ def build_details_tabs(selected_room, state):
                     trait_badge = "[*]" if has_fav else ""
 
                     with dpg.table_row():
+                        print(cat)
                         dpg.add_selectable(
                             label=cat_name,
                             span_columns=True,
