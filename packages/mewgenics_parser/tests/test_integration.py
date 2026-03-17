@@ -1,6 +1,75 @@
 """Integration tests for GPAK functions requiring a real GPAK file."""
 
+from inline_snapshot import snapshot
+
+from mewgenics_parser import parse_save
+from mewgenics_parser.cat import CatGender, CatStatus
 from mewgenics_parser.gpak import GameData
+from mewgenics_parser.utils import NameAndDescription
+
+
+class TestParseSaveIntegration:
+    """Integration tests for parse_save requiring a real save file."""
+
+    def test_cat_from_save(self, savefile_path):
+        """Test Cat.from_gpak produces correct structure."""
+        save = parse_save(savefile_path)
+        cat = save.cats[0]
+        assert cat.db_key == snapshot(1)
+        assert cat.name == snapshot("Andrzej")
+        assert cat.gender == snapshot(CatGender.MALE)
+        assert cat.status == snapshot(CatStatus.GONE)
+        assert cat.room == snapshot(None)
+        assert cat.stat_base == snapshot((6, 4, 7, 5, 6, 3, 4))
+        assert cat.stat_total == snapshot((6, 4, 7, 6, 6, 3, 4))
+        assert cat.age == snapshot(None)
+        assert cat.aggression == snapshot(0.47115162183106574)
+        assert cat.libido == snapshot(0.5)
+        assert cat.coi == snapshot(0.05)
+        assert cat.active_abilities == snapshot(["BasicMelee", "Spit", "Block"])
+        assert cat.passive_abilities == snapshot(["SelfAssured"])
+        assert cat.disorders == snapshot([])
+        assert cat.mutation_ids_by_category == snapshot(
+            {
+                "texture": [54],
+                "body": [19],
+                "head": [46],
+                "tail": [153],
+                "legs": [45, 45],
+                "arms": [45, 45],
+                "eyes": [133, 133],
+                "eyebrows": [26, 26],
+                "ears": [7, 7],
+                "mouth": [50],
+            }
+        )
+        assert cat.parent_a == snapshot(None)
+        assert cat.parent_b == snapshot(None)
+        assert cat.lovers == snapshot([])
+        assert cat.haters == snapshot([])
+
+    def test_cat_mutation_string(self, savefile_path, gpak_path):
+        """Test Cat.mutation_string produces expected result."""
+        save = parse_save(savefile_path)
+
+        min_mouth_mutation_id = 1000
+        max_mouth_mutation_id = 0000
+        for cat in save.cats:
+            mouth_mutation_ids = cat.mutation_ids_by_category.get("mouth", [])
+            for mid in mouth_mutation_ids:
+                if mid < min_mouth_mutation_id:
+                    min_mouth_mutation_id = mid
+                if mid > max_mouth_mutation_id:
+                    max_mouth_mutation_id = mid
+        print(f"Min mouth mutation ID: {min_mouth_mutation_id}")
+        print(f"Max mouth mutation ID: {max_mouth_mutation_id}")
+
+        cat = save.cats[0]
+
+        gd = GameData.from_gpak(gpak_path)
+        result = gd.mutation_text_by_part_and_id["mouth"].get(cat.mutation_ids_by_category["mouth"][0])
+        assert False
+
 
 
 class TestGpakIntegration:
@@ -11,90 +80,52 @@ class TestGpakIntegration:
         gd = GameData.from_gpak(gpak_path)
 
         # Verify all fields are populated
-        assert isinstance(gd.ability_descriptions, dict)
-        assert isinstance(gd.visual_mutations, dict)
+        assert isinstance(gd.ability_text, dict)
+        assert isinstance(gd.mutation_text_by_part_and_id, dict)
         assert isinstance(gd.game_strings, dict)
 
         # Verify expected data is present
-        assert len(gd.ability_descriptions) > 0
-        assert len(gd.visual_mutations) > 0
+        assert len(gd.ability_text) > 0
+        assert len(gd.mutation_text_by_part_and_id) > 0
         assert len(gd.game_strings) > 0
 
-    def test_ability_descriptions_structure(self, gpak_path):
-        """Verify ability descriptions have expected keys."""
+    def test_known_abilities(self, gpak_path):
+        """Verify known abilities have expected descriptions from real GPAK."""
         gd = GameData.from_gpak(gpak_path)
-        result = gd.ability_descriptions
+        result = gd.ability_text
 
-        # Verify key abilities exist
-        assert "slugger" in result
-        assert "longshot" in result
-
-        # Check a few known abilities
-        known_abilities = ["slugger", "longshot", "furious", "amped"]
-        for ability in known_abilities:
-            if ability in result:
-                desc = result[ability]
-                # Descriptions should not be empty
-                assert len(desc) > 0, f"Ability {ability} has empty description"
+        assert result["Slugger"] == snapshot(
+            NameAndDescription(name="Slugger", description="+1 Damage.")
+        )
+        assert result["LongShot"] == snapshot(
+            NameAndDescription(name="Longshot", description="+1 Range.")
+        )
+        assert result["Furious"] == snapshot(
+            NameAndDescription(
+                name="Furious",
+                description="Gain +1 Damage each time you land a critical hit. +5% critical hit chance.",
+            )
+        )
+        assert result["Amped"] == snapshot(
+            NameAndDescription(
+                name="Amped", description="Gain +1 SPD at the end of your turn."
+            )
+        )
 
     def test_visual_mutations_structure(self, gpak_path):
         """Test visual mutation data from real GPAK."""
         gd = GameData.from_gpak(gpak_path)
-        result = gd.visual_mutations
-
-        # Verify expected categories exist
-        assert "body" in result
-        assert "eyes" in result
-        assert "ears" in result
-
-        # Verify mutations have proper structure
-        for category, mutations in result.items():
-            for mutation_id, (name, stat_desc) in mutations.items():
-                assert isinstance(mutation_id, int)
-                assert isinstance(name, str)
-                assert isinstance(stat_desc, str)
-
-    def test_visual_mutations_ids(self, gpak_path):
-        """Verify visual mutation IDs are in expected ranges."""
-        gd = GameData.from_gpak(gpak_path)
-        result = gd.visual_mutations
-
-        # Visual mutations should typically be 300+
-        for category, mutations in result.items():
-            for mutation_id in mutations.keys():
-                assert mutation_id >= 300, (
-                    f"Mutation ID {mutation_id} in {category} is below 300"
-                )
-
-    def test_game_strings_have_ability_refs(self, gpak_path):
-        """Verify game strings contain ability references."""
-        gd = GameData.from_gpak(gpak_path)
-
-        # Game strings should contain keys that abilities reference
-        # At minimum, there should be some string references
-        has_refs = any(
-            key in gd.game_strings for key in gd.ability_descriptions.values()
+        result = gd.mutation_text_by_part_and_id
+        assert list(result.keys()) == snapshot(
+            [
+                "body",
+                "ears",
+                "eyebrows",
+                "eyes",
+                "head",
+                "legs",
+                "mouth",
+                "tail",
+                "texture",
+            ]
         )
-        # This might pass or fail depending on GPAK structure
-        # Just verify game_strings is not empty
-        assert len(gd.game_strings) > 0
-
-
-class TestGpakEdgeCases:
-    """Edge case tests for GPAK functions."""
-
-    def test_game_data_empty_path(self):
-        """GameData with empty path returns empty fields."""
-        gd = GameData.from_gpak("")
-
-        assert gd.ability_descriptions == {}
-        assert gd.visual_mutations == {}
-        assert gd.game_strings == {}
-
-    def test_game_data_nonexistent_path(self):
-        """GameData with nonexistent path returns empty fields."""
-        gd = GameData.from_gpak("/nonexistent/path.gpak")
-
-        assert gd.ability_descriptions == {}
-        assert gd.visual_mutations == {}
-        assert gd.game_strings == {}

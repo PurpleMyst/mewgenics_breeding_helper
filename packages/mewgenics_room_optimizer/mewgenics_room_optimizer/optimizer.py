@@ -138,9 +138,9 @@ def score_pair(
 def _has_planner_trait(cat: Cat, params: OptimizationParams) -> bool:
     """Check if cat has any planner-selected traits."""
     for trait in params.planner_traits:
-        for mutation in cat.mutations or []:
-            if normalize_trait_name(mutation).lower() == trait.key.lower():
-                return True
+        # for mutation in cat.mutations or []:
+        #     if normalize_trait_name(mutation).lower() == trait.key.lower():
+        #         return True
         for passive in cat.passive_abilities or []:
             if normalize_trait_name(passive).lower() == trait.key.lower():
                 return True

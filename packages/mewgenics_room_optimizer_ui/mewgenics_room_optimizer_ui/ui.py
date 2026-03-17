@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from enum import StrEnum
+from pprint import pformat
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser.trait_dictionary import normalize_trait_name
@@ -101,8 +102,7 @@ def substring_match(query: str, choices: list[str]) -> list[str]:
     """Return items containing query as substring (case-insensitive)."""
     if not query:
         return choices
-    query_lower = query.lower()
-    return [c for c in choices if query_lower in c.lower()]
+    return [c for c in choices if query.casefold() in c.casefold()]
 
 
 def build_ui(state: AppState):
@@ -476,7 +476,7 @@ def _format_trait_with_description(
     trait_key: str, game_data, max_desc_len: int = 40
 ) -> str:
     """Format a trait with its description for display in listbox."""
-    desc = game_data.ability_descriptions.get(trait_key.lower(), "")
+    desc = game_data.ability_text[trait_key].description
     if desc:
         truncated = desc[:max_desc_len] + "..." if len(desc) > max_desc_len else desc
         return f"{trait_key} | {truncated}"
@@ -555,10 +555,8 @@ def on_clear_traits(sender, app_data, user_data: AppState):
 
 def _is_favorable_trait(trait_key: str, planner_traits: list) -> bool:
     """Check if a trait is in the favorable traits list."""
-    normalized = normalize_trait_name(trait_key).lower()
-    return any(
-        normalize_trait_name(t.key).lower() == normalized for t in planner_traits
-    )
+    normalized = normalize_trait_name(trait_key)
+    return any(normalize_trait_name(t.key) == normalized for t in planner_traits)
 
 
 def on_toggle_gay(sender, app_data, user_data: tuple[int, AppState]):
@@ -597,21 +595,21 @@ def update_traits_display(state: AppState):
 
     for i, trait in enumerate(state.planner_traits):
         with dpg.group(horizontal=True, parent=container):
-            trait_text = dpg.add_text(
-                f"[{int(trait.weight):2}] {trait.category}: {trait.key}"
-            )
-
-            base_key = trait.key.lower()
+            base_key = trait.key
             upgraded_key = base_key + "2"
 
-            base_desc = state.game_data.ability_descriptions.get(base_key, "")
-            upgraded_desc = state.game_data.ability_descriptions.get(upgraded_key, "")
+            base_nad = state.game_data.ability_text[base_key]
+            upgraded_nad = state.game_data.ability_text[upgraded_key]
+
+            trait_text = dpg.add_text(
+                f"[{int(trait.weight):2}] {trait.category}: {base_nad.name or base_key}"
+            )
 
             tooltip_lines = []
-            if base_desc:
-                tooltip_lines.append(f"Base: {base_desc}")
-            if upgraded_desc:
-                tooltip_lines.append(f"Upgraded: {upgraded_desc}")
+            if base_nad.description:
+                tooltip_lines.append(f"Base: {base_nad.description}")
+            if upgraded_nad.description:
+                tooltip_lines.append(f"Upgraded: {upgraded_nad.description}")
 
             tooltip_text = (
                 "\n".join(tooltip_lines) if tooltip_lines else "No description"
@@ -644,18 +642,18 @@ def update_traits_display(state: AppState):
 def _cat_has_favorable_trait(cat, planner_traits: list) -> bool:
     """Check if cat has any favorable trait from planner."""
     for trait in planner_traits:
-        norm_trait_key = normalize_trait_name(trait.key).lower()
-        if trait.category == TraitCategory.MUTATION:
-            for m in cat.mutations or []:
-                if normalize_trait_name(m).lower() == norm_trait_key:
-                    return True
+        norm_trait_key = normalize_trait_name(trait.key)
+        # if trait.category == TraitCategory.MUTATION:
+        #     for m in cat.mutations or []:
+        #         if normalize_trait_name(m) == norm_trait_key:
+        #             return True
         if trait.category == TraitCategory.PASSIVE:
             for p in cat.passive_abilities or []:
-                if normalize_trait_name(p).lower() == norm_trait_key:
+                if normalize_trait_name(p) == norm_trait_key:
                     return True
         if trait.category == TraitCategory.ABILITY:
-            for a in cat.abilities or []:
-                if normalize_trait_name(a).lower() == norm_trait_key:
+            for a in cat.active_abilities or []:
+                if normalize_trait_name(a) == norm_trait_key:
                     return True
     return False
 
@@ -1322,7 +1320,7 @@ def build_details_tabs(selected_room, state):
                     hits = sum(
                         1
                         for pt in state.planner_traits
-                        if normalize_trait_name(pt.key).lower() in combined_traits
+                        if normalize_trait_name(pt.key) in combined_traits
                     )
                     total = len(state.planner_traits)
 
@@ -1729,12 +1727,11 @@ def show_cat_detail_window(cat, state):
         dpg.add_separator()
 
         with dpg.tree_node(
-            label=f"Active Abilities ({len(cat.abilities or [])})", default_open=True
+            label=f"Active Abilities ({len(cat.active_abilities or [])})",
+            default_open=True,
         ):
-            for ab in cat.abilities or []:
-                desc = state.game_data.ability_descriptions.get(
-                    ab.lower(), "No description"
-                )
+            for ab in cat.active_abilities or []:
+                desc = state.game_data.ability_text[ab].description or "No description"
                 is_fav = _is_favorable_trait(ab, state.planner_traits)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
@@ -1747,9 +1744,7 @@ def show_cat_detail_window(cat, state):
             default_open=True,
         ):
             for ab in cat.passive_abilities or []:
-                desc = state.game_data.ability_descriptions.get(
-                    ab.lower(), "No description"
-                )
+                desc = state.game_data.ability_text[ab].description or "No description"
                 is_fav = _is_favorable_trait(ab, state.planner_traits)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
@@ -1758,13 +1753,22 @@ def show_cat_detail_window(cat, state):
                     dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
         with dpg.tree_node(
-            label=f"Mutations ({len(cat.mutations or [])})", default_open=True
+            label=f"Disorders ({len(cat.disorders or [])})", default_open=True
         ):
-            for mut in cat.mutations or []:
-                is_fav = _is_favorable_trait(mut, state.planner_traits)
-                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
-                prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{mut}", color=color)
+            for dis in cat.disorders or []:
+                desc = state.game_data.disorder_text[dis].description or "No description"
+                color = COLOR_DANGER
+                dpg.add_text(f"  {dis}", color=color)
+                if desc:
+                    dpg.add_text(f"    {desc}", color=(255, 150, 150, 255))
+
+        with dpg.tree_node(label=f"Mutations", default_open=True):
+            # for mut in cat.mutations or []:
+            #     is_fav = _is_favorable_trait(mut, state.planner_traits)
+            #     color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
+            #     prefix = "[*] " if is_fav else "  "
+            #     dpg.add_text(f"{prefix}{mut}", color=color)
+            dpg.add_text(pformat(cat.mutation_ids_by_category))
 
 
 def on_sandbox_changed(sender, app_data, user_data):
@@ -1906,7 +1910,7 @@ def on_sandbox_changed(sender, app_data, user_data):
             hits = sum(
                 1
                 for pt in state.planner_traits
-                if normalize_trait_name(pt.key).lower() in combined_traits
+                if normalize_trait_name(pt.key) in combined_traits
             )
             total = len(state.planner_traits)
 

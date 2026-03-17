@@ -283,9 +283,9 @@ class AppState:
     def get_available_mutations(self) -> list[str]:
         """Extract unique normalized mutations from alive cats."""
         mutations = set()
-        for cat in self.alive_cats:
-            for m in cat.mutations or []:
-                mutations.add(normalize_trait_key(m))
+        # for cat in self.alive_cats:
+        #     for m in cat.mutations or []:
+        #         mutations.add(normalize_trait_key(m))
         return sorted(mutations)
 
     def get_available_passives(self) -> list[str]:

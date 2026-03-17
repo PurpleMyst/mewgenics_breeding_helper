@@ -13,11 +13,6 @@ import lz4.block
 from .binary import BinaryReader
 from .constants import _IDENT_RE, _JUNK_STRINGS, ROOM_DISPLAY, STAT_NAMES
 from .trait_dictionary import DISORDERS, SKILLSHARE_BASE_ID, normalize_trait_name
-from .visual import (
-    _VISUAL_MUTATION_FIELDS,
-    _read_visual_mutation_entries,
-    _visual_mutation_chip_items,
-)
 
 Stats = tuple[int, int, int, int, int, int, int]
 
@@ -44,7 +39,7 @@ def _split_passives_and_disorders(traits: list[str]) -> tuple[list[str], list[st
     passives: list[str] = []
     disorders: list[str] = []
     for t in traits:
-        if t.lower() in DISORDERS:
+        if t in DISORDERS:
             disorders.append(t)
         else:
             passives.append(t)
@@ -84,6 +79,7 @@ def _read_db_key_candidates(
             keys.append(value)
     return keys
 
+
 @dataclass(init=False, slots=True)
 class Cat:
     """Main data model representing a cat in Mewgenics."""
@@ -112,7 +108,7 @@ class Cat:
     disorders: list
 
     # equipment: list
-    mutations: list
+    mutation_ids_by_category: dict[str, list[int]]
     # mutation_chip_items: list
     # visual_mutation_entries: list
     # visual_mutation_ids: list
@@ -153,7 +149,6 @@ class Cat:
         def _stats() -> Stats:
             return (r.u32(), r.u32(), r.u32(), r.u32(), r.u32(), r.u32(), r.u32())
 
-
         self.db_key = cat_key
 
         # Location / status
@@ -189,18 +184,23 @@ class Cat:
         r.skip(64)
         T = [r.u32() for _ in range(72)]
         _body_parts = {"texture": T[0], "bodyShape": T[3], "headShape": T[8]}
-        _visual_mutation_slots = {
-            slot_key: T[table_index]
-            for slot_key, table_index, *_ in _VISUAL_MUTATION_FIELDS
-            if table_index < len(T)
+
+        _MUTATION_INDICES_BY_CATEGORY = {
+            "texture": [0],
+            "body": [3],
+            "head": [8],
+            "tail": [13],
+            "legs": [18, 23],
+            "arms": [28, 33],
+            "eyes": [38, 43],
+            "eyebrows": [48, 53],
+            "ears": [58, 63],
+            "mouth": [68],
         }
-        visual_entries = _read_visual_mutation_entries(T)
-        visual_items = _visual_mutation_chip_items(visual_entries)
-        _visual_mutation_entries = visual_entries
-        _visual_mutation_ids = [
-            int(entry["mutation_id"]) for entry in visual_entries
-        ]
-        visual_display_names = [text for text, _ in visual_items]
+        self.mutation_ids_by_category = {
+            category: [T[i] for i in indices if i < len(T)]
+            for category, indices in _MUTATION_INDICES_BY_CATEGORY.items()
+        }
 
         _gender_token_fields = tuple(r.u32() for _ in range(3))
         raw_gender = r.str()
@@ -212,7 +212,11 @@ class Cat:
         sex_code: int | None = (
             raw[personality_anchor] if personality_anchor < len(raw) else None
         )
-        gender_from_code: CatGender | None = {0: CatGender.MALE, 1: CatGender.FEMALE, 2: CatGender.NONBINARY}.get(sex_code)  # type: ignore[call-overload]
+        gender_from_code: CatGender | None = {
+            0: CatGender.MALE,
+            1: CatGender.FEMALE,
+            2: CatGender.NONBINARY,
+        }.get(sex_code)  # type: ignore[call-overload]
         if gender_from_code:
             self.gender = gender_from_code
             # self.gender_source = "sex_code"
@@ -224,8 +228,9 @@ class Cat:
         self.stat_base = _stats()
         stat_mod = _stats()
         stat_sec = _stats()
-        self.stat_total = tuple(b + m + s for b, m, s in zip(self.stat_base, stat_mod, stat_sec))
-
+        self.stat_total = tuple(
+            b + m + s for b, m, s in zip(self.stat_base, stat_mod, stat_sec)
+        )
 
         # Personality stats (age, aggression, libido, coi).
         # Libido and coi are doubles anchored after the post-name tag string.
@@ -352,7 +357,9 @@ class Cat:
             if found != -1:
                 r.seek(found)
 
-            self.active_abilities = [a for a in [r.str() for _ in range(6)] if _valid_str(a)]
+            self.active_abilities = [
+                a for a in [r.str() for _ in range(6)] if _valid_str(a)
+            ]
             self.equipment = [s for s in [r.str() for _ in range(4)] if _valid_str(s)]
 
             all_passives: list[str] = []
@@ -373,8 +380,7 @@ class Cat:
                 all_passives
             )
 
-        self.mutations = visual_display_names
-        _mutation_chip_items = visual_items
+        # _mutation_chip_items = visual_items
 
         # Extract age from creation_day stored near the end of the blob (around blob_len - 103).
         # Search a small window around the typical offset to handle varying blob structures.
@@ -420,7 +426,6 @@ class Cat:
             return s
         return "N/A"
 
-
     @property
     def inheritable_abilities(self) -> list[str]:
         """Returns normalized abilities for inheritance math."""
@@ -432,16 +437,18 @@ class Cat:
         return [
             n
             for p in self.passive_abilities
-            if (n := normalize_trait_name(p)).lower() != SKILLSHARE_BASE_ID
+            if (n := normalize_trait_name(p)) != SKILLSHARE_BASE_ID
         ]
 
     @property
     def all_normalized_traits(self) -> set[str]:
         """Returns a unified set of all normalized abilities, passives, and mutations."""
         traits: set[str] = set()
-        traits.update(normalize_trait_name(t).lower() for t in (self.active_abilities or []))
         traits.update(
-            normalize_trait_name(t).lower() for t in (self.passive_abilities or [])
+            normalize_trait_name(t) for t in (self.active_abilities or [])
         )
-        traits.update(normalize_trait_name(t).lower() for t in (self.mutations or []))
+        traits.update(
+            normalize_trait_name(t) for t in (self.passive_abilities or [])
+        )
+        # traits.update(normalize_trait_name(t) for t in (self.mutations or []))
         return traits

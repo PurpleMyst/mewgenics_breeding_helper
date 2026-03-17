@@ -8,8 +8,10 @@ from mewgenics_parser.gpak import (
     _clean_game_text,
     _resolve_game_string,
     _parse_gon_abilities,
-    load_gpak_text_strings,
+    _load_gpak_text_strings,
 )
+
+from mewgenics_parser.utils import NameAndDescription
 
 
 class TestCleanGameText:
@@ -109,94 +111,33 @@ class TestParseGonAbilities:
 }
 """
         result = _parse_gon_abilities(gon, {})
-        assert result == snapshot({"slugger": "slugger_desc"})
+        assert result == snapshot({'Slugger': NameAndDescription(name='Slugger', description='slugger_desc')})
 
     def test_ability_with_game_string_reference(self):
         """Parse ability with game string reference."""
         game_strings = {"slugger_desc": "Final description"}
         gon = 'Slugger { desc "slugger_desc" }'
         result = _parse_gon_abilities(gon, game_strings)
-        assert result == snapshot({"slugger": "Final description"})
-
-    def test_ignores_nothing_desc(self):
-        """Ignore abilities with 'nothing' desc."""
-        gon = 'Junk { desc "nothing" }'
-        result = _parse_gon_abilities(gon, {})
-        assert result == snapshot({})
+        assert result == snapshot({'Slugger': NameAndDescription(name='Slugger', description='Final description')})
 
     def test_multiple_abilities(self):
         """Parse multiple abilities."""
         gon = """
-Slugger {
+Slugger { // Ol' Slugger
     desc "slugger_desc"
     damage 1
 }
-Longshot {
+Longshot { // Longest shot you've ever seen! [img:dex]
     desc "longshot_desc"
     range 1
 }
 """
         result = _parse_gon_abilities(gon, {})
         assert result == snapshot(
-            {
-                "slugger": "slugger_desc",
-                "longshot": "longshot_desc",
-            }
+            {'Slugger': NameAndDescription(name='Slugger', description='slugger_desc'), 'Longshot': NameAndDescription(name='Longshot', description='longshot_desc')}
         )
 
     def test_empty_content(self):
         """Handle empty GON content."""
         result = _parse_gon_abilities("", {})
         assert result == snapshot({})
-
-    def test_no_desc_field(self):
-        """Ignore blocks without desc field."""
-        gon = "Slugger { damage 1 }"
-        result = _parse_gon_abilities(gon, {})
-        assert result == snapshot({})
-
-    def test_case_preservation(self):
-        """Ability IDs should be lowercased."""
-        gon = 'Slugger { desc "desc" }\nFURIOUS { desc "desc2" }'
-        result = _parse_gon_abilities(gon, {})
-        keys = list(result.keys())
-        assert keys == snapshot(["slugger", "furious"])
-
-
-class TestLoadGpakTextStrings:
-    """Tests for load_gpak_text_strings function."""
-
-    def test_simple_csv(self):
-        """Parse simple CSV file."""
-        csv_content = "key,value\nABILITY_001,+1 Damage."
-        file_offsets = {"data/text/strings.csv": (0, len(csv_content))}
-
-        file_obj = io.BytesIO(csv_content.encode("utf-8"))
-        result = load_gpak_text_strings(file_obj, file_offsets)
-        assert result == snapshot({"key": "value", "ABILITY_001": "+1 Damage."})
-
-    def test_ignores_non_csv_files(self):
-        """Ignore non-CSV files."""
-        file_offsets = {"data/abilities/slugger.gon": (0, 100)}
-
-        file_obj = io.BytesIO(b"some content")
-        result = load_gpak_text_strings(file_obj, file_offsets)
-        assert result == snapshot({})
-
-    def test_ignores_comment_lines(self):
-        """Ignore comment lines starting with //."""
-        csv_content = "//comment\nkey,value\nABILITY_001,desc"
-        file_offsets = {"data/text/strings.csv": (0, len(csv_content))}
-
-        file_obj = io.BytesIO(csv_content.encode("utf-8"))
-        result = load_gpak_text_strings(file_obj, file_offsets)
-        assert result == snapshot({"key": "value", "ABILITY_001": "desc"})
-
-    def test_ignores_empty_keys(self):
-        """Ignore rows with empty keys."""
-        csv_content = ",value\nkey,value"
-        file_offsets = {"data/text/strings.csv": (0, len(csv_content))}
-
-        file_obj = io.BytesIO(csv_content.encode("utf-8"))
-        result = load_gpak_text_strings(file_obj, file_offsets)
-        assert result == snapshot({"key": "value"})

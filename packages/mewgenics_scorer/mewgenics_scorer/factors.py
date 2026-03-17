@@ -119,8 +119,8 @@ def _calc_ability_inheritance(
     """Ability inheritance with CORRECT class-favoring algebra and pool dilution."""
 
     # Use normalized abilities for pool
-    parent_a_spells = [a.lower() for a in parent_a.inheritable_abilities]
-    parent_b_spells = [a.lower() for a in parent_b.inheritable_abilities]
+    parent_a_spells = parent_a.inheritable_abilities
+    parent_b_spells = parent_b.inheritable_abilities
 
     parent_a_has = trait_key in parent_a_spells
     parent_b_has = trait_key in parent_b_spells
@@ -186,8 +186,8 @@ def _calc_passive_inheritance(
     """Passive inheritance with SKILLSHARE+ guarantee and pool dilution."""
 
     # Use normalized passives for pool (already excludes SkillShare via property)
-    parent_a_passives_norm = [p.lower() for p in parent_a.inheritable_passives]
-    parent_b_passives_norm = [p.lower() for p in parent_b.inheritable_passives]
+    parent_a_passives_norm = parent_a.inheritable_passives
+    parent_b_passives_norm = parent_b.inheritable_passives
 
     parent_a_has = trait_key in parent_a_passives_norm
     parent_b_has = trait_key in parent_b_passives_norm
@@ -267,8 +267,9 @@ def _calc_mutation_inheritance(
 ) -> TraitInheritanceProbability:
     """Mutation inheritance: 80% inherit, mutation favoring with stimulation."""
 
-    parent_a_muts = [m.lower() for m in (parent_a.mutations or [])]
-    parent_b_muts = [m.lower() for m in (parent_b.mutations or [])]
+    # XXX: ↓ Stubbed as I need to better understand mutation data.
+    parent_a_muts = []
+    parent_b_muts = []
 
     parent_a_has = trait_key in parent_a_muts
     parent_b_has = trait_key in parent_b_muts
@@ -322,19 +323,17 @@ def calculate_trait_probability(
     if parent_a is None or parent_b is None:
         return TraitInheritanceProbability(trait, 0.0, "unknown", 0.0, 0.0)
 
-    trait_key = trait.key.lower()
-
     if trait.category == "ability":
         return _calc_ability_inheritance(
-            trait_key, parent_a, parent_b, stimulation, trait
+            trait.key, parent_a, parent_b, stimulation, trait
         )
     elif trait.category == "passive":
         return _calc_passive_inheritance(
-            trait_key, parent_a, parent_b, stimulation, trait
+            trait.key, parent_a, parent_b, stimulation, trait
         )
     elif trait.category == "mutation":
         return _calc_mutation_inheritance(
-            trait_key, parent_a, parent_b, stimulation, trait
+            trait.key, parent_a, parent_b, stimulation, trait
         )
 
     return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
@@ -390,13 +389,12 @@ def trait_coverage(
 
 
 def _cat_has_trait(cat: Cat, category: str, key: str) -> bool:
-    key_lower = key.lower()
     if category == "mutation":
-        return any(m.lower() == key_lower for m in (cat.mutations or []))
+        return any(m == key for m in [])
     elif category == "passive":
-        return any(p.lower() == key_lower for p in (cat.passive_abilities or []))
+        return any(p == key for p in (cat.passive_abilities or []))
     elif category == "ability":
-        return any(a.lower() == key_lower for a in (cat.active_abilities or []))
+        return any(a == key for a in (cat.active_abilities or []))
     return False
 
 

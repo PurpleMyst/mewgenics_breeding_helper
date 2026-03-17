@@ -59,7 +59,7 @@ def build_ancestor_contribs(cats: list[Cat]) -> dict[int, dict[int, AncestorData
     Batch compute ancestor contributions for all cats.
     Returns dict[db_key, dict[db_key, AncestorData]].
     """
-    ordered = sorted(cats, key=lambda c: c.generation)
+    ordered = sorted(cats, key=lambda c: c.db_key)  # Ensure parents are processed before children
     memo: dict[int, dict[int, AncestorData]] = {}
     result: dict[int, dict[int, AncestorData]] = {}
 
