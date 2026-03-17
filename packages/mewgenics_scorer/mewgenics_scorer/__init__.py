@@ -2,7 +2,9 @@
 
 from .factors import (
     PairFactors,
+    TraitInheritanceProbability,
     calculate_pair_factors,
+    calculate_trait_probability,
     expected_stats,
     stat_variance,
     aggression_factor,
@@ -10,6 +12,7 @@ from .factors import (
     trait_coverage,
     expected_disorder_chance,
     expected_part_defect_chance,
+    expected_disorder_inheritance,
     DEFAULT_STIMULATION,
 )
 from .ancestry import (
@@ -26,7 +29,9 @@ from .types import TraitRequirement
 
 __all__ = [
     "PairFactors",
+    "TraitInheritanceProbability",
     "calculate_pair_factors",
+    "calculate_trait_probability",
     "expected_stats",
     "stat_variance",
     "aggression_factor",
@@ -34,6 +39,7 @@ __all__ = [
     "trait_coverage",
     "expected_disorder_chance",
     "expected_part_defect_chance",
+    "expected_disorder_inheritance",
     "build_ancestor_contribs",
     "coi_from_contribs",
     "can_breed",

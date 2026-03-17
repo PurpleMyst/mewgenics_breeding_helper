@@ -7,11 +7,17 @@ import pytest
 from mewgenics_scorer.factors import (
     DEFAULT_STIMULATION,
     PairFactors,
+    TraitInheritanceProbability,
     _better_chance,
     _default_01,
+    _spell_inheritance_chance,
+    _passive_inheritance_chance,
+    _class_favoring_chance,
     aggression_factor,
     calculate_pair_factors,
+    calculate_trait_probability,
     expected_stats,
+    expected_disorder_inheritance,
     libido_factor,
     stat_variance,
     trait_coverage,
@@ -28,6 +34,7 @@ def make_mock_cat(
     mutations: list = None,
     passive_abilities: list = None,
     abilities: list = None,
+    disorders: list = None,
     lovers=None,
     haters=None,
     parent_a=None,
@@ -42,6 +49,7 @@ def make_mock_cat(
     cat.mutations = mutations or []
     cat.passive_abilities = passive_abilities or []
     cat.abilities = abilities or []
+    cat.disorders = disorders or []
     cat.lovers = lovers or []
     cat.haters = haters or []
     cat.parent_a = parent_a
@@ -233,3 +241,189 @@ class TestCalculatePairFactors:
         # Should be 7 values that sum to something based on better_chance
         assert len(result.expected_stats) == 7
         assert result.total_expected_stats == sum(result.expected_stats)
+
+
+class TestSpellInheritanceChance:
+    """Tests for spell inheritance chance functions."""
+
+    def test_spell_inheritance_0_stim(self):
+        first, second = _spell_inheritance_chance(0.0)
+        assert first == 0.2
+        assert second == 0.02
+
+    def test_spell_inheritance_32_stim(self):
+        first, second = _spell_inheritance_chance(32.0)
+        assert first == 1.0  # 0.2 + 0.025*32 = 1.0 (capped)
+        assert second == 0.02 + 0.005 * 32
+
+    def test_spell_inheritance_50_stim(self):
+        first, second = _spell_inheritance_chance(50.0)
+        assert first == 1.0  # Capped at 1.0
+        assert second == 0.27  # 0.02 + 0.005*50 = 0.27
+
+
+class TestPassiveInheritanceChance:
+    """Tests for passive inheritance chance."""
+
+    def test_passive_inheritance_0_stim(self):
+        chance = _passive_inheritance_chance(0.0)
+        assert chance == 0.05
+
+    def test_passive_inheritance_50_stim(self):
+        chance = _passive_inheritance_chance(50.0)
+        assert chance == 0.55  # 0.05 + 0.01*50
+
+    def test_passive_inheritance_95_stim(self):
+        chance = _passive_inheritance_chance(95.0)
+        assert chance == 1.0  # Capped at 1.0
+
+
+class TestClassFavoringChance:
+    """Tests for class-favoring chance."""
+
+    def test_favoring_0_stim(self):
+        chance = _class_favoring_chance(0.0)
+        assert chance == 0.0
+
+    def test_favoring_50_stim(self):
+        chance = _class_favoring_chance(50.0)
+        assert chance == 0.5
+
+    def test_favoring_100_stim(self):
+        chance = _class_favoring_chance(100.0)
+        assert chance == 1.0
+
+
+class TestTraitInheritanceProbability:
+    """Tests for calculate_trait_probability function."""
+
+    def test_ability_neither_parent_has(self):
+        mother = make_mock_cat(1, abilities=[])
+        father = make_mock_cat(2, abilities=[])
+        trait = TraitRequirement("ability", "PathOfTheHunter")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        assert result.probability == 0.0
+        assert result.parent_source == "none"
+
+    def test_ability_single_parent_has(self):
+        mother = make_mock_cat(1, abilities=["PathOfTheHunter"])
+        father = make_mock_cat(2, abilities=[])
+        trait = TraitRequirement("ability", "PathOfTheHunter")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # At 0 stim: 20% chance to inherit, mother has 1 spell = 100% pool share
+        assert result.probability == pytest.approx(0.2)
+        assert result.parent_source == "mother"
+
+    def test_ability_pool_dilution(self):
+        # Mother has 4 spells, father has 1
+        mother = make_mock_cat(1, abilities=["A", "B", "C", "PathOfTheHunter"])
+        father = make_mock_cat(2, abilities=["Zap"])
+        trait = TraitRequirement("ability", "PathOfTheHunter")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # 20% inherit chance * (1/4 pool size) = 5%
+        assert result.probability == pytest.approx(0.05)
+
+    def test_passive_skillshare_plus_guaranteed(self):
+        mother = make_mock_cat(1, passive_abilities=["skillshare_plus", "Sturdy"])
+        father = make_mock_cat(2, passive_abilities=[])
+        trait = TraitRequirement("passive", "Sturdy")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # SkillShare+ guarantees other passives
+        assert result.probability == 1.0
+        assert "SkillShare+" in result.parent_source
+
+    def test_passive_disorder_not_in_passive_pool(self):
+        # Disorders should NOT be in passive_abilities (separated at parse time)
+        mother = make_mock_cat(1, passive_abilities=["Sturdy"], disorders=["blind"])
+        father = make_mock_cat(2, passive_abilities=[])
+        trait = TraitRequirement("passive", "blind")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # blind is a disorder, not a passive - should not inherit via passive mechanics
+        assert result.probability == 0.0
+
+    def test_mutation_inheritance_80_percent(self):
+        mother = make_mock_cat(1, mutations=["Frostbit"])
+        father = make_mock_cat(2, mutations=[])
+        trait = TraitRequirement("mutation", "Frostbit")
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # 80% inherit parts * 50% favor for mother (when only she has it at 0 stim)
+        # = 0.8 * 0.5 = 0.4
+        assert result.probability == pytest.approx(0.4)
+
+    def test_mutation_favoring_with_stimulation(self):
+        mother = make_mock_cat(1, mutations=["Frostbit"])
+        father = make_mock_cat(2, mutations=[])
+        trait = TraitRequirement("mutation", "Frostbit")
+
+        result = calculate_trait_probability(trait, mother, father, 50.0)
+
+        # At 50 stim, mutation favor = (1 + 0.5)/(2 + 0.5) = 1.5/2.5 = 0.6
+        # 80% inherit * 60% favor = 48%
+        expected = 0.8 * ((1.0 + 0.01 * 50) / (2.0 + 0.01 * 50))
+        assert result.probability == pytest.approx(expected)
+
+
+class TestDisorderInheritance:
+    """Tests for disorder inheritance function."""
+
+    def test_disorder_inheritance_neither_has(self):
+        mother = make_mock_cat(1, disorders=[])
+        father = make_mock_cat(2, disorders=[])
+
+        chance = expected_disorder_inheritance(mother, father)
+
+        assert chance == 0.0
+
+    def test_disorder_inheritance_mother_has(self):
+        mother = make_mock_cat(1, disorders=["blind"])
+        father = make_mock_cat(2, disorders=[])
+
+        chance = expected_disorder_inheritance(mother, father)
+
+        assert chance == 0.15
+
+    def test_disorder_inheritance_both_have(self):
+        mother = make_mock_cat(1, disorders=["blind"])
+        father = make_mock_cat(2, disorders=["lumpybody"])
+
+        chance = expected_disorder_inheritance(mother, father)
+
+        assert chance == 0.30  # Cap at 30%
+
+    def test_disorder_inheritance_capped(self):
+        # Even with multiple disorders, capped at 30%
+        mother = make_mock_cat(1, disorders=["blind", "bentleg"])
+        father = make_mock_cat(2, disorders=["lumpybody", "nomouth"])
+
+        chance = expected_disorder_inheritance(mother, father)
+
+        assert chance == 0.30
+
+
+class TestClassFavoringAlgebra:
+    """Tests verifying the corrected class-favoring math."""
+
+    def test_class_favoring_100_percent(self):
+        # At 100 stim, favor_chance = 1.0
+        # mother_select should be 0.5 + 0.5*1.0 = 1.0
+        mother = make_mock_cat(1, abilities=["PathOfTheHunter"])  # class spell
+        father = make_mock_cat(2, abilities=["Swat"])  # generic spell
+        trait = TraitRequirement("ability", "PathOfTheHunter")
+
+        result = calculate_trait_probability(trait, mother, father, 100.0)
+
+        # With 100% favor chance, should strongly favor mother (class spell holder)
+        # At 100 stim, inherit chance is capped at 1.0
+        assert result.parent_favor_chance == 1.0

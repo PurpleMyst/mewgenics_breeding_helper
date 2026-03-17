@@ -10,6 +10,7 @@ from typing import Optional
 
 from .binary import BinaryReader
 from .constants import STAT_NAMES, _JUNK_STRINGS, _IDENT_RE, ROOM_DISPLAY
+from .trait_dictionary import DISORDERS
 from .visual import (
     _read_visual_mutation_entries,
     _visual_mutation_chip_items,
@@ -20,6 +21,18 @@ from .visual import (
 def _valid_str(s: Optional[str]) -> bool:
     """Reject None, empty, and game filler strings like 'none' or 'defaultmove'."""
     return bool(s) and s.strip().lower() not in _JUNK_STRINGS
+
+
+def _split_passives_and_disorders(traits: list[str]) -> tuple[list[str], list[str]]:
+    """Split a list of traits into passives and disorders."""
+    passives: list[str] = []
+    disorders: list[str] = []
+    for t in traits:
+        if t.lower() in DISORDERS:
+            disorders.append(t)
+        else:
+            passives.append(t)
+    return passives, disorders
 
 
 def _normalize_gender(raw_gender: Optional[str]) -> str:
@@ -81,6 +94,7 @@ class Cat:
     coi: Optional[float]
     abilities: list
     passive_abilities: list
+    disorders: list
     equipment: list
     mutations: list
     mutation_chip_items: list
@@ -294,7 +308,9 @@ class Cat:
                 except Exception:
                     break
 
-            self.passive_abilities = passives
+            self.passive_abilities, self.disorders = _split_passives_and_disorders(
+                passives
+            )
             self.equipment = []  # equipment parsing requires separate byte-marker logic
 
         else:
@@ -315,10 +331,10 @@ class Cat:
             self.abilities = [a for a in [r.str() for _ in range(6)] if _valid_str(a)]
             self.equipment = [s for s in [r.str() for _ in range(4)] if _valid_str(s)]
 
-            self.passive_abilities = []
+            all_passives: list[str] = []
             first = r.str()
             if _valid_str(first):
-                self.passive_abilities.append(first)
+                all_passives.append(first)
             for _ in range(13):
                 if r.remaining() < 12:
                     break
@@ -327,7 +343,11 @@ class Cat:
                     break
                 p = r.str()
                 if _valid_str(p):
-                    self.passive_abilities.append(p)
+                    all_passives.append(p)
+
+            self.passive_abilities, self.disorders = _split_passives_and_disorders(
+                all_passives
+            )
 
         self.mutations = visual_display_names
         self.mutation_chip_items = visual_items
