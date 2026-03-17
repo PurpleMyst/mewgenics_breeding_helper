@@ -1324,8 +1324,12 @@ def show_pair_detail_window(pair, state):
                 row_background=True,
             ):
                 dpg.add_table_column(label="Trait", width_stretch=True)
-                dpg.add_table_column(label="Type", width_fixed=80)
-                dpg.add_table_column(label="Probability", width_fixed=90)
+                dpg.add_table_column(
+                    label="Type", width_fixed=True, init_width_or_weight=80
+                )
+                dpg.add_table_column(
+                    label="Probability", width_fixed=True, init_width_or_weight=90
+                )
                 dpg.add_table_column(label="Source", width_stretch=True)
 
                 for trait in state.planner_traits:
