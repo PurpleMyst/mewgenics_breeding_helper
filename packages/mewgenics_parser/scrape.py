@@ -13,6 +13,7 @@ GAME_DATA = mewgenics_parser.GameData.from_gpak(
     r"C:\Program Files (x86)\Steam\steamapps\common\Mewgenics\resources.gpak"
 )
 
+
 def name_to_id(name: str) -> str:
     if (candidate_id := name.replace(" ", "")) in GAME_DATA.ability_text:
         return candidate_id

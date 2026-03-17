@@ -10,5 +10,5 @@ class TestSplitPassivesAndDisorders:
     def test_snapshot(self):
         traits = ["Sturdy", "Insomnia", "LongShot"]
         passives, disorders = _split_passives_and_disorders(traits)
-        assert passives == snapshot(['Sturdy', 'LongShot'])
-        assert disorders == snapshot(['Insomnia'])
+        assert passives == snapshot(["Sturdy", "LongShot"])
+        assert disorders == snapshot(["Insomnia"])

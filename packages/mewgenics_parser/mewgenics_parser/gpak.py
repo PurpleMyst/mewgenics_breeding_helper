@@ -29,16 +29,10 @@ def _parse_gon_abilities(
 
         # Seems to be that templates have their data under a "meta" key, IDK man.
         raw_name = data.get("name", data.get("meta", {}).get("name", ""))
-        name = (
-            _clean_game_text(
-                _resolve_game_string(raw_name, game_strings)
-            )
-        )
+        name = _clean_game_text(_resolve_game_string(raw_name, game_strings))
 
         raw_desc = data.get("desc", data.get("meta", {}).get("desc", ""))
-        desc = _clean_game_text(
-            _resolve_game_string(raw_desc, game_strings)
-        )
+        desc = _clean_game_text(_resolve_game_string(raw_desc, game_strings))
 
         # If both name and description are empty, try to look under variant_of or just go with sane
         # defaults.

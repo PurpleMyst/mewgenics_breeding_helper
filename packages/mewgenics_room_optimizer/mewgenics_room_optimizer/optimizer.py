@@ -178,7 +178,7 @@ def _evaluate_state(
             continue
 
         cats_in_room = rooms_content[room.key]
-        
+
         # Hard capacity constraint
         if room.max_cats is not None and len(cats_in_room) > room.max_cats:
             return -float("inf")
@@ -192,7 +192,7 @@ def _evaluate_state(
         sum_quality = 0.0
         valid_pairs = 0
         valid_cats = set()
-        
+
         for a, b in pairs:
             effective_params = replace(params, stimulation=true_stim)
             scored = pair_cache.get_score(
@@ -220,9 +220,17 @@ def _evaluate_state(
         scoring_prefs = params.scoring_prefs or ScoringPreferences()
         if scoring_prefs.maximize_throughput:
             # Only count cats that actually form valid pairs towards the multiplier
-            males = sum(1 for c in cats_in_room if c.gender == "male" and c.db_key in valid_cats)
-            females = sum(1 for c in cats_in_room if c.gender == "female" and c.db_key in valid_cats)
-            spiders = sum(1 for c in cats_in_room if c.gender == "?" and c.db_key in valid_cats)
+            males = sum(
+                1 for c in cats_in_room if c.gender == "male" and c.db_key in valid_cats
+            )
+            females = sum(
+                1
+                for c in cats_in_room
+                if c.gender == "female" and c.db_key in valid_cats
+            )
+            spiders = sum(
+                1 for c in cats_in_room if c.gender == "?" and c.db_key in valid_cats
+            )
 
             # Calculate max simultaneous breeding pairs
             concurrent_breeds = min(
@@ -230,8 +238,8 @@ def _evaluate_state(
             )
 
             # Apply an exponent to artificially inflate the value of high-capacity rooms.
-            density_bonus = concurrent_breeds ** 1.5
-            
+            density_bonus = concurrent_breeds**1.5
+
             room_quality = expected_breed_quality * density_bonus * dilution_penalty
         else:
             room_quality = expected_breed_quality * dilution_penalty
@@ -239,6 +247,8 @@ def _evaluate_state(
         total_quality += room_quality
 
     return total_quality
+
+
 def _get_neighbor(state: dict[int, str], rooms: list[str]) -> dict[int, str]:
     """Generate a neighboring state by moving one cat or swapping two cats."""
     new_state = state.copy()

@@ -194,7 +194,6 @@ def _calc_passive_inheritance(
 
     # SKILLSHARE+ SPECIAL: 100% guaranteed
     # Check using RAW passives (must check for + variant)
-    print(parent_a, parent_b)
     if has_skillshare_plus(parent_a) and parent_a_has:
         return TraitInheritanceProbability(
             trait=trait,

@@ -48,6 +48,7 @@ class TestParseSaveIntegration:
         assert cat.lovers == snapshot([])
         assert cat.haters == snapshot([])
 
+
 class TestGpakIntegration:
     """Integration tests requiring a real GPAK file."""
 

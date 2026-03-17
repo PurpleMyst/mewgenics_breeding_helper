@@ -1762,7 +1762,10 @@ def show_cat_detail_window(cat, state):
                 color = COLOR_DANGER
                 dpg.add_text(f"  {nd.name or dis}", color=color)
                 if desc:
-                    dpg.add_text(f"    {nd.description or 'No description'}", color=(255, 150, 150, 255))
+                    dpg.add_text(
+                        f"    {nd.description or 'No description'}",
+                        color=(255, 150, 150, 255),
+                    )
 
         with dpg.tree_node(label=f"Mutations", default_open=True):
             # for mut in cat.mutations or []:

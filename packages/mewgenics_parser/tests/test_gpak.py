@@ -19,7 +19,9 @@ class TestCleanGameText:
 
     def test_remove_image_tags(self):
         """Remove [img:...] tags."""
-        assert _clean_game_text("Hello [img:icon] World") == snapshot('Hello Icon World')
+        assert _clean_game_text("Hello [img:icon] World") == snapshot(
+            "Hello Icon World"
+        )
 
     def test_remove_size_tags(self):
         """Remove [s:...] and [/s] tags."""
@@ -48,7 +50,7 @@ class TestCleanGameText:
     def test_multiple_tags(self):
         """Handle multiple different tags."""
         input_text = "[img:icon] [s:bold]important[/s] [c:red]text[/c]"
-        assert _clean_game_text(input_text) == snapshot('Icon important text')
+        assert _clean_game_text(input_text) == snapshot("Icon important text")
 
 
 class TestResolveGameString:
@@ -111,14 +113,22 @@ class TestParseGonAbilities:
 }
 """
         result = _parse_gon_abilities(gon, {})
-        assert result == snapshot({'Slugger': NameAndDescription(name='Slugger', description='slugger_desc')})
+        assert result == snapshot(
+            {"Slugger": NameAndDescription(name="Slugger", description="slugger_desc")}
+        )
 
     def test_ability_with_game_string_reference(self):
         """Parse ability with game string reference."""
         game_strings = {"slugger_desc": "Final description"}
         gon = 'Slugger { desc "slugger_desc" }'
         result = _parse_gon_abilities(gon, game_strings)
-        assert result == snapshot({'Slugger': NameAndDescription(name='Slugger', description='Final description')})
+        assert result == snapshot(
+            {
+                "Slugger": NameAndDescription(
+                    name="Slugger", description="Final description"
+                )
+            }
+        )
 
     def test_multiple_abilities(self):
         """Parse multiple abilities."""
@@ -134,7 +144,15 @@ Longshot { // Longest shot you've ever seen! [img:dex]
 """
         result = _parse_gon_abilities(gon, {})
         assert result == snapshot(
-            {'Slugger': NameAndDescription(name="Ol' Slugger", description='slugger_desc'), 'Longshot': NameAndDescription(name="Longest shot you've ever seen! DEX", description='longshot_desc')}
+            {
+                "Slugger": NameAndDescription(
+                    name="Ol' Slugger", description="slugger_desc"
+                ),
+                "Longshot": NameAndDescription(
+                    name="Longest shot you've ever seen! DEX",
+                    description="longshot_desc",
+                ),
+            }
         )
 
     def test_empty_content(self):

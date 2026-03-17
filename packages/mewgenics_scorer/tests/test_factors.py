@@ -57,9 +57,7 @@ def make_mock_cat(
         SKILLSHARE_BASE_ID,
     )
 
-    cat.inheritable_abilities = [
-        normalize_trait_name(a) for a in (abilities or [])
-    ]
+    cat.inheritable_abilities = [normalize_trait_name(a) for a in (abilities or [])]
 
     cat.inheritable_passives = [
         normalize_trait_name(p)

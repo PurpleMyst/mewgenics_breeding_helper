@@ -12,7 +12,10 @@ def savefile_path(request):
     """Path to save file for integration tests."""
     path = os.environ.get("MEWGENICS_SAVEFILE_PATH")
     if not path and sys.platform == "win32" and (appdata := os.getenv("APPDATA")):
-        path = appdata + r"\Glaiel Games\Mewgenics\76561198044230461\saves\steamcampaign01.sav"
+        path = (
+            appdata
+            + r"\Glaiel Games\Mewgenics\76561198044230461\saves\steamcampaign01.sav"
+        )
 
     if path and Path(path).exists():
         return path
@@ -20,6 +23,7 @@ def savefile_path(request):
     pytest.skip(
         "No save file provided. Populate MEWGENICS_SAVEFILE_PATH env var or place save file in default location."
     )
+
 
 @pytest.fixture
 def gpak_path(request):
