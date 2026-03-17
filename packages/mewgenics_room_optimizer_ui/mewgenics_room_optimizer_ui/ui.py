@@ -1,5 +1,8 @@
 """DearPyGui UI components for room optimizer."""
 
+from collections.abc import Callable
+from enum import StrEnum
+
 import dearpygui.dearpygui as dpg
 from mewgenics_parser.trait_dictionary import normalize_trait_name
 from mewgenics_room_optimizer import RoomType, can_pair_gay
@@ -8,6 +11,95 @@ from mewgenics_scorer import ScoringPreferences
 from .state import AppState
 
 LOCATION_COL_WIDTH = 125
+
+
+class TraitCategory(StrEnum):
+    MUTATION = "mutation"
+    PASSIVE = "passive"
+    ABILITY = "ability"
+
+
+COLOR_SUCCESS = (100, 255, 100, 255)
+COLOR_WARNING = (255, 200, 100, 255)
+COLOR_DANGER = (255, 100, 100, 255)
+COLOR_EY_TEAL = (0, 255, 255, 255)
+COLOR_MUTED = (150, 150, 150, 255)
+COLOR_LOVER = (255, 150, 200, 255)
+COLOR_DEFAULT_TEXT = (255, 255, 255, 255)
+
+
+def render_cat_table_rows(
+    cats: list,
+    state: AppState,
+    parent_table_tag: str,
+    show_location: bool = True,
+    is_ey_check: bool = False,
+    eternal_youth_cats: list | None = None,
+    name_callback: Callable | None = None,
+    row_callback: Callable | None = None,
+    row_tag_prefix: str = "row",
+):
+    """Universal renderer for cat table rows to enforce consistent UI."""
+    from mewgenics_parser.constants import STAT_NAMES
+
+    for cat in cats:
+        if is_ey_check and eternal_youth_cats:
+            is_ey = cat in eternal_youth_cats
+        else:
+            is_ey = hasattr(cat, "eternal_youth") and cat.eternal_youth
+
+        cat_name = name_callback(cat) if name_callback else (cat.name or "Unnamed")
+        name_color = COLOR_EY_TEAL if is_ey else COLOR_DEFAULT_TEXT
+
+        sex_display = (
+            cat.gender.value if hasattr(cat.gender, "value") else str(cat.gender)
+        )
+        age = cat.age if cat.age is not None else 0
+        age = min(age, 100)
+        age_display = f"{age} [EY]" if is_ey else str(age)
+
+        assigned_room = _get_assigned_room_key(cat.db_key, state.results)
+        current_room = cat.room
+        if assigned_room is None:
+            loc_color = COLOR_WARNING
+        elif current_room == assigned_room:
+            loc_color = COLOR_SUCCESS
+        else:
+            loc_color = COLOR_DANGER
+
+        stats = cat.total_stats
+        stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
+        stat_values = [stats.get(s, 0) for s in stat_order]
+        total = sum(cat.total_stats.values())
+
+        has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
+        trait_badge = "[*]" if has_fav else ""
+        badge_color = COLOR_SUCCESS if has_fav else COLOR_MUTED
+
+        callback = row_callback or on_cat_selected
+        user_data = (cat, state)
+        tag = f"{row_tag_prefix}_{parent_table_tag}_{cat.db_key}"
+
+        with dpg.table_row(parent=parent_table_tag):
+            dpg.add_selectable(
+                label=cat_name,
+                span_columns=True,
+                callback=callback,
+                user_data=user_data,
+                tag=tag,
+            )
+            dpg.bind_item_theme(dpg.last_item(), name_color)
+
+            dpg.add_text(str(sex_display))
+            dpg.add_text(age_display)
+
+            if show_location:
+                dpg.add_text(cat.room_display or current_room, color=loc_color)
+
+            for sv in stat_values:
+                dpg.add_text(str(sv))
+            dpg.add_text(str(total))
+            dpg.add_text(trait_badge, color=badge_color)
 
 
 def substring_match(query: str, choices: list[str]) -> list[str]:
@@ -308,8 +400,12 @@ def build_traits_section(state: AppState):
                         tag="mutation_filter",
                         hint="Filter...",
                         width=-1,
-                        callback=on_mutation_filter,
-                        user_data=state,
+                        callback=on_trait_filter,
+                        user_data=(
+                            state,
+                            "mutation_listbox",
+                            state.get_available_mutations,
+                        ),
                     )
                     dpg.add_listbox(
                         tag="mutation_listbox",
@@ -317,15 +413,21 @@ def build_traits_section(state: AppState):
                         num_items=5,
                     )
                     dpg.add_button(
-                        label="Add", callback=on_add_mutation, user_data=state
+                        label="Add",
+                        callback=on_add_trait,
+                        user_data=(state, TraitCategory.MUTATION, "mutation_listbox"),
                     )
                 with dpg.tab(label="Passives"):
                     dpg.add_input_text(
                         tag="passive_filter",
                         hint="Filter...",
                         width=-1,
-                        callback=on_passive_filter,
-                        user_data=state,
+                        callback=on_trait_filter,
+                        user_data=(
+                            state,
+                            "passive_listbox",
+                            state.get_available_passives,
+                        ),
                     )
                     dpg.add_listbox(
                         tag="passive_listbox",
@@ -333,15 +435,21 @@ def build_traits_section(state: AppState):
                         num_items=5,
                     )
                     dpg.add_button(
-                        label="Add", callback=on_add_passive, user_data=state
+                        label="Add",
+                        callback=on_add_trait,
+                        user_data=(state, TraitCategory.PASSIVE, "passive_listbox"),
                     )
                 with dpg.tab(label="Abilities"):
                     dpg.add_input_text(
                         tag="ability_filter",
                         hint="Filter...",
                         width=-1,
-                        callback=on_ability_filter,
-                        user_data=state,
+                        callback=on_trait_filter,
+                        user_data=(
+                            state,
+                            "ability_listbox",
+                            state.get_available_abilities,
+                        ),
                     )
                     dpg.add_listbox(
                         tag="ability_listbox",
@@ -349,7 +457,9 @@ def build_traits_section(state: AppState):
                         num_items=5,
                     )
                     dpg.add_button(
-                        label="Add", callback=on_add_ability, user_data=state
+                        label="Add",
+                        callback=on_add_trait,
+                        user_data=(state, TraitCategory.ABILITY, "ability_listbox"),
                     )
 
             dpg.add_separator()
@@ -383,39 +493,6 @@ def _extract_trait_key(formatted: str) -> str:
     return formatted.split(" | ")[0].strip()
 
 
-def on_mutation_filter(sender, app_data, user_data: AppState):
-    """Filter mutations listbox with fuzzy matching."""
-    filter_text = app_data or ""
-    mutations = user_data.get_available_mutations()
-    filtered = substring_match(filter_text, mutations)
-    formatted = [
-        _format_trait_with_description(m, user_data.game_data) for m in filtered
-    ]
-    dpg.configure_item("mutation_listbox", items=formatted)
-
-
-def on_passive_filter(sender, app_data, user_data: AppState):
-    """Filter passives listbox with fuzzy matching."""
-    filter_text = app_data or ""
-    passives = user_data.get_available_passives()
-    filtered = substring_match(filter_text, passives)
-    formatted = [
-        _format_trait_with_description(p, user_data.game_data) for p in filtered
-    ]
-    dpg.configure_item("passive_listbox", items=formatted)
-
-
-def on_ability_filter(sender, app_data, user_data: AppState):
-    """Filter abilities listbox with fuzzy matching."""
-    filter_text = app_data or ""
-    abilities = user_data.get_available_abilities()
-    filtered = substring_match(filter_text, abilities)
-    formatted = [
-        _format_trait_with_description(a, user_data.game_data) for a in filtered
-    ]
-    dpg.configure_item("ability_listbox", items=formatted)
-
-
 def on_cat_name_filter(sender, app_data, user_data: AppState):
     """Filter All Cats table by name with fuzzy matching."""
     filter_text = app_data or ""
@@ -441,12 +518,13 @@ def on_toggle_show_all_cats(sender, app_data, user_data: AppState):
     )
 
 
-def on_add_mutation(sender, app_data, user_data: AppState):
-    """Add selected mutation to favorable traits."""
-    selected = dpg.get_value("mutation_listbox")
+def on_add_trait(sender, app_data, user_data: tuple[AppState, TraitCategory, str]):
+    """Add selected trait to favorable traits."""
+    state, category, listbox_tag = user_data
+    selected = dpg.get_value(listbox_tag)
 
     if not selected:
-        items = dpg.get_item_configuration("mutation_listbox").get("items", [])
+        items = dpg.get_item_configuration(listbox_tag).get("items", [])
         if items:
             selected = items[0]
 
@@ -454,51 +532,23 @@ def on_add_mutation(sender, app_data, user_data: AppState):
         from mewgenics_scorer import TraitRequirement
 
         actual_key = _extract_trait_key(selected)
-        user_data.planner_traits.append(
-            TraitRequirement(category="mutation", key=actual_key, weight=5.0)
+        state.planner_traits.append(
+            TraitRequirement(category=category, key=actual_key, weight=5.0)
         )
-        user_data.save()
-        update_traits_display(user_data)
+        state.save()
+        update_traits_display(state)
 
 
-def on_add_passive(sender, app_data, user_data: AppState):
-    """Add selected passive to favorable traits."""
-    selected = dpg.get_value("passive_listbox")
+def on_trait_filter(sender, app_data, user_data: tuple[AppState, str, Callable]):
+    """Filter traits listbox with fuzzy matching."""
+    state, listbox_tag, get_traits_func = user_data
+    filter_text = app_data or ""
 
-    if not selected:
-        items = dpg.get_item_configuration("passive_listbox").get("items", [])
-        if items:
-            selected = items[0]
+    traits = get_traits_func()
+    filtered = substring_match(filter_text, traits)
+    formatted = [_format_trait_with_description(t, state.game_data) for t in filtered]
 
-    if selected:
-        from mewgenics_scorer import TraitRequirement
-
-        actual_key = _extract_trait_key(selected)
-        user_data.planner_traits.append(
-            TraitRequirement(category="passive", key=actual_key, weight=5.0)
-        )
-        user_data.save()
-        update_traits_display(user_data)
-
-
-def on_add_ability(sender, app_data, user_data: AppState):
-    """Add selected ability to favorable traits."""
-    selected = dpg.get_value("ability_listbox")
-
-    if not selected:
-        items = dpg.get_item_configuration("ability_listbox").get("items", [])
-        if items:
-            selected = items[0]
-
-    if selected:
-        from mewgenics_scorer import TraitRequirement
-
-        actual_key = _extract_trait_key(selected)
-        user_data.planner_traits.append(
-            TraitRequirement(category="ability", key=actual_key, weight=5.0)
-        )
-        user_data.save()
-        update_traits_display(user_data)
+    dpg.configure_item(listbox_tag, items=formatted)
 
 
 def on_clear_traits(sender, app_data, user_data: AppState):
@@ -600,15 +650,15 @@ def _cat_has_favorable_trait(cat, planner_traits: list) -> bool:
     """Check if cat has any favorable trait from planner."""
     for trait in planner_traits:
         norm_trait_key = normalize_trait_name(trait.key).lower()
-        if trait.category == "mutation":
+        if trait.category == TraitCategory.MUTATION:
             for m in cat.mutations or []:
                 if normalize_trait_name(m).lower() == norm_trait_key:
                     return True
-        if trait.category == "passive":
+        if trait.category == TraitCategory.PASSIVE:
             for p in cat.passive_abilities or []:
                 if normalize_trait_name(p).lower() == norm_trait_key:
                     return True
-        if trait.category == "ability":
+        if trait.category == TraitCategory.ABILITY:
             for a in cat.abilities or []:
                 if normalize_trait_name(a).lower() == norm_trait_key:
                     return True
@@ -651,10 +701,7 @@ def update_all_cats_table(
     if trait_filter:
         trait_filtered = []
         for cat in filtered_cats:
-            all_traits = []
-            all_traits.extend(cat.mutations or [])
-            all_traits.extend(cat.passive_abilities or [])
-            all_traits.extend(cat.abilities or [])
+            all_traits = list(cat.all_normalized_traits)
             if substring_match(trait_filter, all_traits):
                 trait_filtered.append(cat)
         filtered_cats = trait_filtered
@@ -686,11 +733,11 @@ def update_all_cats_table(
         assigned_room = _get_assigned_room_key(cat.db_key, state.results)
         current_room = cat.room
         if assigned_room is None:
-            location_color = (255, 200, 100, 255)  # Yellow - not assigned
+            location_color = COLOR_WARNING
         elif current_room == assigned_room:
-            location_color = (100, 255, 100, 255)  # Green - correct
+            location_color = COLOR_SUCCESS
         else:
-            location_color = (255, 100, 100, 255)  # Red - wrong room
+            location_color = COLOR_DANGER
 
         # Get individual stats from total_stats dict
         stats = cat.total_stats
@@ -858,11 +905,13 @@ def build_themes():
 def on_global_enter(sender, app_data, user_data):
     """Check which filter is active when Enter is pressed and trigger add."""
     if dpg.is_item_active("mutation_filter"):
-        on_add_mutation(None, None, user_data)
+        on_add_trait(
+            None, None, (user_data, TraitCategory.MUTATION, "mutation_listbox")
+        )
     elif dpg.is_item_active("passive_filter"):
-        on_add_passive(None, None, user_data)
+        on_add_trait(None, None, (user_data, TraitCategory.PASSIVE, "passive_listbox"))
     elif dpg.is_item_active("ability_filter"):
-        on_add_ability(None, None, user_data)
+        on_add_trait(None, None, (user_data, TraitCategory.ABILITY, "ability_listbox"))
 
 
 def scan_and_load_saves(sender=None, app_data=None, user_data: AppState | None = None):
@@ -1124,7 +1173,7 @@ def update_results_table(results, state):
             dpg.add_text(f"{avg_quality:.1f}")
             dpg.add_text(
                 f"{avg_risk:2.0f}%",
-                color=(255, 100, 100, 255) if avg_risk > 15 else (200, 200, 200, 255),
+                color=COLOR_DANGER if avg_risk > 15 else (200, 200, 200, 255),
             )
 
         if avg_risk > 15:
@@ -1272,24 +1321,12 @@ def build_details_tabs(selected_room, state):
                     disorder = pair.factors.expected_disorder_chance * 100
                     part_defect = pair.factors.expected_part_defect_chance * 100
                     combined = pair.factors.combined_malady_chance * 100
-                    risk_color = (
-                        (255, 100, 100, 255) if combined > 15 else (100, 255, 100, 255)
-                    )
+                    risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
 
-                    combined_traits = set()
-                    for cat in (pair.cat_a, pair.cat_b):
-                        combined_traits.update(
-                            normalize_trait_name(t).lower()
-                            for t in (cat.mutations or [])
-                        )
-                        combined_traits.update(
-                            normalize_trait_name(t).lower()
-                            for t in (cat.passive_abilities or [])
-                        )
-                        combined_traits.update(
-                            normalize_trait_name(t).lower()
-                            for t in (cat.abilities or [])
-                        )
+                    combined_traits = (
+                        pair.cat_a.all_normalized_traits
+                        | pair.cat_b.all_normalized_traits
+                    )
 
                     hits = sum(
                         1
@@ -1318,7 +1355,7 @@ def build_details_tabs(selected_room, state):
                                     dpg.add_text("Mutual Lovers")
                             libido = getattr(pair.factors, "libido_factor", 0)
                             if libido > 0.6:
-                                badge = dpg.add_text("[+]", color=(255, 200, 100, 255))
+                                badge = dpg.add_text("[+]", color=COLOR_WARNING)
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Libido")
                             agg = getattr(pair.factors, "aggression_factor", 0)
@@ -1327,11 +1364,11 @@ def build_details_tabs(selected_room, state):
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Aggression")
                             if combined > 50:
-                                badge = dpg.add_text("[!]", color=(255, 100, 100, 255))
+                                badge = dpg.add_text("[!]", color=COLOR_DANGER)
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Inbreeding Risk")
                             if hits > 0:
-                                badge = dpg.add_text("[*]", color=(100, 255, 100, 255))
+                                badge = dpg.add_text("[*]", color=COLOR_SUCCESS)
                                 with dpg.tooltip(badge):
                                     dpg.add_text(f"{hits}/{total} Favorable Traits")
         else:
@@ -1379,11 +1416,11 @@ def build_details_tabs(selected_room, state):
                     assigned_room = _get_assigned_room_key(cat.db_key, state.results)
                     current_room = cat.room
                     if assigned_room is None:
-                        location_color = (255, 200, 100, 255)  # Yellow - not assigned
+                        location_color = COLOR_WARNING
                     elif current_room == assigned_room:
-                        location_color = (100, 255, 100, 255)  # Green - correct
+                        location_color = COLOR_SUCCESS
                     else:
-                        location_color = (255, 100, 100, 255)  # Red - wrong room
+                        location_color = COLOR_DANGER
 
                     # Get individual stats from total_stats dict
                     stats = cat.total_stats
@@ -1391,7 +1428,7 @@ def build_details_tabs(selected_room, state):
                     stat_values = [stats.get(s, 0) for s in stat_order]
 
                     name_color = (
-                        (0, 255, 255, 255) if is_ey else (255, 255, 255, 255)
+                        COLOR_EY_TEAL if is_ey else COLOR_DEFAULT_TEXT
                     )  # Teal for EY
 
                     has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
@@ -1415,9 +1452,7 @@ def build_details_tabs(selected_room, state):
                         dpg.add_text(str(total_stats))
                         dpg.add_text(
                             trait_badge,
-                            color=(100, 255, 100, 255)
-                            if has_fav
-                            else (150, 150, 150, 255),
+                            color=COLOR_SUCCESS if has_fav else COLOR_MUTED,
                         )
         else:
             dpg.add_text("No cats in this room")
@@ -1536,7 +1571,7 @@ def show_pair_detail_window(pair, state):
         disorder = pair.factors.expected_disorder_chance * 100
         part_defect = pair.factors.expected_part_defect_chance * 100
         combined = pair.factors.combined_malady_chance * 100
-        risk_color = (255, 100, 100, 255) if combined > 15 else (100, 255, 100, 255)
+        risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
 
         dpg.add_text(
             f"Quality: {pair.quality:.1f} | Disorder: {disorder:.0f}% | Part Defect: {part_defect:.0f}% | Combined: {combined:.0f}%",
@@ -1574,11 +1609,11 @@ def show_pair_detail_window(pair, state):
                     )
 
                     if prob_result.probability >= 0.5:
-                        color = (100, 255, 100, 255)
+                        color = COLOR_SUCCESS
                     elif prob_result.probability >= 0.25:
-                        color = (255, 200, 100, 255)
+                        color = COLOR_WARNING
                     else:
-                        color = (255, 100, 100, 255)
+                        color = COLOR_DANGER
 
                     with dpg.table_row():
                         dpg.add_text(trait.key)
@@ -1603,7 +1638,7 @@ def show_pair_detail_window(pair, state):
                     color=(100, 255, 100, 255),
                 )
         else:
-            dpg.add_text("No favorable traits configured", color=(150, 150, 150, 255))
+            dpg.add_text("No favorable traits configured", color=COLOR_MUTED)
 
 
 def on_cat_selected(sender, app_data, user_data):
@@ -1691,8 +1726,8 @@ def show_cat_detail_window(cat, state):
                 dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
                 dpg.add_text(f"Status: {cat.status}")
                 dpg.add_text(f"Room: {room_display}")
-                dpg.add_text(f"Lovers: {lovers_str}", color=(255, 150, 200, 255))
-                dpg.add_text(f"Haters: {haters_str}", color=(255, 100, 100, 255))
+                dpg.add_text(f"Lovers: {lovers_str}", color=COLOR_LOVER)
+                dpg.add_text(f"Haters: {haters_str}", color=COLOR_DANGER)
 
         is_gay = state.gay_flags.get(cat.db_key, False)
         dpg.add_checkbox(
@@ -1716,7 +1751,7 @@ def show_cat_detail_window(cat, state):
                     ab.lower(), "No description"
                 )
                 is_fav = _is_favorable_trait(ab, state.planner_traits)
-                color = (100, 255, 100, 255) if is_fav else (200, 200, 200, 255)
+                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{ab}", color=color)
                 if desc:
@@ -1731,7 +1766,7 @@ def show_cat_detail_window(cat, state):
                     ab.lower(), "No description"
                 )
                 is_fav = _is_favorable_trait(ab, state.planner_traits)
-                color = (100, 255, 100, 255) if is_fav else (200, 200, 200, 255)
+                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{ab}", color=color)
                 if desc:
@@ -1742,7 +1777,7 @@ def show_cat_detail_window(cat, state):
         ):
             for mut in cat.mutations or []:
                 is_fav = _is_favorable_trait(mut, state.planner_traits)
-                color = (100, 255, 100, 255) if is_fav else (200, 200, 200, 255)
+                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{mut}", color=color)
 
@@ -1794,7 +1829,7 @@ def on_sandbox_changed(sender, app_data, user_data):
 
     with dpg.group(parent=container):
         if cat_a.db_key == cat_b.db_key:
-            dpg.add_text("Cannot breed a cat with itself.", color=(255, 100, 100, 255))
+            dpg.add_text("Cannot breed a cat with itself.", color=COLOR_DANGER)
             return
 
         if not can_breed(cat_a, cat_b):
@@ -1846,7 +1881,7 @@ def on_sandbox_changed(sender, app_data, user_data):
         )
 
         if pair_result is None:
-            dpg.add_text("Could not score this pair.", color=(255, 100, 100, 255))
+            dpg.add_text("Could not score this pair.", color=COLOR_DANGER)
             return
 
         if dpg.does_item_exist("inspector_tab_bar"):
@@ -1858,7 +1893,7 @@ def on_sandbox_changed(sender, app_data, user_data):
         part_defect = pair_result.factors.expected_part_defect_chance * 100
         combined = pair_result.factors.combined_malady_chance * 100
 
-        risk_color = (255, 100, 100, 255) if combined > 15 else (100, 255, 100, 255)
+        risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
         dpg.add_text(
             f"Expected Quality: {pair_result.quality:.1f} | "
             f"Disorder: {disorder:.0f}% | Part Defect: {part_defect:.0f}% | Combined: {combined:.0f}%",
@@ -1869,11 +1904,11 @@ def on_sandbox_changed(sender, app_data, user_data):
             if pair_result.factors.mutual_lovers:
                 dpg.add_text("[<3 Lovers]", color=(255, 150, 150, 255))
             if pair_result.factors.libido_factor > 0.6:
-                dpg.add_text("[+ Libido]", color=(255, 200, 100, 255))
+                dpg.add_text("[+ Libido]", color=COLOR_WARNING)
             if pair_result.factors.aggression_factor > 0.6:
                 dpg.add_text("[- Aggro]", color=(100, 200, 255, 255))
             if combined > 50:
-                dpg.add_text("[! Inbred]", color=(255, 100, 100, 255))
+                dpg.add_text("[! Inbred]", color=COLOR_DANGER)
             if pair_result.factors.combined_malady_chance > state.max_risk:
                 dpg.add_text(
                     f"[! High Risk (>{state.max_risk * 100:.0f}%)]",
@@ -1881,18 +1916,7 @@ def on_sandbox_changed(sender, app_data, user_data):
                 )
 
         if state.planner_traits:
-            combined_traits = set()
-            for cat in (cat_a, cat_b):
-                combined_traits.update(
-                    normalize_trait_name(t).lower() for t in (cat.mutations or [])
-                )
-                combined_traits.update(
-                    normalize_trait_name(t).lower()
-                    for t in (cat.passive_abilities or [])
-                )
-                combined_traits.update(
-                    normalize_trait_name(t).lower() for t in (cat.abilities or [])
-                )
+            combined_traits = cat_a.all_normalized_traits | cat_b.all_normalized_traits
 
             hits = sum(
                 1

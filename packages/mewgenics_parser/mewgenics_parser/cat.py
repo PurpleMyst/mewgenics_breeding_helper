@@ -433,3 +433,14 @@ class Cat:
             for p in self.passive_abilities
             if normalize_trait_name(p).lower() != SKILLSHARE_BASE_ID
         ]
+
+    @property
+    def all_normalized_traits(self) -> set[str]:
+        """Returns a unified set of all normalized abilities, passives, and mutations."""
+        traits: set[str] = set()
+        traits.update(normalize_trait_name(t).lower() for t in (self.abilities or []))
+        traits.update(
+            normalize_trait_name(t).lower() for t in (self.passive_abilities or [])
+        )
+        traits.update(normalize_trait_name(t).lower() for t in (self.mutations or []))
+        return traits
