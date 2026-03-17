@@ -3,6 +3,7 @@
 import dearpygui.dearpygui as dpg
 from mewgenics_parser.trait_dictionary import normalize_trait_name
 from mewgenics_room_optimizer import RoomType
+from mewgenics_scorer import ScoringPreferences
 
 from .state import AppState
 
@@ -225,6 +226,38 @@ def build_params_section(state: AppState):
                     dpg.add_text(
                         "Favors pairs with higher combined charisma for better breeding odds."
                     )
+            with dpg.group(horizontal=True):
+                dpg.add_text("SA Temperature:")
+                dpg.add_input_float(
+                    tag="sa_temperature",
+                    default_value=100.0,
+                    min_value=1.0,
+                    max_value=500.0,
+                    step=1.0,
+                    width=100,
+                )
+
+            with dpg.group(horizontal=True):
+                dpg.add_text("Cooling Rate:")
+                dpg.add_input_float(
+                    tag="sa_cooling_rate",
+                    default_value=0.95,
+                    min_value=0.8,
+                    max_value=0.99,
+                    step=0.01,
+                    width=100,
+                )
+
+            with dpg.group(horizontal=True):
+                dpg.add_text("Neighbors/Temp:")
+                dpg.add_input_int(
+                    tag="sa_neighbors",
+                    default_value=200,
+                    min_value=50,
+                    max_value=1000,
+                    step=10,
+                    width=100,
+                )
 
 
 def on_param_changed(sender, app_data, user_data: AppState):
@@ -978,9 +1011,9 @@ def exit_callback(sender, app_data, user_data):
 
 def run_optimization(sender, app_data, user_data: AppState):
     """Run the optimization."""
-    from mewgenics_room_optimizer import optimize
+    from mewgenics_room_optimizer import optimize_sa
     from mewgenics_room_optimizer.types import OptimizationParams
-    from mewgenics_scorer import build_ancestor_contribs
+    from mewgenics_scorer import ScoringPreferences, build_ancestor_contribs
 
     if not user_data.cats:
         return
@@ -991,25 +1024,39 @@ def run_optimization(sender, app_data, user_data: AppState):
 
     min_stats = dpg.get_value("min_stats")
     max_risk = dpg.get_value("max_risk") / 100.0  # Convert percentage to probability
-    minimize_variance = dpg.get_value("minimize_variance")
     avoid_lovers = dpg.get_value("avoid_lovers")
+
+    # SA Parameters
+    sa_temp = dpg.get_value("sa_temperature")
+    sa_cooling = dpg.get_value("sa_cooling_rate")
+    sa_neighbors = dpg.get_value("sa_neighbors")
+
+    # Scoring Preferences
+    minimize_variance = dpg.get_value("minimize_variance")
     prefer_low_aggression = dpg.get_value("prefer_low_aggression")
     prefer_high_libido = dpg.get_value("prefer_high_libido")
     prefer_high_charisma = dpg.get_value("prefer_high_charisma")
 
-    params = OptimizationParams(
-        min_stats=min_stats,
-        max_risk=max_risk,
+    scoring_prefs = ScoringPreferences(
         minimize_variance=minimize_variance,
-        avoid_lovers=avoid_lovers,
         prefer_low_aggression=prefer_low_aggression,
         prefer_high_libido=prefer_high_libido,
         prefer_high_charisma=prefer_high_charisma,
+    )
+
+    params = OptimizationParams(
+        min_stats=min_stats,
+        max_risk=max_risk,
+        avoid_lovers=avoid_lovers,
+        scoring_prefs=scoring_prefs,
         planner_traits=user_data.planner_traits,
+        sa_temperature=sa_temp,
+        sa_cooling_rate=sa_cooling,
+        sa_neighbors_per_temp=sa_neighbors,
     )
 
     ancestor_contribs = build_ancestor_contribs(user_data.cats)
-    results = optimize(
+    results = optimize_sa(
         user_data.cats, user_data.room_configs, params, ancestor_contribs
     )
     user_data.results = results
@@ -1768,11 +1815,13 @@ def on_sandbox_changed(sender, app_data, user_data):
         params = OptimizationParams(
             min_stats=state.min_stats,
             max_risk=state.max_risk,
-            minimize_variance=state.minimize_variance,
             avoid_lovers=state.avoid_lovers,
-            prefer_low_aggression=state.prefer_low_aggression,
-            prefer_high_libido=state.prefer_high_libido,
-            prefer_high_charisma=state.prefer_high_charisma,
+            scoring_prefs=ScoringPreferences(
+                minimize_variance=state.minimize_variance,
+                prefer_low_aggression=state.prefer_low_aggression,
+                prefer_high_libido=state.prefer_high_libido,
+                prefer_high_charisma=state.prefer_high_charisma,
+            ),
             planner_traits=state.planner_traits,
             gay_flags=state.gay_flags,
         )

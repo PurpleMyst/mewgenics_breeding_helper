@@ -154,7 +154,9 @@ def _calc_ability_inheritance(
 
     final_prob = 0.0
     if parent_a_has:
-        final_prob += (parent_a_select_prob / max(1, parent_a_pool_size)) * inherit_chance
+        final_prob += (
+            parent_a_select_prob / max(1, parent_a_pool_size)
+        ) * inherit_chance
     if parent_b_has:
         final_prob += (
             (1.0 - parent_a_select_prob) / max(1, parent_b_pool_size)
@@ -237,7 +239,9 @@ def _calc_passive_inheritance(
 
     final_prob = 0.0
     if parent_a_has:
-        final_prob += (parent_a_select_prob / max(1, parent_a_pool_size)) * inherit_chance
+        final_prob += (
+            parent_a_select_prob / max(1, parent_a_pool_size)
+        ) * inherit_chance
     if parent_b_has:
         final_prob += (
             (1.0 - parent_a_select_prob) / max(1, parent_b_pool_size)
@@ -323,11 +327,17 @@ def calculate_trait_probability(
     trait_key = trait.key.lower()
 
     if trait.category == "ability":
-        return _calc_ability_inheritance(trait_key, parent_a, parent_b, stimulation, trait)
+        return _calc_ability_inheritance(
+            trait_key, parent_a, parent_b, stimulation, trait
+        )
     elif trait.category == "passive":
-        return _calc_passive_inheritance(trait_key, parent_a, parent_b, stimulation, trait)
+        return _calc_passive_inheritance(
+            trait_key, parent_a, parent_b, stimulation, trait
+        )
     elif trait.category == "mutation":
-        return _calc_mutation_inheritance(trait_key, parent_a, parent_b, stimulation, trait)
+        return _calc_mutation_inheritance(
+            trait_key, parent_a, parent_b, stimulation, trait
+        )
 
     return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
 

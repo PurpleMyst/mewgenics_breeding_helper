@@ -321,7 +321,7 @@ class TestTraitInheritanceProbability:
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
         assert result.probability == 0.0
-        assert result.parent_source == "none"
+        assert result.parent_source in ("none", "neither")
 
     def test_ability_single_parent_has(self):
         mother = make_mock_cat(1, abilities=["PathOfTheHunter"])

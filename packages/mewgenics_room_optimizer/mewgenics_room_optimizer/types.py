@@ -52,16 +52,15 @@ class OptimizationParams:
     """Optimizer configuration."""
 
     min_stats: int = 0
-    max_risk: float = 0.2  # Maximum combined malady probability (0.0-1.0)
-    minimize_variance: bool = True
+    max_risk: float = 0.2
     avoid_lovers: bool = True
-    prefer_low_aggression: bool = True
-    prefer_high_libido: bool = True
-    prefer_high_charisma: bool = True
     stimulation: float = 50.0
     planner_traits: list[TraitRequirement] = field(default_factory=list)
     gay_flags: dict[int, bool] = field(default_factory=dict)
-    scoring_prefs: ScoringPreferences | None = None  # Optional SA scoring preferences
+    scoring_prefs: ScoringPreferences | None = None
+    sa_temperature: float = 100.0
+    sa_cooling_rate: float = 0.95
+    sa_neighbors_per_temp: int = 200
 
 
 @dataclass

@@ -128,12 +128,7 @@ def score_pair(
     if not skip_risk_check and factors.combined_malady_chance > params.max_risk:
         return None
 
-    scoring_prefs = ScoringPreferences(
-        minimize_variance=params.minimize_variance,
-        prefer_low_aggression=params.prefer_low_aggression,
-        prefer_high_libido=params.prefer_high_libido,
-        prefer_high_charisma=params.prefer_high_charisma,
-    )
+    scoring_prefs = params.scoring_prefs or ScoringPreferences()
     quality = calculate_pair_quality(factors, scoring_prefs)
 
     return ScoredPair(
@@ -152,7 +147,7 @@ def _calculate_quality(factors, params: OptimizationParams) -> float:
     risk_factor = 1.0 - factors.combined_malady_chance / 2.0
 
     variance_penalty = 0.0
-    if params.minimize_variance:
+    if True:
         for diff in [
             abs(a - b)
             for a, b in zip(factors.expected_stats[:3], factors.expected_stats[3:])
@@ -161,11 +156,11 @@ def _calculate_quality(factors, params: OptimizationParams) -> float:
                 variance_penalty += diff * 2.0
 
     personality_bonus = 0.0
-    if params.prefer_low_aggression:
+    if True:
         personality_bonus += factors.aggression_factor * 2.5
-    if params.prefer_high_libido:
+    if True:
         personality_bonus += factors.libido_factor * 2.5
-    if params.prefer_high_charisma:
+    if True:
         personality_bonus += factors.charisma_factor * 2.5
 
     trait_bonus = sum(t.weight for t in factors.trait_matches) * 5.0
@@ -318,10 +313,10 @@ def _run_sa_worker(
     if seed is not None:
         random.seed(seed)
 
-    T = 100.0
+    T = params.sa_temperature
     T_min = 0.1
-    cooling_rate = 0.95
-    neighbors_per_temp = 200
+    cooling_rate = params.sa_cooling_rate
+    neighbors_per_temp = params.sa_neighbors_per_temp
 
     current_state = initial_state.copy()
     current_score = _evaluate_state(
@@ -535,212 +530,6 @@ def _build_results_from_state_dict(
                     cats=cats_in_room,
                     pairs=pairs_in_room,
                     eternal_youth_cats=[],
-                )
-            )
-
-            if config.room_type == RoomType.BREEDING:
-                breeding_rooms_used += 1
-            elif config.room_type == RoomType.GENERAL:
-                general_rooms_used += 1
-
-            total_pairs += len(pairs_in_room)
-            for p in pairs_in_room:
-                total_pair_quality += p.quality
-                total_risk += p.factors.combined_malady_chance * 100
-
-    avg_quality = total_pair_quality / total_pairs if total_pairs > 0 else 0.0
-    avg_risk = total_risk / total_pairs if total_pairs > 0 else 0.0
-
-    stats = OptimizationStats(
-        total_cats=len(filtered_cats),
-        assigned_cats=len(filtered_cats) - len(excluded),
-        total_pairs=total_pairs,
-        breeding_rooms_used=breeding_rooms_used,
-        general_rooms_used=general_rooms_used,
-        avg_pair_quality=avg_quality,
-        avg_risk_percent=avg_risk,
-    )
-
-    return OptimizationResult(
-        rooms=room_results,
-        excluded_cats=excluded,
-        stats=stats,
-    )
-
-
-def optimize(
-    cats: list[Cat],
-    room_configs: list[RoomConfig],
-    params: OptimizationParams,
-    ancestor_contribs: dict[int, dict[int, AncestorData]],
-) -> OptimizationResult:
-    """Main optimization entry point using Seed and Pull algorithm."""
-
-    filtered_cats = _filter_cats(cats, params.min_stats)
-
-    # Separate cats
-    eternal_youth_cats = [c for c in filtered_cats if _has_eternalyouth(c)]
-    breeding_cats = [c for c in filtered_cats if not _has_eternalyouth(c)]
-
-    # Setup room lists
-    breeding_rooms = [r for r in room_configs if r.room_type == RoomType.BREEDING]
-    general_rooms = [r for r in room_configs if r.room_type == RoomType.GENERAL]
-    fighting_rooms = [r for r in room_configs if r.room_type == RoomType.FIGHTING]
-
-    room_assignments: dict[str, list[Cat]] = {r.key: [] for r in room_configs}
-    room_pairs: dict[str, list[ScoredPair]] = {r.key: [] for r in room_configs}
-    room_eternal_youth: dict[str, list[Cat]] = {r.key: [] for r in room_configs}
-    cat_locations: dict[int, str] = {}  # Track which room each cat is in
-    assigned_cats: set[int] = set()
-
-    # --- PHASE 1: EY BUFF PLACEMENT ---
-    # Put all EY cats into the single best breeding room (highest base_stim)
-    if breeding_rooms and eternal_youth_cats:
-        best_breeding_room = max(breeding_rooms, key=lambda r: r.base_stim)
-        for ey_cat in eternal_youth_cats:
-            room_eternal_youth[best_breeding_room.key].append(ey_cat)
-            assigned_cats.add(ey_cat.db_key)
-            cat_locations[ey_cat.db_key] = best_breeding_room.key
-
-    # Calculate True Stimulation for all breeding rooms
-    room_true_stim: dict[str, float] = {}
-    for room in breeding_rooms:
-        room_true_stim[room.key] = _calculate_true_stim(
-            room, room_eternal_youth[room.key]
-        )
-
-    # --- PHASE 2: SCORE ALL PAIRS ---
-    pairs = _generate_pairs(breeding_cats)
-
-    # Score all pairs using baseline stimulation (50.0)
-    temp_params = replace(params, stimulation=50.0)
-
-    scored_pairs: list[ScoredPair] = []
-    for cat_a, cat_b in pairs:
-        scored = score_pair(cat_a, cat_b, ancestor_contribs, temp_params)
-        if scored is not None:
-            scored_pairs.append(scored)
-
-    # Sort pairs from highest quality to lowest
-    scored_pairs.sort(key=lambda p: p.quality, reverse=True)
-
-    # --- PHASE 3: SEED & PULL ---
-    # Sort rooms from highest True Stimulation to lowest
-    breeding_rooms.sort(key=lambda r: room_true_stim[r.key], reverse=True)
-
-    for pair in scored_pairs:
-        loc_a = cat_locations.get(pair.cat_a.db_key)
-        loc_b = cat_locations.get(pair.cat_b.db_key)
-
-        # CASE 1: Both unassigned -> SEED
-        if loc_a is None and loc_b is None:
-            for room in breeding_rooms:
-                current_cats = room_assignments[room.key]
-                if not _can_fit_pair(room, len(current_cats)):
-                    continue
-                if not _passes_throughput_cap(room, current_cats, pair.cat_a):
-                    continue
-                temp_cats = current_cats + [pair.cat_a]
-                if not _passes_throughput_cap(room, temp_cats, pair.cat_b):
-                    continue
-
-                # Place both cats
-                room_assignments[room.key].extend([pair.cat_a, pair.cat_b])
-                cat_locations[pair.cat_a.db_key] = room.key
-                cat_locations[pair.cat_b.db_key] = room.key
-                assigned_cats.update([pair.cat_a.db_key, pair.cat_b.db_key])
-                break
-
-        # CASE 2: A assigned, B unassigned -> PULL B
-        elif loc_a is not None and loc_b is None:
-            room = next((r for r in breeding_rooms if r.key == loc_a), None)
-            if room:
-                current_cats = room_assignments[room.key]
-                if _can_fit_single(room, len(current_cats)) and _passes_throughput_cap(
-                    room, current_cats, pair.cat_b
-                ):
-                    room_assignments[room.key].append(pair.cat_b)
-                    cat_locations[pair.cat_b.db_key] = room.key
-                    assigned_cats.add(pair.cat_b.db_key)
-
-        # CASE 3: B assigned, A unassigned -> PULL A
-        elif loc_b is not None and loc_a is None:
-            room = next((r for r in breeding_rooms if r.key == loc_b), None)
-            if room:
-                current_cats = room_assignments[room.key]
-                if _can_fit_single(room, len(current_cats)) and _passes_throughput_cap(
-                    room, current_cats, pair.cat_a
-                ):
-                    room_assignments[room.key].append(pair.cat_a)
-                    cat_locations[pair.cat_a.db_key] = room.key
-                    assigned_cats.add(pair.cat_a.db_key)
-
-        # CASE 4: Both in different rooms -> SKIP (do nothing)
-
-    # --- PHASE 4: UNMATCHED CATS ---
-    unassigned = [c for c in filtered_cats if c.db_key not in assigned_cats]
-
-    # Trait cats go to general rooms
-    trait_cats = [c for c in unassigned if _has_planner_trait(c, params)]
-    for cat in trait_cats:
-        for room in general_rooms:
-            current_count = len(room_assignments[room.key])
-            if _can_fit_single(room, current_count):
-                room_assignments[room.key].append(cat)
-                assigned_cats.add(cat.db_key)
-                break
-
-    # Non-trait cats go to fighting rooms + general rooms
-    remaining = [c for c in unassigned if c.db_key not in assigned_cats]
-    for cat in remaining:
-        for room in fighting_rooms + general_rooms:
-            current_count = len(room_assignments[room.key])
-            if _can_fit_single(room, current_count):
-                room_assignments[room.key].append(cat)
-                assigned_cats.add(cat.db_key)
-                break
-
-    # --- PHASE 5: CROSS-PRODUCT RESCORING ---
-    # For each breeding room, re-score pairs using TRUE stimulation
-    for room in breeding_rooms:
-        cats_in_room = room_assignments[room.key]
-        if len(cats_in_room) < 2:
-            continue
-
-        # Generate all pairs from cats in this room
-        room_pairs_list = _generate_pairs(cats_in_room)
-
-        # Re-score using TRUE stimulation for this room
-        true_stim = room_true_stim[room.key]
-        actual_params = replace(params, stimulation=true_stim)
-
-        for cat_a, cat_b in room_pairs_list:
-            scored = score_pair(cat_a, cat_b, ancestor_contribs, actual_params)
-            if scored is not None:
-                room_pairs[room.key].append(scored)
-
-    excluded = [c for c in filtered_cats if c.db_key not in assigned_cats]
-
-    # --- BUILD RESULTS ---
-    room_results: list[RoomAssignment] = []
-    breeding_rooms_used = 0
-    general_rooms_used = 0
-    total_pair_quality = 0.0
-    total_risk = 0.0
-    total_pairs = 0
-
-    for config in room_configs:
-        cats_in_room = room_assignments[config.key]
-        pairs_in_room = room_pairs[config.key]
-        ey_cats_in_room = room_eternal_youth[config.key]
-
-        if cats_in_room or pairs_in_room or ey_cats_in_room:
-            room_results.append(
-                RoomAssignment(
-                    room=config,
-                    cats=cats_in_room,
-                    pairs=pairs_in_room,
-                    eternal_youth_cats=ey_cats_in_room,
                 )
             )
 
