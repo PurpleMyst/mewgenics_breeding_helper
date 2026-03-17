@@ -362,6 +362,16 @@ class TestSnapshotResults:
                     room_type=RoomType.GENERAL,
                     max_cats=6,
                 ),
+                RoomConfig(
+                    key="Floor2_Large",
+                    display_name="Second Floor Left",
+                    room_type=RoomType.NONE,
+                ),
+                RoomConfig(
+                    key="Floor2_Small",
+                    display_name="Second Floor Right",
+                    room_type=RoomType.NONE,
+                ),
             ]
         )
 
