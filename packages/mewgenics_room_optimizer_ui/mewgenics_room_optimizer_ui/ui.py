@@ -641,11 +641,10 @@ def update_all_cats_table(
         else:
             location_color = (255, 100, 100, 255)  # Red - wrong room
 
-        # Get individual stats
-        stats = cat.stat_base
+        # Get individual stats from total_stats dict
+        stats = cat.total_stats
         stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
         stat_values = [stats.get(s, 0) for s in stat_order]
-        total_stats = sum(stat_values)
 
         has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
         trait_badge = "[*] " if has_fav else ""
@@ -1294,7 +1293,7 @@ def build_details_tabs(selected_room, state):
                     cat_name = cat.name or "Unnamed"
                     if is_ey:
                         cat_name = f"{cat_name} [EY]"
-                    total_stats = sum(cat.stat_base.values())
+                    total_stats = sum(cat.total_stats.values())
                     age = cat.age if cat.age is not None else "-"
 
                     # Get assigned room and determine location color
@@ -1307,8 +1306,8 @@ def build_details_tabs(selected_room, state):
                     else:
                         location_color = (255, 100, 100, 255)  # Red - wrong room
 
-                    # Get individual stats
-                    stats = cat.stat_base
+                    # Get individual stats from total_stats dict
+                    stats = cat.total_stats
                     stat_order = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
                     stat_values = [stats.get(s, 0) for s in stat_order]
 
@@ -1385,7 +1384,7 @@ def build_details_tabs(selected_room, state):
                         cat = item["cat"]
                         has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
                         trait_badge = "[*] " if has_fav else ""
-                        total = sum(cat.stat_base.values())
+                        total = sum(cat.total_stats.values())
 
                         with dpg.table_row():
                             dpg.add_text(cat.name or "Unnamed")
