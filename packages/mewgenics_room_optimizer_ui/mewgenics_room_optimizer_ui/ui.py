@@ -590,7 +590,6 @@ def update_all_cats_table(
     if children and 1 in children:
         for row in children[1]:  # type: ignore[iterable]
             dpg.delete_item(row)
-            dpg.delete_item(row)
 
     show_all = dpg.get_value("show_all_cats")
     cats = state.cats if show_all else state.alive_cats
@@ -1524,12 +1523,20 @@ def show_pair_detail_window(pair, state):
                         )
                         dpg.add_text(prob_result.parent_source)
 
-            hits = len(pair.factors.trait_matches)
-            total = len(state.planner_traits)
-            dpg.add_text(
-                f"[* {hits}/{total} Favorable Traits Inherited]",
-                color=(100, 255, 100, 255),
+            hits = sum(1 for p in pair.factors.trait_probabilities if p.probability > 0)
+            ev = (
+                sum(
+                    p.probability * p.trait.weight
+                    for p in pair.factors.trait_probabilities
+                )
+                * 5.0
             )
+            total = len(state.planner_traits)
+            if ev >= 1:
+                dpg.add_text(
+                    f"[* EV: {ev:.2f} from {hits}/{total} traits]",
+                    color=(100, 255, 100, 255),
+                )
         else:
             dpg.add_text("No favorable traits configured", color=(150, 150, 150, 255))
 
