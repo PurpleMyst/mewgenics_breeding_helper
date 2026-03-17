@@ -21,26 +21,24 @@ class AncestorData:
 def _ancestor_contributions(cat: Cat | None) -> dict[int, AncestorData]:
     """
     Compute Σ(0.5^depth) and track minimum depth for each ancestor of cat.
-    Returns dict of id(cat) -> AncestorData.
+    Returns dict of db_key -> AncestorData.
     """
     if cat is None:
         return {}
 
     contribs: dict[int, AncestorData] = {}
-    # Stack stores: (Node, Depth, Probability)
     stack: list[tuple[Cat, int, float]] = [(cat, 0, 1.0)]
 
     while stack:
         node, depth, prob = stack.pop()
-        node_id = id(node)
+        node_key = node.db_key
 
-        # Aggregate probabilities and keep the shortest path depth
-        if node_id in contribs:
-            existing = contribs[node_id]
+        if node_key in contribs:
+            existing = contribs[node_key]
             existing.prob += prob
             existing.min_depth = min(existing.min_depth, depth)
         else:
-            contribs[node_id] = AncestorData(node, prob, depth)
+            contribs[node_key] = AncestorData(node, prob, depth)
 
         if depth >= MAX_DEPTH:
             continue
@@ -59,44 +57,41 @@ def _ancestor_contributions(cat: Cat | None) -> dict[int, AncestorData]:
 def build_ancestor_contribs(cats: list[Cat]) -> dict[int, dict[int, AncestorData]]:
     """
     Batch compute ancestor contributions for all cats.
-    Returns dict[db_key, dict[id(cat), AncestorData]].
+    Returns dict[db_key, dict[db_key, AncestorData]].
     """
     ordered = sorted(cats, key=lambda c: c.generation)
     memo: dict[int, dict[int, AncestorData]] = {}
     result: dict[int, dict[int, AncestorData]] = {}
 
     for cat in ordered:
-        # Initialize the contribution dictionary with the cat itself
-        contribs: dict[int, AncestorData] = {id(cat): AncestorData(cat, 1.0, 0)}
+        contribs: dict[int, AncestorData] = {cat.db_key: AncestorData(cat, 1.0, 0)}
 
         for parent in (cat.parent_a, cat.parent_b):
             if parent is None:
                 continue
 
-            parent_id = id(parent)
-            pc = memo.get(parent_id)
+            parent_key = parent.db_key
+            pc = memo.get(parent_key)
 
-            # If parent isn't memoized yet, compute it (fallback for safety)
             if pc is None:
                 pc = _ancestor_contributions(parent)
-                memo[parent_id] = pc
+                memo[parent_key] = pc
 
-            # Merge parent's ancestors into the current cat's ancestors
-            for anc_id, anc_data in pc.items():
+            for anc_key, anc_data in pc.items():
                 new_prob = anc_data.prob * 0.5
                 new_depth = anc_data.min_depth + 1
 
                 if new_prob < MIN_CONTRIB:
                     continue
 
-                if anc_id in contribs:
-                    existing = contribs[anc_id]
+                if anc_key in contribs:
+                    existing = contribs[anc_key]
                     existing.prob += new_prob
                     existing.min_depth = min(existing.min_depth, new_depth)
                 else:
-                    contribs[anc_id] = AncestorData(anc_data.cat, new_prob, new_depth)
+                    contribs[anc_key] = AncestorData(anc_data.cat, new_prob, new_depth)
 
-        memo[id(cat)] = contribs
+        memo[cat.db_key] = contribs
         result[cat.db_key] = contribs
 
     return result

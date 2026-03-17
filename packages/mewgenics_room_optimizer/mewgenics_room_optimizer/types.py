@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from mewgenics_parser import Cat
-from mewgenics_scorer import PairFactors, TraitRequirement
+from mewgenics_scorer import PairFactors, ScoringPreferences, TraitRequirement
 
 
 class RoomType(Enum):
@@ -61,6 +61,7 @@ class OptimizationParams:
     stimulation: float = 50.0
     planner_traits: list[TraitRequirement] = field(default_factory=list)
     gay_flags: dict[int, bool] = field(default_factory=dict)
+    scoring_prefs: ScoringPreferences | None = None  # Optional SA scoring preferences
 
 
 @dataclass

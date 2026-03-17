@@ -4,6 +4,7 @@ from .factors import (
     PairFactors,
     TraitInheritanceProbability,
     calculate_pair_factors,
+    calculate_pair_quality,
     calculate_trait_probability,
     expected_stats,
     stat_variance,
@@ -26,12 +27,13 @@ from .compatibility import (
     is_lover_conflict,
     is_mutual_lovers,
 )
-from .types import TraitRequirement
+from .types import TraitRequirement, ScoringPreferences
 
 __all__ = [
     "PairFactors",
     "TraitInheritanceProbability",
     "calculate_pair_factors",
+    "calculate_pair_quality",
     "calculate_trait_probability",
     "expected_stats",
     "stat_variance",
@@ -49,5 +51,6 @@ __all__ = [
     "is_lover_conflict",
     "is_mutual_lovers",
     "TraitRequirement",
+    "ScoringPreferences",
     "DEFAULT_STIMULATION",
 ]

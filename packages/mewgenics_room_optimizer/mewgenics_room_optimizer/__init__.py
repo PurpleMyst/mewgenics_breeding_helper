@@ -10,7 +10,7 @@ from .types import (
     OptimizationStats,
     DEFAULT_ROOM_CONFIGS,
 )
-from .optimizer import optimize, score_pair, can_pair_gay
+from .optimizer import optimize, optimize_sa, score_pair, can_pair_gay
 
 __all__ = [
     "RoomType",
@@ -22,6 +22,7 @@ __all__ = [
     "OptimizationStats",
     "DEFAULT_ROOM_CONFIGS",
     "optimize",
+    "optimize_sa",
     "score_pair",
     "can_pair_gay",
 ]

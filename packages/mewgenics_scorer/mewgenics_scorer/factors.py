@@ -11,7 +11,7 @@ from mewgenics_parser.trait_dictionary import (
     SKILLSHARE_PLUS_ID,
 )
 
-from .types import TraitRequirement
+from .types import TraitRequirement, ScoringPreferences
 from .compatibility import (
     can_breed,
     is_hater_conflict,
@@ -96,7 +96,7 @@ class PairFactors:
     libido_factor: float
     charisma_factor: float
 
-    trait_matches: list[TraitRequirement]
+    trait_probabilities: list[TraitInheritanceProbability]
 
     @property
     def combined_malady_chance(self) -> float:
@@ -420,6 +420,11 @@ def calculate_pair_factors(
 
     exp_stats = expected_stats(a, b, stimulation)
 
+    trait_probs = [
+        calculate_trait_probability(trait, a, b, stimulation)
+        for trait in (planner_traits or [])
+    ]
+
     return PairFactors(
         can_breed=can_breed(a, b),
         hater_conflict=is_hater_conflict(a, b),
@@ -433,5 +438,39 @@ def calculate_pair_factors(
         aggression_factor=aggression_factor(a, b),
         libido_factor=libido_factor(a, b),
         charisma_factor=charisma_factor(a, b),
-        trait_matches=trait_coverage(a, b, planner_traits or []),
+        trait_probabilities=trait_probs,
+    )
+
+
+def calculate_pair_quality(factors: PairFactors, prefs: ScoringPreferences) -> float:
+    """Calculate quality score from pair factors using Expected Value math."""
+    avg_stats = factors.total_expected_stats / 7.0
+    risk_factor = 1.0 - factors.combined_malady_chance / 2.0
+
+    variance_penalty = 0.0
+    if prefs.minimize_variance:
+        for diff in [
+            abs(a - b)
+            for a, b in zip(factors.expected_stats[:3], factors.expected_stats[3:])
+        ]:
+            if diff > 2:
+                variance_penalty += (diff**2) * 0.5
+
+    personality_bonus = 0.0
+    if prefs.prefer_low_aggression:
+        personality_bonus += factors.aggression_factor * 2.5
+    if prefs.prefer_high_libido:
+        personality_bonus += factors.libido_factor * 2.5
+    if prefs.prefer_high_charisma:
+        personality_bonus += factors.charisma_factor * 2.5
+
+    trait_bonus = (
+        sum(p.probability * p.trait.weight for p in factors.trait_probabilities) * 5.0
+    )
+
+    return (
+        (avg_stats + risk_factor * 20)
+        - variance_penalty
+        + personality_bonus
+        + trait_bonus
     )
