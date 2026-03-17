@@ -11,7 +11,10 @@ A Python-based tool for optimizing breeding operations in the game Mewgenics. Fe
 - **Room Optimization**: Algorithm for optimal cat placement across breeding, general, and fighting rooms
 - **Seed & Pull Algorithm**: Multi-partner breeding support with throughput caps (prevents gender imbalance)
 - **EY Support**: Eternal Youth cats treated as free room buffs (+1 stim each, 0 capacity cost)
-- **Risk Assessment**: Inbreeding risk calculation with configurable thresholds
+- **Risk Assessment**: Game-accurate inbreeding risk calculation with configurable thresholds
+  - **Disorder Chance**: Probability of birth defect disorder (base 2% + CoI penalty)
+  - **Part Defect Chance**: Probability of mutated part defects (1.5 × CoI)
+  - **Combined Malady**: Union probability of any birth defect
 - **Trait Planning**: Mark favorable traits for targeted breeding
 - **Lover/Hater Tracking**: Visual display of relationships in cat inspector
 - **Gay Marking**: Same-sex breeding preference support
@@ -97,7 +100,7 @@ The application will look for `resources.gpak` in:
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | Min Stats | Minimum total base stats for breeding candidates | 0 |
-| Max Risk % | Maximum inbreeding risk allowed (0-100) | 20.0 |
+| Max Risk % | Maximum combined malady probability allowed (0-100, stored as 0.0-1.0) | 20 |
 | Minimize Variance | Prioritize pairs with similar stats for consistent offspring | On |
 | Avoid Lovers | Exclude mutual lover pairs from breeding | On |
 | Prefer High Libido | Favor high libido cats for faster breeding cycles | On |
@@ -146,7 +149,7 @@ The third tab in Room Details lets you test any breeding combination:
 2. Select Parent B from dropdown
 3. View results:
    - Expected Quality score
-   - Risk %
+   - Risk breakdown: Disorder %, Part Defect %, Combined %
    - Badges (Lovers, Libido, Aggression, Inbred, Favorable Traits)
 
 ## Troubleshooting
