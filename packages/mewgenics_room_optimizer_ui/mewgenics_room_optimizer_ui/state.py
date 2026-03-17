@@ -13,6 +13,7 @@ from mewgenics_room_optimizer import (
     RoomType,
     DEFAULT_ROOM_CONFIGS,
 )
+from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer import TraitRequirement
 
 
@@ -153,6 +154,8 @@ class AppState:
 
     sim_cat_a_key: int | None = None
     sim_cat_b_key: int | None = None
+    selected_pair: ScoredPair | None = None
+    selected_pair_index: int | None = None
 
     is_loading: bool = False
 

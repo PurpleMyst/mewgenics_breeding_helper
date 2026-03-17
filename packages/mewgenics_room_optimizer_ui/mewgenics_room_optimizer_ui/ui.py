@@ -703,11 +703,24 @@ def build_all_cats_tab(state: AppState):
 
 
 def build_inspector_section(state: AppState):
-    """Build the inspector panel."""
+    """Build the inspector panel with tabs for cat and pair inspection."""
     with dpg.collapsing_header(label="Inspector", default_open=True):
         with dpg.child_window(border=True, tag="inspector_section"):
-            dpg.add_text("Select a cat to inspect", tag="inspector_placeholder")
+            dpg.add_text("Select a cat or pair to inspect", tag="inspector_placeholder")
             dpg.add_group(tag="inspector_container")
+            dpg.add_tab_bar(tag="inspector_tab_bar")
+            with dpg.tab(
+                label="Cat", parent="inspector_tab_bar", tag="inspector_cat_tab"
+            ):
+                pass
+            with dpg.tab(
+                label="Pair", parent="inspector_tab_bar", tag="inspector_pair_tab"
+            ):
+                dpg.add_text(
+                    "Select a pair to view trait inheritance probabilities",
+                    tag="inspector_pair_placeholder",
+                )
+                dpg.add_group(tag="inspector_pair_container")
 
 
 def build_themes():
@@ -939,7 +952,7 @@ def update_results_table(results, state):
     """Update the results table with optimization results."""
     clear_results_table()
     clear_details_section()
-    clear_inspector()
+    clear_inspector(state)
     dpg.hide_item("results_placeholder")
 
     for i, room in enumerate(results.rooms):
@@ -999,13 +1012,22 @@ def clear_details_section():
                 dpg.delete_item(child)
 
 
-def clear_inspector():
+def clear_inspector(state: AppState | None = None):
     """Clear the inspector panel and show placeholder."""
     container = "inspector_container"
     if dpg.does_item_exist(container):
         dpg.delete_item(container, children_only=True)
     dpg.show_item("inspector_placeholder")
     dpg.hide_item(container)
+
+    pair_container = "inspector_pair_container"
+    if dpg.does_item_exist(pair_container):
+        dpg.delete_item(pair_container, children_only=True)
+    dpg.show_item("inspector_pair_placeholder")
+
+    if state is not None:
+        state.selected_pair = None
+        state.selected_pair_index = None
 
 
 def on_all_cats_cat_selected(sender, app_data, user_data):
@@ -1049,7 +1071,7 @@ def on_room_selected(sender, app_data, user_data):
     state.sim_cat_b_key = None
 
     # Clear inspector when room is selected
-    clear_inspector()
+    clear_inspector(state)
 
     if not state.results:
         return
@@ -1065,6 +1087,26 @@ def on_room_selected(sender, app_data, user_data):
 
     clear_details_section()
     build_details_tabs(selected_room, state)
+
+
+def on_pair_selected(sender, app_data, user_data):
+    """Handle pair selection with radio behavior - only one pair selected at a time."""
+    pair_index, pair, state = user_data
+
+    if state.selected_pair_index is not None:
+        old_item = f"pair_selectable_{state.selected_pair_index}"
+        if dpg.does_item_exist(old_item):
+            dpg.set_value(old_item, False)
+
+    state.selected_pair_index = pair_index
+    state.selected_pair = pair
+
+    dpg.set_value(sender, True)
+
+    if dpg.does_item_exist("inspector_tab_bar"):
+        dpg.set_value("inspector_pair_tab", True)
+
+    show_pair_detail_window(pair, state)
 
 
 def build_details_tabs(selected_room, state):
@@ -1084,7 +1126,7 @@ def build_details_tabs(selected_room, state):
                 dpg.add_table_column(label="Risk", width_fixed=True)
                 dpg.add_table_column(label="Badges", width_stretch=True)
 
-                for pair in selected_room.pairs:
+                for i, pair in enumerate(selected_room.pairs):
                     name_a = pair.cat_a.name or "Unnamed"
                     name_b = pair.cat_b.name or "Unnamed"
                     disorder = pair.factors.expected_disorder_chance * 100
@@ -1110,7 +1152,12 @@ def build_details_tabs(selected_room, state):
                     total = len(state.planner_traits)
 
                     with dpg.table_row():
-                        dpg.add_text(f"{name_a} + {name_b}")
+                        dpg.add_selectable(
+                            label=f"{name_a} + {name_b}",
+                            callback=on_pair_selected,
+                            user_data=(i, pair, state),
+                            tag=f"pair_selectable_{i}",
+                        )
                         dpg.add_text(f"{pair.quality:.1f}")
                         dpg.add_text(
                             f"D:{disorder:.0f}% P:{part_defect:.0f}% C:{combined:.0f}%",
@@ -1229,6 +1276,88 @@ def build_details_tabs(selected_room, state):
             dpg.add_group(tag="sandbox_results_container")
 
 
+def show_pair_detail_window(pair, state):
+    """Show pair details in the inspector panel with trait inheritance probabilities."""
+    from mewgenics_scorer import calculate_trait_probability
+
+    container = "inspector_pair_container"
+    if not dpg.does_item_exist(container):
+        return
+
+    dpg.hide_item("inspector_pair_placeholder")
+    dpg.show_item(container)
+
+    dpg.delete_item(container, children_only=True)
+
+    with dpg.group(parent=container):
+        name_a = pair.cat_a.name or "Unnamed"
+        name_b = pair.cat_b.name or "Unnamed"
+        dpg.add_text(f"Pair: {name_a} + {name_b}", tag="pair_names")
+
+        disorder = pair.factors.expected_disorder_chance * 100
+        part_defect = pair.factors.expected_part_defect_chance * 100
+        combined = pair.factors.combined_malady_chance * 100
+        risk_color = (255, 100, 100, 255) if combined > 15 else (100, 255, 100, 255)
+
+        dpg.add_text(
+            f"Quality: {pair.quality:.1f} | Disorder: {disorder:.0f}% | Part Defect: {part_defect:.0f}% | Combined: {combined:.0f}%",
+            color=risk_color,
+        )
+
+        if state.planner_traits:
+            mother = pair.cat_a if pair.cat_a.gender.lower() == "female" else pair.cat_b
+            father = pair.cat_b if pair.cat_a.gender.lower() == "female" else pair.cat_a
+
+            stimulation = 50.0
+            for rc in state.room_configs:
+                if rc.room_type.value == "breeding":
+                    stimulation = rc.base_stim
+                    break
+
+            dpg.add_separator()
+            dpg.add_text("Trait Inheritance Probabilities:")
+
+            with dpg.table(
+                tag="pair_trait_prob_table",
+                header_row=True,
+                borders_innerH=True,
+                row_background=True,
+            ):
+                dpg.add_table_column(label="Trait", width_stretch=True)
+                dpg.add_table_column(label="Type", width_fixed=80)
+                dpg.add_table_column(label="Probability", width_fixed=90)
+                dpg.add_table_column(label="Source", width_stretch=True)
+
+                for trait in state.planner_traits:
+                    prob_result = calculate_trait_probability(
+                        trait, mother, father, stimulation
+                    )
+
+                    if prob_result.probability >= 0.5:
+                        color = (100, 255, 100, 255)
+                    elif prob_result.probability >= 0.25:
+                        color = (255, 200, 100, 255)
+                    else:
+                        color = (255, 100, 100, 255)
+
+                    with dpg.table_row():
+                        dpg.add_text(trait.key)
+                        dpg.add_text(trait.category)
+                        dpg.add_text(
+                            f"{prob_result.probability * 100:.1f}%", color=color
+                        )
+                        dpg.add_text(prob_result.parent_source)
+
+            hits = len(pair.factors.trait_matches)
+            total = len(state.planner_traits)
+            dpg.add_text(
+                f"[* {hits}/{total} Favorable Traits Inherited]",
+                color=(100, 255, 100, 255),
+            )
+        else:
+            dpg.add_text("No favorable traits configured", color=(150, 150, 150, 255))
+
+
 def on_cat_selected(sender, app_data, user_data):
     """Handle cat selection - show detail window with radio behavior."""
     cat, state = user_data
@@ -1253,6 +1382,9 @@ def show_cat_detail_window(cat, state):
     container = "inspector_container"
     if not dpg.does_item_exist(container):
         return
+
+    if dpg.does_item_exist("inspector_tab_bar"):
+        dpg.set_value("inspector_cat_tab", True)
 
     dpg.hide_item("inspector_placeholder")
     dpg.show_item(container)
@@ -1473,6 +1605,11 @@ def on_sandbox_changed(sender, app_data, user_data):
         if not pair_result:
             dpg.add_text("Could not score this pair.", color=(255, 100, 100, 255))
             return
+
+        if dpg.does_item_exist("inspector_tab_bar"):
+            dpg.set_value("inspector_pair_tab", True)
+
+        show_pair_detail_window(pair_result, state)
 
         disorder = pair_result.factors.expected_disorder_chance * 100
         part_defect = pair_result.factors.expected_part_defect_chance * 100
