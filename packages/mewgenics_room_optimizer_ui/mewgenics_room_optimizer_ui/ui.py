@@ -1,7 +1,6 @@
 """DearPyGui UI components for room optimizer."""
 
 import dearpygui.dearpygui as dpg
-
 from mewgenics_room_optimizer import RoomType
 
 from .state import AppState
@@ -499,7 +498,7 @@ def update_traits_display(state: AppState):
     for i, trait in enumerate(state.planner_traits):
         with dpg.group(horizontal=True, parent=container):
             trait_text = dpg.add_text(
-                    f"[{int(trait.weight):2}] {trait.category}: {trait.key}"
+                f"[{int(trait.weight):2}] {trait.category}: {trait.key}"
             )
             desc = state.game_data.ability_descriptions.get(
                 trait.key.lower(), "No description"
@@ -708,13 +707,14 @@ def build_inspector_section(state: AppState):
     """Build the inspector panel with tabs for cat and pair inspection."""
     with dpg.collapsing_header(label="Inspector", default_open=True):
         with dpg.child_window(border=True, tag="inspector_section"):
-            dpg.add_text("Select a cat or pair to inspect", tag="inspector_placeholder")
-            dpg.add_group(tag="inspector_container")
             dpg.add_tab_bar(tag="inspector_tab_bar")
+
             with dpg.tab(
                 label="Cat", parent="inspector_tab_bar", tag="inspector_cat_tab"
             ):
-                pass
+                dpg.add_text("Select a cat to inspect", tag="inspector_placeholder")
+                dpg.add_group(tag="inspector_container")
+
             with dpg.tab(
                 label="Pair", parent="inspector_tab_bar", tag="inspector_pair_tab"
             ):
@@ -1106,7 +1106,7 @@ def on_pair_selected(sender, app_data, user_data):
     dpg.set_value(sender, True)
 
     if dpg.does_item_exist("inspector_tab_bar"):
-        dpg.set_value("inspector_pair_tab", True)
+        dpg.set_value("inspector_tab_bar", "inspector_pair_tab")
 
     show_pair_detail_window(pair, state)
 
@@ -1390,7 +1390,7 @@ def show_cat_detail_window(cat, state):
         return
 
     if dpg.does_item_exist("inspector_tab_bar"):
-        dpg.set_value("inspector_cat_tab", True)
+        dpg.set_value("inspector_tab_bar", "inspector_cat_tab")
 
     dpg.hide_item("inspector_placeholder")
     dpg.show_item(container)
@@ -1508,14 +1508,15 @@ def show_cat_detail_window(cat, state):
 def on_sandbox_changed(sender, app_data, user_data):
     """Handle sandbox dropdown changes."""
     import re
+
+    from mewgenics_room_optimizer import can_pair_gay, score_pair
+    from mewgenics_room_optimizer.types import OptimizationParams
     from mewgenics_scorer import (
+        build_ancestor_contribs,
         can_breed,
         is_hater_conflict,
         is_lover_conflict,
-        build_ancestor_contribs,
     )
-    from mewgenics_room_optimizer import score_pair, can_pair_gay
-    from mewgenics_room_optimizer.types import OptimizationParams
 
     selected_room, state, parent_slot = user_data
     container = "sandbox_results_container"
@@ -1577,15 +1578,13 @@ def on_sandbox_changed(sender, app_data, user_data):
 
         is_a_gay = state.gay_flags.get(cat_a.db_key, False)
         is_b_gay = state.gay_flags.get(cat_b.db_key, False)
-        if is_a_gay and cat_b.gender.lower() != "female":
+        if (
+            (is_a_gay or is_b_gay)
+            and cat_a.gender.lower() != "?"
+            and cat_b.gender.lower() != "?"
+        ):
             dpg.add_text(
-                "Gay cat can only breed with female partners.",
-                color=(255, 100, 100, 255),
-            )
-            return
-        if is_b_gay and cat_a.gender.lower() != "female":
-            dpg.add_text(
-                "Gay cat can only breed with female partners.",
+                "Gay conflict - one or both cats have same-sex breeding preference but neither is genderless.",
                 color=(255, 100, 100, 255),
             )
             return
@@ -1613,7 +1612,7 @@ def on_sandbox_changed(sender, app_data, user_data):
             return
 
         if dpg.does_item_exist("inspector_tab_bar"):
-            dpg.set_value("inspector_pair_tab", True)
+            dpg.set_value("inspector_tab_bar", "inspector_pair_tab")
 
         show_pair_detail_window(pair_result, state)
 

@@ -33,13 +33,9 @@ def can_pair_gay(cat_a: Cat, cat_b: Cat, gay_flags: dict[int, bool]) -> bool:
 
     if not is_a_gay and not is_b_gay:
         return True
+    
+    return (not (is_a_gay or is_b_gay)) or "?" in {cat_a.gender, cat_b.gender}
 
-    if is_a_gay and cat_b.gender.lower() != "female":
-        return False
-    if is_b_gay and cat_a.gender.lower() != "female":
-        return False
-
-    return True
 
 
 def _cat_stats_sum(cat: Cat) -> int:
