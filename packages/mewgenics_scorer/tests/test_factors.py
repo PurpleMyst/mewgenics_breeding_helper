@@ -17,7 +17,6 @@ from mewgenics_scorer.factors import (
     calculate_pair_factors,
     calculate_trait_probability,
     expected_stats,
-    expected_disorder_inheritance,
     libido_factor,
     stat_variance,
     trait_coverage,
@@ -424,43 +423,6 @@ class TestTraitInheritanceProbability:
 
         # Should match because normalized = "paththehunter"
         assert result.probability > 0.0
-
-
-class TestDisorderInheritance:
-    """Tests for disorder inheritance function."""
-
-    def test_disorder_inheritance_neither_has(self):
-        mother = make_mock_cat(1, disorders=[])
-        father = make_mock_cat(2, disorders=[])
-
-        chance = expected_disorder_inheritance(mother, father)
-
-        assert chance == 0.0
-
-    def test_disorder_inheritance_mother_has(self):
-        mother = make_mock_cat(1, disorders=["blind"])
-        father = make_mock_cat(2, disorders=[])
-
-        chance = expected_disorder_inheritance(mother, father)
-
-        assert chance == 0.15
-
-    def test_disorder_inheritance_both_have(self):
-        mother = make_mock_cat(1, disorders=["blind"])
-        father = make_mock_cat(2, disorders=["lumpybody"])
-
-        chance = expected_disorder_inheritance(mother, father)
-
-        assert chance == 0.30  # Cap at 30%
-
-    def test_disorder_inheritance_capped(self):
-        # Even with multiple disorders, capped at 30%
-        mother = make_mock_cat(1, disorders=["blind", "bentleg"])
-        father = make_mock_cat(2, disorders=["lumpybody", "nomouth"])
-
-        chance = expected_disorder_inheritance(mother, father)
-
-        assert chance == 0.30
 
 
 class TestClassFavoringAlgebra:

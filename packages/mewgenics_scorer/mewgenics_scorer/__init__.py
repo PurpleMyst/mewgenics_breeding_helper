@@ -13,7 +13,6 @@ from .factors import (
     trait_coverage,
     expected_disorder_chance,
     expected_part_defect_chance,
-    expected_disorder_inheritance,
     DEFAULT_STIMULATION,
 )
 from .ancestry import (
@@ -42,7 +41,6 @@ __all__ = [
     "trait_coverage",
     "expected_disorder_chance",
     "expected_part_defect_chance",
-    "expected_disorder_inheritance",
     "build_ancestor_contribs",
     "coi_from_contribs",
     "AncestorData",

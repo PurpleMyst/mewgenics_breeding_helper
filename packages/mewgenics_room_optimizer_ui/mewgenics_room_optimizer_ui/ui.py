@@ -1476,9 +1476,6 @@ def show_pair_detail_window(pair, state):
         )
 
         if state.planner_traits:
-            mother = pair.cat_a if pair.cat_a.gender.lower() == "female" else pair.cat_b
-            father = pair.cat_b if pair.cat_a.gender.lower() == "female" else pair.cat_a
-
             stimulation = 50.0
             for rc in state.room_configs:
                 if rc.room_type.value == "breeding":
@@ -1505,7 +1502,7 @@ def show_pair_detail_window(pair, state):
 
                 for trait in state.planner_traits:
                     prob_result = calculate_trait_probability(
-                        trait, mother, father, stimulation
+                        trait, pair.cat_a, pair.cat_b, stimulation
                     )
 
                     if prob_result.probability >= 0.5:
