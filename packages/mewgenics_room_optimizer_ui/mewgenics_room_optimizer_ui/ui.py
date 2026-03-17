@@ -2,7 +2,7 @@
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser.trait_dictionary import normalize_trait_name
-from mewgenics_room_optimizer import RoomType
+from mewgenics_room_optimizer import RoomType, can_pair_gay
 from mewgenics_scorer import ScoringPreferences
 
 from .state import AppState
@@ -1097,6 +1097,7 @@ def update_results_table(results, state):
     for i, room in enumerate(results.rooms):
         avg_quality = 0.0
         avg_risk = 0.0
+        print(len(room.pairs))
         if room.pairs:
             avg_quality = sum(p.quality for p in room.pairs) / len(room.pairs)
             avg_risk = sum(
@@ -1325,7 +1326,7 @@ def build_details_tabs(selected_room, state):
                                 badge = dpg.add_text("[-]", color=(100, 200, 255, 255))
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Aggression")
-                            if combined > 10:
+                            if combined > 50:
                                 badge = dpg.add_text("[!]", color=(255, 100, 100, 255))
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Inbreeding Risk")
@@ -1817,13 +1818,7 @@ def on_sandbox_changed(sender, app_data, user_data):
             )
             return
 
-        is_a_gay = state.gay_flags.get(cat_a.db_key, False)
-        is_b_gay = state.gay_flags.get(cat_b.db_key, False)
-        if (
-            (is_a_gay or is_b_gay)
-            and cat_a.gender.lower() != "?"
-            and cat_b.gender.lower() != "?"
-        ):
+        if not can_pair_gay(cat_a, cat_b, state.gay_flags):
             dpg.add_text(
                 "Gay conflict - one or both cats have same-sex breeding preference but neither is genderless.",
                 color=(255, 100, 100, 255),
@@ -1831,7 +1826,6 @@ def on_sandbox_changed(sender, app_data, user_data):
             return
 
         ancestor_contribs = build_ancestor_contribs(state.cats)
-
         params = OptimizationParams(
             min_stats=state.min_stats,
             max_risk=state.max_risk,
@@ -1851,7 +1845,7 @@ def on_sandbox_changed(sender, app_data, user_data):
             cat_a, cat_b, ancestor_contribs, params, skip_risk_check=True
         )
 
-        if not pair_result:
+        if pair_result is None:
             dpg.add_text("Could not score this pair.", color=(255, 100, 100, 255))
             return
 
@@ -1878,7 +1872,7 @@ def on_sandbox_changed(sender, app_data, user_data):
                 dpg.add_text("[+ Libido]", color=(255, 200, 100, 255))
             if pair_result.factors.aggression_factor > 0.6:
                 dpg.add_text("[- Aggro]", color=(100, 200, 255, 255))
-            if combined > 10:
+            if combined > 50:
                 dpg.add_text("[! Inbred]", color=(255, 100, 100, 255))
             if pair_result.factors.combined_malady_chance > state.max_risk:
                 dpg.add_text(

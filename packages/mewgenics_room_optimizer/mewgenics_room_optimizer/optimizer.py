@@ -181,6 +181,8 @@ def _evaluate_state(
             continue
 
         cats_in_room = rooms_content[room.key]
+        
+        # Hard capacity constraint
         if room.max_cats is not None and len(cats_in_room) > room.max_cats:
             return -float("inf")
 
@@ -188,9 +190,12 @@ def _evaluate_state(
             continue
 
         true_stim = room.base_stim
-
         pairs = _generate_pairs(cats_in_room)
-        room_quality = 0.0
+
+        sum_quality = 0.0
+        valid_pairs = 0
+        valid_cats = set()
+        
         for a, b in pairs:
             effective_params = replace(params, stimulation=true_stim)
             scored = pair_cache.get_score(
@@ -200,29 +205,43 @@ def _evaluate_state(
                 lambda: score_pair(a, b, ancestor_contribs, effective_params),
             )
             if scored:
-                room_quality += scored.quality
+                sum_quality += scored.quality
+                valid_pairs += 1
+                valid_cats.add(a.db_key)
+                valid_cats.add(b.db_key)
+
+        if valid_pairs == 0:
+            continue
+
+        # Expected quality of a single random breeding event in this room
+        expected_breed_quality = sum_quality / valid_pairs
+
+        # Percentage-based dilution penalty (1.0 = perfect, 0.5 = half the cats are useless)
+        dilution_penalty = len(valid_cats) / len(cats_in_room)
 
         # --- Throughput Soft Constraint ---
-        # Boosts the room's score if it can produce multiple pregnancies simultaneously
-        if (params.scoring_prefs or ScoringPreferences()).maximize_throughput:
-            males = sum(1 for c in cats_in_room if c.gender == "male")
-            females = sum(1 for c in cats_in_room if c.gender == "female")
-            spiders = sum(1 for c in cats_in_room if c.gender == "?")
+        scoring_prefs = params.scoring_prefs or ScoringPreferences()
+        if scoring_prefs.maximize_throughput:
+            # Only count cats that actually form valid pairs towards the multiplier
+            males = sum(1 for c in cats_in_room if c.gender == "male" and c.db_key in valid_cats)
+            females = sum(1 for c in cats_in_room if c.gender == "female" and c.db_key in valid_cats)
+            spiders = sum(1 for c in cats_in_room if c.gender == "?" and c.db_key in valid_cats)
 
-            # Calculate max simultaneous breeding pairs (spiders can act as either gender)
+            # Calculate max simultaneous breeding pairs
             concurrent_breeds = min(
-                len(cats_in_room) // 2, males + spiders, females + spiders
+                len(valid_cats) // 2, males + spiders, females + spiders
             )
 
-            if concurrent_breeds > 1:
-                # E.g., 2 concurrent breeds = 1.2x multiplier, 3 breeds = 1.4x multiplier
-                room_quality *= 1.0 + (concurrent_breeds - 1) * 0.2
+            # Apply an exponent to artificially inflate the value of high-capacity rooms.
+            density_bonus = concurrent_breeds ** 1.5
+            
+            room_quality = expected_breed_quality * density_bonus * dilution_penalty
+        else:
+            room_quality = expected_breed_quality * dilution_penalty
 
         total_quality += room_quality
 
     return total_quality
-
-
 def _get_neighbor(state: dict[int, str], rooms: list[str]) -> dict[int, str]:
     """Generate a neighboring state by moving one cat or swapping two cats."""
     new_state = state.copy()
@@ -462,15 +481,13 @@ def _build_results_from_state_dict(
         if len(cats_in_room) < 2:
             continue
 
-        true_stim = room.base_stim
-
         pairs = _generate_pairs(cats_in_room)
         for a, b in pairs:
-            effective_params = replace(params, stimulation=true_stim)
+            effective_params = replace(params, stimulation=room.base_stim)
             scored = pair_cache.get_score(
                 a,
                 b,
-                true_stim,
+                room.base_stim,
                 lambda: score_pair(a, b, ancestor_contribs, effective_params),
             )
             if scored:
