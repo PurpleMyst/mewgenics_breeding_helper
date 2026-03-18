@@ -1,46 +1,86 @@
-# mewgenics_breeding_helper
+# Mewgenics Breeding Helper
+
+[![Python 3.14+](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![uv](https://img.shields.io/badge/uv-package_manager-orange)](https://github.com/astral-sh/uv)
 
 **Disclaimer: This project was developed with assistance from AI tools (OpenCode, Claude). Review all code before use.**
 
-A Python-based tool for optimizing breeding operations in the game Mewgenics. Features a DearPyGui-based UI for room optimization, cat management, and breeding pair analysis.
+A Python-based tool for optimizing breeding operations in the game [Mewgenics](https://store.steampowered.com/app/686060/Mewgenics/). Features a DearPyGui-based UI for room optimization, cat management, and breeding pair analysis.
 
 ![Main UI](/.github/screenshots/main.png?raw=true "Main UI")
 
 ## Features
 
 - **Room Optimization**: Parallel Simulated Annealing optimizer with Metropolis acceptance
-- **SA Optimizer**: Configurable temperature, cooling rate, and neighbor evaluation
-- **EY Support**: Eternal Youth cats treated as free room buffs (+1 stim each, 0 capacity cost)
+- **Save File Parsing**: Parse Mewgenics `.sav` files and `resources.gpak` for game data
+- **Cat Management**: View detailed stats, traits, and relationships
+- **Breeding Planner**: Mark favorable traits for targeted breeding
 - **Risk Assessment**: Game-accurate inbreeding risk calculation with configurable thresholds
   - **Disorder Chance**: Probability of birth defect disorder (base 2% + CoI penalty)
   - **Part Defect Chance**: Probability of mutated part defects (1.5 × CoI)
   - **Combined Malady**: Union probability of any birth defect
-- **Trait Planning**: Mark favorable traits for targeted breeding
 - **Lover/Hater Tracking**: Visual display of relationships in cat inspector
 - **Gay Marking**: Same-sex breeding preference support
+- **Eternal Youth Support**: EY cats treated as free room buffs (+1 stim each, 0 capacity cost)
 - **Auto-save**: Configuration persistence across sessions
 
-## Requirements
+## System Architecture
+
+```
+mewgenics_breeding_helper/
+├── packages/
+│   ├── mewgenics_parser/           # Save file parsing, trait definitions
+│   │   ├── binary.py              # BinaryReader for parsing binary data
+│   │   ├── cat.py                 # Cat data model
+│   │   ├── gpak.py                # GPAK file handling
+│   │   ├── save.py                # Save file parsing
+│   │   ├── traits.py              # Trait domain models
+│   │   └── trait_dictionary.py    # Trait constants
+│   ├── mewgenics_scorer/          # Pair scoring logic
+│   │   ├── factors.py             # Breeding factor calculations
+│   │   ├── ancestry.py            # Ancestry and inbreeding calculations
+│   │   ├── compatibility.py       # Pair compatibility scoring
+│   │   ├── inheritance.py         # Game-accurate inheritance simulation
+│   │   └── types.py               # Type definitions
+│   ├── mewgenics_room_optimizer/  # Optimization algorithm
+│   │   └── optimizer.py           # Parallel Simulated Annealing implementation
+│   └── mewgenics_room_optimizer_ui/ # DearPyGui UI application
+│       └── ui.py                  # Main UI implementation
+└── MewgenicsBreedingManager/       # Reference submodule (do not modify)
+```
+
+### Algorithm
+
+The optimizer uses **Parallel Simulated Annealing**:
+
+1. **Parallel Workers**: Uses `cpu_count() - 1` workers running independent SA searches
+2. **Temperature Schedule**: Exponential cooling from configured temperature (default 100.0) down to 0.1
+3. **Neighbor Generation**: 
+   - 50% move operation: Move one cat to a different room
+   - 50% swap operation: Swap two cats between rooms
+4. **Metropolis Acceptance**: Accepts worse solutions with probability `exp(delta / T)`
+5. **Evaluation**:
+   - Expected breed quality = average quality per valid pair
+   - Dilution penalty = `valid_cats / total_cats` (penalizes gender imbalance)
+   - Throughput boost (when Maximize Throughput enabled) = `concurrent_breeds ^ 1.5`
+
+### Inheritance Math (Game-accurate)
+
+The scorer implements the exact game mechanics:
+
+- **Stat Inheritance**: `P(higher) = (1.0 + 0.01*Stimulation) / (2.0 + 0.01*Stimulation)`
+- **Spell Chance**: `0.2 + 0.025*Stimulation` (guaranteed at 32+)
+- **Passive Chance**: `0.05 + 0.01*Stimulation` (guaranteed at 95+)
+- **Disorder Inheritance**: 15% from each parent (flat rate)
+- **Birth Defect**: `0.02 + 0.4 * max(Inbreeding - 0.2, 0.0)`
+
+See [docs/breeding_notes.txt](docs/breeding_notes.txt) for complete details.
+
+## Prerequisites
 
 - Python 3.14+
 - [uv](https://github.com/astral-sh/uv) package manager
 - Mewgenics game (for `resources.gpak`)
-
-## Project Structure
-
-```
-mewgenics_breeding_helper/
-├── pyproject.toml                 # Root workspace config (uv)
-├── justfile                       # Development commands
-├── packages/
-│   ├── mewgenics_parser/          # Save file parsing
-│   ├── mewgenics_scorer/          # Pair scoring logic
-│   ├── mewgenics_room_optimizer/ # Optimization algorithm
-│   └── mewgenics_room_optimizer_ui/  # DearPyGui UI
-├── MewgenicsBreedingManager/      # Reference submodule (do not modify)
-├── .github/screenshots/           # UI screenshots
-└── tests/                        # Test suites
-```
 
 ## Installation
 
@@ -61,7 +101,9 @@ The application will look for `resources.gpak` in:
 1. The current directory
 2. The game default location: `C:\Program Files (x86)\Steam\steamapps\common\Mewgenics\resources.gpak`
 
-## Quick Start
+## Usage
+
+### Quick Start
 
 1. **Load a save file**: Click "Load Save" and select your `.sav` file
 2. **Configure rooms**: Adjust room types, capacities, and base stimulation in the Rooms tab
@@ -70,7 +112,7 @@ The application will look for `resources.gpak` in:
 5. **Mark gay cats**: Toggle same-sex breeding preference in the Inspector (optional)
 6. **Optimize**: Click "Optimize Rooms" to generate breeding pairs
 
-## Room Types
+### Room Types
 
 | Type | Purpose | Capacity Limit |
 |------|---------|----------------|
@@ -83,13 +125,13 @@ The application will look for `resources.gpak` in:
 
 The Room Details panel includes a "Misplaced" tab showing cats currently in a room but assigned to a different room by the optimizer. Use this to identify cats that weren't moved to their optimal locations.
 
-## Stimulation
+### Stimulation
 
 - **Base Stimulation**: Default 50.0, configurable per room
 - **True Stimulation**: `base_stim + Eternal_Youth_cats` in the room
 - Higher stimulation increases the chance offspring inherit higher stats from parents
 
-## Factor Columns
+### Factor Columns
 
 The Pairs table displays individual columns for each breeding factor:
 
@@ -97,10 +139,10 @@ The Pairs table displays individual columns for each breeding factor:
 |--------|-------------|--------------|
 | **Lovers** | Whether both cats are mutual lovers | Green = Yes, Gray = No |
 | **Libido** | Combined libido factor (0.0-1.0) | Green >= 0.6 |
-| **Aggr** | Combined aggression factor (0.0-1.0) | Green <= 0.4, Red > 0.4 (lower is better) |
+| **Aggr** | Combined aggression factor (0.0-1.0) | Green <= 0.4, Red > 0.4 |
 | **Char** | Combined charisma factor (0.0-1.0) | Green >= 0.4 |
-| **Var** | Stat variance (lower = more consistent offspring) | Green <= 5, Red > 10, Yellow 5-10 |
-| **Trait EV** | Trait Expected Value: `sum(probability × weight) × 5.0` | Green > 0, Gray = 0 |
+| **Var** | Stat variance (lower = more consistent) | Green <= 5, Red > 10, Yellow 5-10 |
+| **Trait EV** | Trait Expected Value | Green > 0, Gray = 0 |
 
 ### Location Colors (in tables)
 
@@ -110,6 +152,15 @@ The Pairs table displays individual columns for each breeding factor:
 | Red | Cat is in the wrong room |
 | Yellow | Cat is not assigned to any room |
 
+### Cat Inspector
+
+Click any cat to view detailed information:
+
+- **Bio**: Name, Gender, Age, Status, Room, Lovers, Haters
+- **Stats**: All 7 base stats (STR, DEX, CON, INT, SPD, CHA, LCK)
+- **Traits**: Active Abilities, Passive Abilities, Disorders, Body Parts
+- **Options**: Same-Sex Breeder toggle
+
 ## Configuration
 
 ### Optimization Parameters
@@ -118,12 +169,12 @@ The Pairs table displays individual columns for each breeding factor:
 |-----------|-------------|---------|
 | Min Stats | Minimum total base stats for breeding candidates | 0 |
 | Max Risk % | Maximum combined malady probability allowed (0-100) | 20 |
-| Minimize Variance | Prioritize pairs with similar stats for consistent offspring | On |
+| Minimize Variance | Prioritize pairs with similar stats | On |
 | Avoid Lovers | Exclude mutual lover pairs from breeding | On |
-| Prefer High Libido | Favor high libido cats for faster breeding cycles | On |
-| Prefer High Charisma | Favor high charisma for better breeding odds | On |
+| Prefer High Libido | Favor high libido cats for faster cycles | On |
+| Prefer High Charisma | Favor high charisma for better odds | On |
 | Base Stimulation | Default stimulation for unconfigured rooms | 50.0 |
-| Maximize Throughput | Apply density exponent (`concurrent_breeds ^ 1.5`) and prioritize maximizing number of breeding pairs | Off |
+| Maximize Throughput | Apply density exponent and maximize pairs | Off |
 
 ### SA Parameters
 
@@ -135,13 +186,12 @@ The Pairs table displays individual columns for each breeding factor:
 
 ### Favorable Traits (Breeding Planner)
 
-Mark specific mutations, passives, abilities, or body parts you want to propagate through your breeding program.
+Mark specific mutations, passives, abilities, or body parts you want to propagate:
 
 - Select traits from alive ("In House") cats only
 - Supports active abilities, passive abilities, body parts, and disorders
 - Each trait has a weight (1-10) that affects pair scoring
-- Higher weight = higher priority for that trait in breeding decisions
-- Traits are displayed in the Inspector with `[*]` prefix when marked as favorable
+- Traits display with `[*]` prefix when marked as favorable
 
 ### Gay Marking
 
@@ -152,51 +202,6 @@ Some cats prefer same-sex breeding. To mark a cat as gay:
 3. Check "Same-Sex Breeder"
 
 Gay cats will only breed with Female cats (not other gay cats).
-
-### Throughput Cap
-
-To prevent gender imbalance in breeding rooms, each gender is limited to `max_cats - 2` cats per breeding room. This prevents scenarios like 5 males / 1 female in a 6-cat room.
-
-## Cat Inspector
-
-Click any cat to view detailed information:
-
-- **Bio**: Name, Gender, Age, Status, Room, Lovers, Haters
-- **Stats**: All 7 base stats (STR, DEX, CON, INT, SPD, CHA, LCK)
-- **Traits**: Active Abilities, Passive Abilities, Disorders, Body Parts
-- **Options**: Same-Sex Breeder toggle
-
-EY cats display with a teal `[EY]` badge and are excluded from capacity calculations.
-
-## Sandbox Mode
-
-The third tab in Room Details lets you test any breeding combination:
-
-1. Select Parent A from dropdown
-2. Select Parent B from dropdown
-3. View results:
-   - Expected Quality score
-   - Risk breakdown: Disorder %, Part Defect %, Combined %
-   - Badges (Lovers, Libido, Aggression, Inbred, Favorable Traits)
-
-## Algorithm
-
-The optimizer uses Parallel Simulated Annealing:
-
-1. **Parallel Workers**: Uses `cpu_count() - 1` workers running independent SA searches
-
-2. **Temperature Schedule**: Exponential cooling from configured temperature (default 100.0) down to 0.1
-
-3. **Neighbor Generation**: 
-   - 50% move operation: Move one cat to a different room
-   - 50% swap operation: Swap two cats between rooms
-
-4. **Metropolis Acceptance**: Accepts worse solutions with probability `exp(delta / T)`
-
-5. **Evaluation**:
-   - Expected breed quality = average quality per valid pair
-   - Dilution penalty = `valid_cats / total_cats` (penalizes gender imbalance)
-   - Throughput boost (when Maximize Throughput enabled) = `concurrent_breeds ^ 1.5`
 
 ## Development
 
@@ -227,6 +232,15 @@ just fix
 
 - Large save files may take time to parse
 - Cat Inspector does not display abilities as upgraded even when the cat has the upgraded version
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+
+1. **Tests pass**: Run `just test-all`
+2. **Type check passes**: Run `just ty`
+3. **Linting passes**: Run `just lint` and `just fix` if needed
+4. **Formatting**: Code is formatted with `ruff format .`
 
 ## Credits
 
