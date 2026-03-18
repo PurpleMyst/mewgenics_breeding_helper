@@ -1,22 +1,49 @@
-from unittest.mock import MagicMock
-
+from mewgenics_parser import Cat
+from mewgenics_parser.cat import CatGender, CatStatus, CatBodyParts, Stats
 from mewgenics_scorer.ancestry import (
     build_ancestor_contribs,
     coi_from_contribs,
 )
 
 
-# --- Helper Methods ---
-def make_mock_cat(
-    db_key: int, generation: int = 0, parent_a=None, parent_b=None, coi=0.0
-):
-    cat = MagicMock()
-    cat.db_key = db_key
-    cat.generation = generation
-    cat.parent_a = parent_a
-    cat.parent_b = parent_b
-    cat.coi = coi  # We will need to store this on the model eventually!
-    return cat
+def make_cat(
+    db_key: int,
+    parent_a: Cat | None = None,
+    parent_b: Cat | None = None,
+    coi: float = 0.0,
+) -> Cat:
+    return Cat(
+        db_key=db_key,
+        name=f"Cat_{db_key}",
+        gender=CatGender.MALE,
+        status=CatStatus.IN_HOUSE,
+        room=None,
+        stat_base=Stats(5, 5, 5, 5, 5, 5, 5),
+        stat_total=Stats(5, 5, 5, 5, 5, 5, 5),
+        age=0,
+        aggression=0.5,
+        libido=0.5,
+        coi=coi,
+        active_abilities=[],
+        passive_abilities=[],
+        disorders=[],
+        body_parts=CatBodyParts(
+            texture=0,
+            body=0,
+            head=0,
+            tail=0,
+            legs=0,
+            arms=0,
+            eyes=0,
+            eyebrows=0,
+            ears=0,
+            mouth=0,
+        ),
+        parent_a=parent_a,
+        parent_b=parent_b,
+        lovers=[],
+        haters=[],
+    )
 
 
 class TestMewgenicsSpecificMechanics:
@@ -24,8 +51,8 @@ class TestMewgenicsSpecificMechanics:
 
     def test_stray_always_zero_coi(self):
         """Strays have no parents (None). Breeding two strays must yield 0 COI."""
-        stray_1 = make_mock_cat(1)
-        stray_2 = make_mock_cat(2)
+        stray_1 = make_cat(1)
+        stray_2 = make_cat(2)
 
         ca = build_ancestor_contribs([stray_1])[1]
         cb = build_ancestor_contribs([stray_2])[2]
@@ -38,19 +65,17 @@ class TestMewgenicsSpecificMechanics:
         great-great-great-grandchild (Closeness of 5), the child... will not be Inbred."
         """
         # Generation 0
-        stray_parent = make_mock_cat(1)
-        other_stray = make_mock_cat(2)
+        stray_parent = make_cat(1)
+        other_stray = make_cat(2)
 
         # Straight ladder down
-        gen_1 = make_mock_cat(3, parent_a=stray_parent, parent_b=other_stray)  # Child
-        gen_2 = make_mock_cat(4, parent_a=gen_1, parent_b=other_stray)  # Grandchild
-        gen_3 = make_mock_cat(
-            5, parent_a=gen_2, parent_b=other_stray
-        )  # Great-grandchild
-        gen_4 = make_mock_cat(
+        gen_1 = make_cat(3, parent_a=stray_parent, parent_b=other_stray)  # Child
+        gen_2 = make_cat(4, parent_a=gen_1, parent_b=other_stray)  # Grandchild
+        gen_3 = make_cat(5, parent_a=gen_2, parent_b=other_stray)  # Great-grandchild
+        gen_4 = make_cat(
             6, parent_a=gen_3, parent_b=other_stray
         )  # Great-great-grandchild
-        gen_5 = make_mock_cat(
+        gen_5 = make_cat(
             7, parent_a=gen_4, parent_b=other_stray
         )  # Great-great-great-grandchild
 
@@ -78,14 +103,14 @@ class TestMewgenicsSpecificMechanics:
         than if the common ancestor was a stray (twisted ladder vs straight ladder).
         """
         # Scenario A: Common ancestor is a Stray (fA = 0)
-        pure_ancestor = make_mock_cat(1, coi=0.0)
-        pure_parent_a = make_mock_cat(2, parent_a=pure_ancestor)
-        pure_parent_b = make_mock_cat(3, parent_a=pure_ancestor)
+        pure_ancestor = make_cat(1, coi=0.0)
+        pure_parent_a = make_cat(2, parent_a=pure_ancestor)
+        pure_parent_b = make_cat(3, parent_a=pure_ancestor)
 
         # Scenario B: Common ancestor is highly inbred (fA > 0)
-        inbred_ancestor = make_mock_cat(4, coi=0.5)  # Assuming CoI is stored/calculated
-        inbred_parent_a = make_mock_cat(5, parent_a=inbred_ancestor)
-        inbred_parent_b = make_mock_cat(6, parent_a=inbred_ancestor)
+        inbred_ancestor = make_cat(4, coi=0.5)
+        inbred_parent_a = make_cat(5, parent_a=inbred_ancestor)
+        inbred_parent_b = make_cat(6, parent_a=inbred_ancestor)
 
         cats = [
             pure_ancestor,
@@ -112,12 +137,12 @@ class TestComplexFamilyTrees:
 
     def test_twisted_ladder_multiple_common_ancestors(self):
         """A child whose parents share MULTIPLE ancestors should sum the loops."""
-        stray_1 = make_mock_cat(1)
-        stray_2 = make_mock_cat(2)
+        stray_1 = make_cat(1)
+        stray_2 = make_cat(2)
 
         # Full siblings breeding
-        sibling_1 = make_mock_cat(3, parent_a=stray_1, parent_b=stray_2)
-        sibling_2 = make_mock_cat(4, parent_a=stray_1, parent_b=stray_2)
+        sibling_1 = make_cat(3, parent_a=stray_1, parent_b=stray_2)
+        sibling_2 = make_cat(4, parent_a=stray_1, parent_b=stray_2)
 
         contribs = build_ancestor_contribs([stray_1, stray_2, sibling_1, sibling_2])
 

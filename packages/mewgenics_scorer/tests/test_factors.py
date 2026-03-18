@@ -23,9 +23,9 @@ from mewgenics_scorer.factors import (
 from mewgenics_scorer.types import TraitRequirement
 
 
-def make_mock_cat(
+def make_cat(
     db_key: int,
-    gender: str = "male",
+    gender: CatGender = CatGender.MALE,
     stat_base: list[int] | None = None,
     aggression: float | None = None,
     libido: float | None = None,
@@ -41,7 +41,7 @@ def make_mock_cat(
         db_key=db_key,
         name=f"Cat{db_key}",
         status=CatStatus.IN_HOUSE,
-        gender=CatGender(gender),
+        gender=gender,
         stat_base=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
         stat_total=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
         aggression=aggression,
@@ -57,16 +57,16 @@ def make_mock_cat(
         age=5,
         coi=0.0,
         body_parts=CatBodyParts(
-            head=0,
+            texture=0,
             body=0,
+            head=0,
             tail=0,
             legs=0,
             arms=0,
-            texture=0,
             eyes=0,
-            mouth=0,
-            ears=0,
             eyebrows=0,
+            ears=0,
+            mouth=0,
         ),
     )
 
@@ -108,14 +108,14 @@ class TestExpectedStats:
     """Tests for expected_stats function."""
 
     def test_identical_stats(self):
-        a = make_mock_cat(1, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_mock_cat(2, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        a = make_cat(1, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, stat_base=[5, 5, 5, 5, 5, 5, 5])
         result = expected_stats(a, b, 50.0)
         assert all(s == 5.0 for s in result)
 
     def test_different_stats(self):
-        a = make_mock_cat(1, stat_base=[10, 0, 0, 0, 0, 0, 0])
-        b = make_mock_cat(2, stat_base=[0, 10, 0, 0, 0, 0, 0])
+        a = make_cat(1, stat_base=[10, 0, 0, 0, 0, 0, 0])
+        b = make_cat(2, stat_base=[0, 10, 0, 0, 0, 0, 0])
         result = expected_stats(a, b, 50.0)
         # First stat: max(10,0)*chance + min(10,0)*(1-chance) = 10*chance
         # Second stat: max(0,10)*chance + min(0,10)*(1-chance) = 10*chance
@@ -128,13 +128,13 @@ class TestStatVariance:
     """Tests for stat_variance function."""
 
     def test_identical_stats(self):
-        a = make_mock_cat(1, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_mock_cat(2, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        a = make_cat(1, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, stat_base=[5, 5, 5, 5, 5, 5, 5])
         assert stat_variance(a, b) == 0.0
 
     def test_all_different(self):
-        a = make_mock_cat(1, stat_base=[10, 10, 10, 10, 10, 10, 10])
-        b = make_mock_cat(2, stat_base=[0, 0, 0, 0, 0, 0, 0])
+        a = make_cat(1, stat_base=[10, 10, 10, 10, 10, 10, 10])
+        b = make_cat(2, stat_base=[0, 0, 0, 0, 0, 0, 0])
         assert stat_variance(a, b) == 70.0  # 7 * 10
 
 
@@ -142,20 +142,20 @@ class TestAggressionFactor:
     """Tests for aggression_factor function."""
 
     def test_both_low_aggression(self):
-        a = make_mock_cat(1, aggression=0.1)
-        b = make_mock_cat(2, aggression=0.1)
+        a = make_cat(1, aggression=0.1)
+        b = make_cat(2, aggression=0.1)
         result = aggression_factor(a, b)
         assert result > 0.8  # High factor for low aggression
 
     def test_both_high_aggression(self):
-        a = make_mock_cat(1, aggression=0.9)
-        b = make_mock_cat(2, aggression=0.9)
+        a = make_cat(1, aggression=0.9)
+        b = make_cat(2, aggression=0.9)
         result = aggression_factor(a, b)
         assert result < 0.2  # Low factor for high aggression
 
     def test_unknown_aggression_defaults(self):
-        a = make_mock_cat(1, aggression=None)
-        b = make_mock_cat(2, aggression=None)
+        a = make_cat(1, aggression=None)
+        b = make_cat(2, aggression=None)
         assert aggression_factor(a, b) == 0.5
 
 
@@ -163,20 +163,20 @@ class TestLibidoFactor:
     """Tests for libido_factor function."""
 
     def test_both_low_libido(self):
-        a = make_mock_cat(1, libido=0.1)
-        b = make_mock_cat(2, libido=0.1)
+        a = make_cat(1, libido=0.1)
+        b = make_cat(2, libido=0.1)
         result = libido_factor(a, b)
         assert result < 0.2
 
     def test_both_high_libido(self):
-        a = make_mock_cat(1, libido=0.9)
-        b = make_mock_cat(2, libido=0.9)
+        a = make_cat(1, libido=0.9)
+        b = make_cat(2, libido=0.9)
         result = libido_factor(a, b)
         assert result > 0.8
 
     def test_unknown_libido_defaults(self):
-        a = make_mock_cat(1, libido=None)
-        b = make_mock_cat(2, libido=None)
+        a = make_cat(1, libido=None)
+        b = make_cat(2, libido=None)
         assert libido_factor(a, b) == 0.5
 
 
@@ -184,8 +184,8 @@ class TestTraitCoverage:
     """Tests for trait_coverage function."""
 
     def test_a_has_trait(self):
-        a = make_mock_cat(1, passives=["Host"])
-        b = make_mock_cat(2)
+        a = make_cat(1, passives=["Host"])
+        b = make_cat(2)
         traits = [
             TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
         ]
@@ -195,8 +195,8 @@ class TestTraitCoverage:
         assert result[0].trait.key == "Host"
 
     def test_b_has_trait(self):
-        a = make_mock_cat(1)
-        b = make_mock_cat(2, passives=["Host"])
+        a = make_cat(1)
+        b = make_cat(2, passives=["Host"])
         traits = [
             TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
         ]
@@ -205,8 +205,8 @@ class TestTraitCoverage:
         assert result[0].trait.key == "Host"
 
     def test_neither_has_trait(self):
-        a = make_mock_cat(1)
-        b = make_mock_cat(2)
+        a = make_cat(1)
+        b = make_cat(2)
         traits = [
             TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
         ]
@@ -214,8 +214,8 @@ class TestTraitCoverage:
         assert len(result) == 0
 
     def test_passive_ability(self):
-        a = make_mock_cat(1, passives=["Sturdy"])
-        b = make_mock_cat(2)
+        a = make_cat(1, passives=["Sturdy"])
+        b = make_cat(2)
         traits = [
             TraitRequirement(
                 trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
@@ -230,8 +230,8 @@ class TestCalculatePairFactors:
     """Tests for calculate_pair_factors function."""
 
     def test_basic_calculation(self):
-        a = make_mock_cat(1, gender="male", stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_mock_cat(2, gender="female", stat_base=[5, 5, 5, 5, 5, 5, 5])
+        a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
         contribs = {1: {}, 2: {}}
 
         result = calculate_pair_factors(a, b, contribs)
@@ -243,8 +243,8 @@ class TestCalculatePairFactors:
         assert result.mutual_lovers is False
 
     def test_unrelated_cats_no_risk(self):
-        a = make_mock_cat(1, gender="male")
-        b = make_mock_cat(2, gender="female")
+        a = make_cat(1, CatGender.MALE)
+        b = make_cat(2, CatGender.FEMALE)
         contribs = {1: {}, 2: {}}
 
         result = calculate_pair_factors(a, b, contribs)
@@ -256,8 +256,8 @@ class TestCalculatePairFactors:
         assert result.expected_part_defect_chance == 0.0
 
     def test_total_expected_stats(self):
-        a = make_mock_cat(1, gender="male", stat_base=[10, 0, 0, 0, 0, 0, 0])
-        b = make_mock_cat(2, gender="female", stat_base=[0, 10, 0, 0, 0, 0, 0])
+        a = make_cat(1, CatGender.MALE, stat_base=[10, 0, 0, 0, 0, 0, 0])
+        b = make_cat(2, CatGender.FEMALE, stat_base=[0, 10, 0, 0, 0, 0, 0])
         contribs = {1: {}, 2: {}}
 
         result = calculate_pair_factors(a, b, contribs)
@@ -322,8 +322,8 @@ class TestTraitInheritanceProbability:
     """Tests for calculate_trait_probability function."""
 
     def test_ability_neither_parent_has(self):
-        mother = make_mock_cat(1, abilities=[])
-        father = make_mock_cat(2, abilities=[])
+        mother = make_cat(1, abilities=[])
+        father = make_cat(2, abilities=[])
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
         )
@@ -331,11 +331,11 @@ class TestTraitInheritanceProbability:
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
         assert result.probability == 0.0
-        assert result.parent_source in ("none", "neither")
+        assert result.parent_source in ("None", "Neither")
 
     def test_ability_single_parent_has(self):
-        mother = make_mock_cat(1, abilities=["PathOfTheHunter"])
-        father = make_mock_cat(2, abilities=[])
+        mother = make_cat(1, abilities=["PathOfTheHunter"])
+        father = make_cat(2, abilities=[])
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
         )
@@ -348,8 +348,8 @@ class TestTraitInheritanceProbability:
 
     def test_ability_pool_dilution(self):
         # Mother has 4 spells, father has 1
-        mother = make_mock_cat(1, abilities=["A", "B", "C", "PathOfTheHunter"])
-        father = make_mock_cat(2, abilities=["Zap"])
+        mother = make_cat(1, abilities=["A", "B", "C", "PathOfTheHunter"])
+        father = make_cat(2, abilities=["Zap"])
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
         )
@@ -361,8 +361,8 @@ class TestTraitInheritanceProbability:
         assert result.probability == pytest.approx(0.025)
 
     def test_passive_skillshare_plus_guaranteed(self):
-        mother = make_mock_cat(1, passives=["SkillShare2", "Sturdy"])
-        father = make_mock_cat(2, passives=[])
+        mother = make_cat(1, passives=["SkillShare2", "Sturdy"])
+        father = make_cat(2, passives=[])
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         )
@@ -375,8 +375,8 @@ class TestTraitInheritanceProbability:
 
     def test_passive_disorder_not_in_passive_pool(self):
         # Disorders should NOT be in passive_abilities (separated at parse time)
-        mother = make_mock_cat(1, passives=["Sturdy"], disorders=["Blind"])
-        father = make_mock_cat(2, passives=[])
+        mother = make_cat(1, passives=["Sturdy"], disorders=["Blind"])
+        father = make_cat(2, passives=[])
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Blind")
         )
@@ -387,8 +387,8 @@ class TestTraitInheritanceProbability:
         assert result.probability == 0.0
 
     # def test_mutation_inheritance_80_percent(self):
-    #     mother = make_mock_cat(1, mutations=["Frostbit"])
-    #     father = make_mock_cat(2, mutations=[])
+    #     mother = make_cat(1, mutations=["Frostbit"])
+    #     father = make_cat(2, mutations=[])
     #     trait = TraitRequirement("mutation", "Frostbit")
     #
     #     result = calculate_trait_probability(trait, mother, father, 0.0)
@@ -398,8 +398,8 @@ class TestTraitInheritanceProbability:
     #     assert result.probability == pytest.approx(0.4)
     #
     # def test_mutation_favoring_with_stimulation(self):
-    #     mother = make_mock_cat(1, mutations=["Frostbit"])
-    #     father = make_mock_cat(2, mutations=[])
+    #     mother = make_cat(1, mutations=["Frostbit"])
+    #     father = make_cat(2, mutations=[])
     #     trait = TraitRequirement("mutation", "Frostbit")
     #
     #     result = calculate_trait_probability(trait, mother, father, 50.0)
@@ -411,8 +411,8 @@ class TestTraitInheritanceProbability:
     #
     def test_passive_skillshare_not_inherited(self):
         """Base SkillShare cannot be inherited - should always return 0%."""
-        mother = make_mock_cat(1, passives=["SkillShare", "Sturdy"])
-        father = make_mock_cat(2, passives=[])
+        mother = make_cat(1, passives=["SkillShare", "Sturdy"])
+        father = make_cat(2, passives=[])
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.PASSIVE_ABILITY, "SkillShare")
         )
@@ -424,8 +424,8 @@ class TestTraitInheritanceProbability:
 
     def test_passive_upgraded_ability_normalized(self):
         """Querying for base passive matches parent's upgraded variant."""
-        mother = make_mock_cat(1, passives=["Sturdy2"])
-        father = make_mock_cat(2, passives=[])
+        mother = make_cat(1, passives=["Sturdy2"])
+        father = make_cat(2, passives=[])
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         )
@@ -437,8 +437,8 @@ class TestTraitInheritanceProbability:
 
     def test_ability_upgraded_ability_normalized(self):
         """Querying for base ability matches parent's upgraded variant."""
-        mother = make_mock_cat(1, abilities=["PathOfTheHunter2"])
-        father = make_mock_cat(2, abilities=[])
+        mother = make_cat(1, abilities=["PathOfTheHunter2"])
+        father = make_cat(2, abilities=[])
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
         )
@@ -455,8 +455,8 @@ class TestClassFavoringAlgebra:
     def test_class_favoring_100_percent(self):
         # At 100 stim, favor_chance = 1.0
         # mother_select should be 0.5 + 0.5*1.0 = 1.0
-        mother = make_mock_cat(1, abilities=["PathOfTheHunter"])  # class spell
-        father = make_mock_cat(2, abilities=["Swat"])  # generic spell
+        mother = make_cat(1, abilities=["PathOfTheHunter"])  # class spell
+        father = make_cat(2, abilities=["Swat"])  # generic spell
         trait = TraitRequirement(
             trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
         )
