@@ -9,7 +9,7 @@ from mewgenics_parser import Cat, TraitCategory
 from mewgenics_parser.cat import CatStatus
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import Trait, create_trait, extract_traits_from_cat
-from mewgenics_room_optimizer import OptimizationResult, RoomType
+from mewgenics_room_optimizer import OptimizationResult, RoomType, RoomAssignment
 from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
@@ -557,7 +557,10 @@ def on_clear_traits(sender: int, app_data: Any, user_data: AppState) -> None:
 def on_toggle_gay(sender: int, app_data: bool, user_data: tuple[int, AppState]) -> None:
     """Set gay flag for a cat based on checkbox state."""
     db_key, state = user_data
-    state.gay_flags[db_key] = app_data
+    if app_data:
+        state.gay_cats_by_id.add(db_key)
+    else:
+        state.gay_cats_by_id.discard(db_key)
     state.save()
     cat = next((c for c in state.cats if c.db_key == db_key), None)
     if cat:
@@ -855,7 +858,7 @@ def build_themes() -> None:
     dpg.bind_theme(global_theme)
 
 
-def on_global_enter(sender: int, app_data: Any, user_data: Any) -> None:
+def on_global_enter(sender: int, app_data: Any, user_data: AppState) -> None:
     """Check which filter is active when Enter is pressed and trigger add."""
     if dpg.is_item_active("body_part_filter"):
         on_add_trait(
@@ -1078,6 +1081,7 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
         avoid_lovers=avoid_lovers,
         scoring_prefs=scoring_prefs,
         trait_requirements=user_data.trait_requirements,
+        gay_cats_by_id=user_data.gay_cats_by_id,
         sa_temperature=sa_temp,
         sa_cooling_rate=sa_cooling,
         sa_neighbors_per_temp=sa_neighbors,
@@ -1262,7 +1266,7 @@ def on_pair_selected(
     show_pair_detail_window(pair, state)
 
 
-def build_details_tabs(selected_room: Any, state: AppState) -> None:
+def build_details_tabs(selected_room: RoomAssignment, state: AppState) -> None:
     """Build the tabbed details view for a selected room."""
     dpg.add_tab_bar(parent="details_section", tag="details_tab_bar")
 
@@ -1662,7 +1666,7 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
                 for i, stat in enumerate(cat.stat_base):
                     dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
 
-        is_gay = state.gay_flags.get(cat.db_key, False)
+        is_gay = cat.db_key in state.gay_cats_by_id
         dpg.add_checkbox(
             label="Same-Sex Breeding Preference",
             default_value=is_gay,

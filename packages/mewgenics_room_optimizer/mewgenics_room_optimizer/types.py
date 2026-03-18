@@ -62,7 +62,7 @@ class OptimizationParams:
     avoid_lovers: bool = True
     stimulation: float = 50.0
     trait_requirements: list[TraitRequirement] = field(default_factory=list)
-    gay_flags: dict[int, bool] = field(default_factory=dict)
+    gay_cats_by_id: set[int] = field(default_factory=set)
     scoring_prefs: ScoringPreferences | None = None
     sa_temperature: float = 100.0
     sa_cooling_rate: float = 0.95
