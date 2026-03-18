@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any
+import traceback
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat, TraitCategory
@@ -916,7 +917,12 @@ def scan_and_load_saves(
             init_traits_lists(state)
             update_all_cats_table(state)
         except Exception as e:
-            print(f"Error loading save: {e}")
+            with dpg.window(label="Error", id="error_modal", modal=True):
+                dpg.add_text("Error loading save!")
+                dpg.add_separator()
+                dpg.add_text(str(e))
+                dpg.add_input_text(multiline=True, readonly=True, default_value=traceback.format_exc())
+                dpg.add_button(label="Close", callback=lambda: dpg.delete_item("error_modal"))
     else:
         dpg.set_value("status_text", "No saves found")
         dpg.set_value("cat_count_text", "Cats: 0")
@@ -924,17 +930,23 @@ def scan_and_load_saves(
 
 def init_traits_lists(state: AppState) -> None:
     """Initialize the trait filter listboxes with available traits from cats."""
-    for category, listbox_tag in [
-        ("body_part", "body_part_listbox"),
-        ("passive_ability", "passive_listbox"),
-        ("active_ability", "ability_listbox"),
-    ]:
+    for category in TraitCategory:
         traits = state.get_available_traits(category)
-        formatted = [
-            f"{t.key} | {t.get_display_name(state.game_data)} | {t.get_description(state.game_data)}"
-            for t in traits
-        ]
-        dpg.configure_item(listbox_tag, items=formatted)
+        formatted = []
+        for t in traits:
+            parts = [t.key]
+            display_name = t.get_display_name(state.game_data)
+            if display_name and display_name not in parts:
+                parts.append(display_name)
+            description = t.get_description(state.game_data)
+            if description and description not in parts:
+                parts.append(description)
+            formatted.append(" | ".join(parts))
+        listbox_tag = f"{category.value}_listbox"
+        if dpg.does_item_exist(listbox_tag):
+            dpg.configure_item(listbox_tag, items=formatted)
+        else:
+            print(f"Warning: Tried to initialize traits listbox for {category.value} but it does not exist in the UI")
 
     update_traits_display(state)
 
