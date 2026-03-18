@@ -21,6 +21,7 @@ from mewgenics_scorer.factors import (
     trait_coverage,
 )
 from mewgenics_scorer.types import TraitRequirement
+from mewgenics_parser.traits import create_trait, TraitCategory
 
 
 def make_mock_cat(
@@ -183,34 +184,44 @@ class TestTraitCoverage:
     def test_a_has_trait(self):
         a = make_mock_cat(1, passives=["Host"])
         b = make_mock_cat(2)
-        traits = [TraitRequirement("passive", "Host")]
+        traits = [
+            TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
+        ]
         result = trait_coverage(a, b, traits)
         # Check the key of the returned TraitRequirement
         assert len(result) == 1
-        assert result[0].key == "Host"
+        assert result[0].trait.key == "Host"
 
     def test_b_has_trait(self):
         a = make_mock_cat(1)
         b = make_mock_cat(2, passives=["Host"])
-        traits = [TraitRequirement("passive", "Host")]
+        traits = [
+            TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
+        ]
         result = trait_coverage(a, b, traits)
         assert len(result) == 1
-        assert result[0].key == "Host"
+        assert result[0].trait.key == "Host"
 
     def test_neither_has_trait(self):
         a = make_mock_cat(1)
         b = make_mock_cat(2)
-        traits = [TraitRequirement("passive", "Host")]
+        traits = [
+            TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
+        ]
         result = trait_coverage(a, b, traits)
         assert len(result) == 0
 
     def test_passive_ability(self):
         a = make_mock_cat(1, passives=["Sturdy"])
         b = make_mock_cat(2)
-        traits = [TraitRequirement("passive", "Sturdy")]
+        traits = [
+            TraitRequirement(
+                trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+            )
+        ]
         result = trait_coverage(a, b, traits)
         assert len(result) == 1
-        assert result[0].key == "Sturdy"
+        assert result[0].trait.key == "Sturdy"
 
 
 class TestCalculatePairFactors:
@@ -311,7 +322,9 @@ class TestTraitInheritanceProbability:
     def test_ability_neither_parent_has(self):
         mother = make_mock_cat(1, abilities=[])
         father = make_mock_cat(2, abilities=[])
-        trait = TraitRequirement("ability", "PathOfTheHunter")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
@@ -321,7 +334,9 @@ class TestTraitInheritanceProbability:
     def test_ability_single_parent_has(self):
         mother = make_mock_cat(1, abilities=["PathOfTheHunter"])
         father = make_mock_cat(2, abilities=[])
-        trait = TraitRequirement("ability", "PathOfTheHunter")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
@@ -333,7 +348,9 @@ class TestTraitInheritanceProbability:
         # Mother has 4 spells, father has 1
         mother = make_mock_cat(1, abilities=["A", "B", "C", "PathOfTheHunter"])
         father = make_mock_cat(2, abilities=["Zap"])
-        trait = TraitRequirement("ability", "PathOfTheHunter")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
@@ -344,7 +361,9 @@ class TestTraitInheritanceProbability:
     def test_passive_skillshare_plus_guaranteed(self):
         mother = make_mock_cat(1, passives=["SkillShare2", "Sturdy"])
         father = make_mock_cat(2, passives=[])
-        trait = TraitRequirement("passive", "Sturdy")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
@@ -356,7 +375,9 @@ class TestTraitInheritanceProbability:
         # Disorders should NOT be in passive_abilities (separated at parse time)
         mother = make_mock_cat(1, passives=["Sturdy"], disorders=["Blind"])
         father = make_mock_cat(2, passives=[])
-        trait = TraitRequirement("passive", "Blind")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Blind")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
@@ -390,7 +411,9 @@ class TestTraitInheritanceProbability:
         """Base SkillShare cannot be inherited - should always return 0%."""
         mother = make_mock_cat(1, passives=["SkillShare", "Sturdy"])
         father = make_mock_cat(2, passives=[])
-        trait = TraitRequirement("passive", "SkillShare")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.PASSIVE_ABILITY, "SkillShare")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
@@ -401,7 +424,9 @@ class TestTraitInheritanceProbability:
         """Querying for base passive matches parent's upgraded variant."""
         mother = make_mock_cat(1, passives=["Sturdy2"])
         father = make_mock_cat(2, passives=[])
-        trait = TraitRequirement("passive", "Sturdy")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
@@ -412,7 +437,9 @@ class TestTraitInheritanceProbability:
         """Querying for base ability matches parent's upgraded variant."""
         mother = make_mock_cat(1, abilities=["PathOfTheHunter2"])
         father = make_mock_cat(2, abilities=[])
-        trait = TraitRequirement("ability", "PathOfTheHunter")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
@@ -428,7 +455,9 @@ class TestClassFavoringAlgebra:
         # mother_select should be 0.5 + 0.5*1.0 = 1.0
         mother = make_mock_cat(1, abilities=["PathOfTheHunter"])  # class spell
         father = make_mock_cat(2, abilities=["Swat"])  # generic spell
-        trait = TraitRequirement("ability", "PathOfTheHunter")
+        trait = TraitRequirement(
+            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+        )
 
         result = calculate_trait_probability(trait, mother, father, 100.0)
 

@@ -1,30 +1,20 @@
 """DearPyGui UI components for room optimizer."""
-from mewgenics_parser.utils import NameAndDescription
 
 from collections.abc import Callable
-from enum import StrEnum
-from pprint import pformat
 from typing import Any
 from dataclasses import asdict
-import re
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat
 from mewgenics_parser.gpak import GameData
-from mewgenics_parser.trait_dictionary import normalize_trait_name
 from mewgenics_room_optimizer import OptimizationResult, RoomType, can_pair_gay
 from mewgenics_room_optimizer.types import ScoredPair
+from mewgenics_parser.traits import Trait, create_trait
 from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
 from .state import AppState
 
 LOCATION_COL_WIDTH = 125
-
-
-class TraitCategory(StrEnum):
-    BODY_PART = "body_part"
-    PASSIVE = "passive"
-    ABILITY = "ability"
 
 
 COLOR_SUCCESS = (100, 255, 100, 255)
@@ -113,6 +103,20 @@ def substring_match(query: str, choices: list[str]) -> list[str]:
     if not query:
         return choices
     return [c for c in choices if query.casefold() in c.casefold()]
+
+
+def trait_substring_match(
+    query: str, choices: list[Trait], game_data: GameData
+) -> list[Trait]:
+    """Return trait items containing query as substring (case-insensitive)."""
+    if not query:
+        return choices
+    result = []
+    for t in choices:
+        display = f"{t.key} | {t.get_display_name(game_data)} | {t.get_description(game_data)}"
+        if query.casefold() in display.casefold():
+            result.append(t)
+    return result
 
 
 def build_ui(state: AppState) -> None:
@@ -400,71 +404,32 @@ def build_traits_section(state: AppState) -> None:
     with dpg.collapsing_header(label="Favorable Traits", default_open=True):
         with dpg.child_window(border=True, tag="traits_section"):
             with dpg.tab_bar():
-                with dpg.tab(label="Body Parts"):
-                    dpg.add_input_text(
-                        tag="body_part_filter",
-                        hint="Filter...",
-                        width=-1,
-                        callback=on_body_part_filter,
-                        user_data=(
-                            state,
-                            "body_part_listbox",
-                        ),
-                    )
-                    dpg.add_listbox(
-                        tag="body_part_listbox",
-                        width=-1,
-                        num_items=5,
-                    )
-                    dpg.add_button(
-                        label="Add",
-                        callback=on_add_trait,
-                        user_data=(state, TraitCategory.BODY_PART, "body_part_listbox"),
-                    )
-                with dpg.tab(label="Passives"):
-                    dpg.add_input_text(
-                        tag="passive_filter",
-                        hint="Filter...",
-                        width=-1,
-                        callback=on_trait_filter,
-                        user_data=(
-                            state,
-                            "passive_listbox",
-                            state.get_available_passives,
-                        ),
-                    )
-                    dpg.add_listbox(
-                        tag="passive_listbox",
-                        width=-1,
-                        num_items=5,
-                    )
-                    dpg.add_button(
-                        label="Add",
-                        callback=on_add_trait,
-                        user_data=(state, TraitCategory.PASSIVE, "passive_listbox"),
-                    )
-                with dpg.tab(label="Abilities"):
-                    dpg.add_input_text(
-                        tag="ability_filter",
-                        hint="Filter...",
-                        width=-1,
-                        callback=on_trait_filter,
-                        user_data=(
-                            state,
-                            "ability_listbox",
-                            state.get_available_abilities,
-                        ),
-                    )
-                    dpg.add_listbox(
-                        tag="ability_listbox",
-                        width=-1,
-                        num_items=5,
-                    )
-                    dpg.add_button(
-                        label="Add",
-                        callback=on_add_trait,
-                        user_data=(state, TraitCategory.ABILITY, "ability_listbox"),
-                    )
+                for tab_label, category in [
+                    ("Body Parts", "body_part"),
+                    ("Passives", "passive_ability"),
+                    ("Abilities", "active_ability"),
+                ]:
+                    with dpg.tab(label=tab_label):
+                        listbox_tag = f"{category}_listbox"
+                        filter_tag = f"{category}_filter"
+
+                        dpg.add_input_text(
+                            tag=filter_tag,
+                            hint="Filter...",
+                            width=-1,
+                            callback=on_trait_filter,
+                            user_data=(state, listbox_tag, category),
+                        )
+                        dpg.add_listbox(
+                            tag=listbox_tag,
+                            width=-1,
+                            num_items=5,
+                        )
+                        dpg.add_button(
+                            label="Add",
+                            callback=on_add_trait,
+                            user_data=(state, category, listbox_tag),
+                        )
 
             dpg.add_separator()
             with dpg.table(
@@ -479,34 +444,6 @@ def build_traits_section(state: AppState) -> None:
                     )
 
             dpg.add_group(tag="selected_traits_container")
-
-
-def _split_body_part_key(body_part_key: str) -> tuple[str, int]:
-    match = re.fullmatch(r"(\D+)(\d+)", body_part_key)
-    if not match:
-        raise ValueError(f"String '{body_part_key}' does not match the expected 'text + number' format.")
-    alpha_part, num_part = match.groups()
-    return alpha_part, int(num_part)
-
-def _format_body_part_with_description(
-        body_part_key: str, game_data: GameData) -> str:
-    """Format a body part with its description for display in listbox."""
-    category, part_id = _split_body_part_key(body_part_key)
-    name_desc = game_data.body_part_text.get(category.lower(), {}).get(part_id, NameAndDescription())
-    return " | ".join(filter(None, [body_part_key, name_desc.name, name_desc.description]))
-
-
-def _format_trait_with_description(
-    trait_key: str, game_data: GameData
-) -> str:
-    """Format a trait with its description for display in listbox."""
-    desc = game_data.ability_text[trait_key].description
-    return f"{trait_key} | {desc}" if desc else trait_key
-
-
-def _extract_trait_key(formatted: str) -> str:
-    """Extract the actual trait key from a formatted listbox string."""
-    return formatted.split(" | ")[0].strip()
 
 
 def on_cat_name_filter(sender: int, app_data: str, user_data: AppState) -> None:
@@ -535,9 +472,12 @@ def on_toggle_show_all_cats(sender: int, app_data: bool, user_data: AppState) ->
 
 
 def on_add_trait(
-    sender: int | None, app_data: Any, user_data: tuple[AppState, TraitCategory, str]
+    sender: int | None, app_data: Any, user_data: tuple[AppState, str, str]
 ) -> None:
     """Add selected trait to favorable traits."""
+    from mewgenics_parser.traits import create_trait
+    from mewgenics_scorer import TraitRequirement
+
     state, category, listbox_tag = user_data
     selected = dpg.get_value(listbox_tag)
 
@@ -547,40 +487,27 @@ def on_add_trait(
             selected = items[0]
 
     if selected:
-        from mewgenics_scorer import TraitRequirement
-
-        actual_key = _extract_trait_key(selected)
+        actual_key = selected.split(" | ")[0].strip()
         state.planner_traits.append(
-            TraitRequirement(category=category, key=actual_key, weight=5.0)
+            TraitRequirement(trait=create_trait(category, actual_key), weight=5.0)
         )
         state.save()
         update_traits_display(state)
 
 
-def on_body_part_filter(
-    sender: int, app_data: str, user_data: tuple[AppState, str]
-) -> None:
-    """Filter traits listbox with fuzzy matching."""
-    state, listbox_tag = user_data
-    filter_text = app_data or ""
-
-    body_parts = state.get_available_body_part_keys()
-    # first format then filter so that the search can match against the descriptions as well
-    formatted = [_format_body_part_with_description(bp, state.game_data) for bp in body_parts]
-    filtered = substring_match(filter_text, formatted)
-    dpg.configure_item(listbox_tag, items=filtered)
-
-
 def on_trait_filter(
-    sender: int, app_data: str, user_data: tuple[AppState, str, Callable]
+    sender: int, app_data: str, user_data: tuple[AppState, str, str]
 ) -> None:
     """Filter traits listbox with fuzzy matching."""
-    state, listbox_tag, get_traits_func = user_data
+    state, listbox_tag, category = user_data
     filter_text = app_data or ""
 
-    traits = get_traits_func()
-    filtered = substring_match(filter_text, traits)
-    formatted = [_format_trait_with_description(t, state.game_data) for t in filtered]
+    traits = state.get_available_traits(category)
+    filtered = trait_substring_match(filter_text, traits, state.game_data)
+    formatted = [
+        f"{t.key} | {t.get_display_name(state.game_data)} | {t.get_description(state.game_data)}"
+        for t in filtered
+    ]
 
     dpg.configure_item(listbox_tag, items=formatted)
 
@@ -590,12 +517,6 @@ def on_clear_traits(sender: int, app_data: Any, user_data: AppState) -> None:
     user_data.planner_traits.clear()
     user_data.save()
     update_traits_display(user_data)
-
-
-def _is_favorable_trait(trait_key: str, planner_traits: list) -> bool:
-    """Check if a trait is in the favorable traits list."""
-    normalized = normalize_trait_name(trait_key)
-    return any(normalize_trait_name(t.key) == normalized for t in planner_traits)
 
 
 def on_toggle_gay(sender: int, app_data: bool, user_data: tuple[int, AppState]) -> None:
@@ -636,23 +557,23 @@ def update_traits_display(state: AppState) -> None:
 
     dpg.delete_item(container, children_only=True)
 
-    for i, trait in enumerate(state.planner_traits):
+    for i, trait_req in enumerate(state.planner_traits):
         with dpg.group(horizontal=True, parent=container):
-            base_key = trait.key
-            upgraded_key = base_key + "2"
+            trait = trait_req.trait
 
-            base_nad = state.game_data.ability_text[base_key]
-            upgraded_nad = state.game_data.ability_text[upgraded_key]
+            display_name = trait.get_display_name(state.game_data)
+            description = trait.get_description(state.game_data)
+            upgraded_desc = trait.get_upgraded_description(state.game_data)
 
             trait_text = dpg.add_text(
-                f"[{int(trait.weight):2}] {trait.category}: {base_nad.name or base_key}"
+                f"[{int(trait_req.weight):2}] {trait.category}: {display_name}"
             )
 
             tooltip_lines = []
-            if base_nad.description:
-                tooltip_lines.append(f"Base: {base_nad.description}")
-            if upgraded_nad.description:
-                tooltip_lines.append(f"Upgraded: {upgraded_nad.description}")
+            if description:
+                tooltip_lines.append(f"Base: {description}")
+            if upgraded_desc:
+                tooltip_lines.append(f"Upgraded: {upgraded_desc}")
 
             tooltip_text = (
                 "\n".join(tooltip_lines) if tooltip_lines else "No description"
@@ -684,21 +605,7 @@ def update_traits_display(state: AppState) -> None:
 
 def _cat_has_favorable_trait(cat: Cat, planner_traits: list[TraitRequirement]) -> bool:
     """Check if cat has any favorable trait from planner."""
-    for trait in planner_traits:
-        norm_trait_key = normalize_trait_name(trait.key)
-        if trait.category == TraitCategory.BODY_PART:
-            for part, id_ in asdict(cat.body_parts).items():
-                if trait.key == f"{part.title()}{id_}":
-                    return True
-        if trait.category == TraitCategory.PASSIVE:
-            for p in cat.passive_abilities or []:
-                if normalize_trait_name(p) == norm_trait_key:
-                    return True
-        if trait.category == TraitCategory.ABILITY:
-            for a in cat.active_abilities or []:
-                if normalize_trait_name(a) == norm_trait_key:
-                    return True
-    return False
+    return any(req.trait.is_possessed_by(cat) for req in planner_traits)
 
 
 def _get_assigned_room_key(
@@ -943,13 +850,11 @@ def build_themes() -> None:
 def on_global_enter(sender: int, app_data: Any, user_data: Any) -> None:
     """Check which filter is active when Enter is pressed and trigger add."""
     if dpg.is_item_active("body_part_filter"):
-        on_add_trait(
-            None, None, (user_data, TraitCategory.BODY_PART, "body_part_listbox")
-        )
+        on_add_trait(None, None, (user_data, "body_part", "body_part_listbox"))
     elif dpg.is_item_active("passive_filter"):
-        on_add_trait(None, None, (user_data, TraitCategory.PASSIVE, "passive_listbox"))
+        on_add_trait(None, None, (user_data, "passive_ability", "passive_listbox"))
     elif dpg.is_item_active("ability_filter"):
-        on_add_trait(None, None, (user_data, TraitCategory.ABILITY, "ability_listbox"))
+        on_add_trait(None, None, (user_data, "active_ability", "ability_listbox"))
 
 
 def scan_and_load_saves(
@@ -1001,24 +906,17 @@ def scan_and_load_saves(
 
 def init_traits_lists(state: AppState) -> None:
     """Initialize the trait filter listboxes with available traits from cats."""
-    body_part_keys = state.get_available_body_part_keys()
-    passives = state.get_available_passives()
-    abilities = state.get_available_abilities()
-
-    formatted_body_parts = [
-        _format_body_part_with_description(bp, state.game_data) for bp in body_part_keys
-    ]
-
-    formatted_passives = [
-        _format_trait_with_description(p, state.game_data) for p in passives
-    ]
-    formatted_abilities = [
-        _format_trait_with_description(a, state.game_data) for a in abilities
-    ]
-
-    dpg.configure_item("body_part_listbox", items=formatted_body_parts)
-    dpg.configure_item("passive_listbox", items=formatted_passives)
-    dpg.configure_item("ability_listbox", items=formatted_abilities)
+    for category, listbox_tag in [
+        ("body_part", "body_part_listbox"),
+        ("passive_ability", "passive_listbox"),
+        ("active_ability", "ability_listbox"),
+    ]:
+        traits = state.get_available_traits(category)
+        formatted = [
+            f"{t.key} | {t.get_display_name(state.game_data)} | {t.get_description(state.game_data)}"
+            for t in traits
+        ]
+        dpg.configure_item(listbox_tag, items=formatted)
 
     update_traits_display(state)
 
@@ -1378,7 +1276,7 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                     hits = sum(
                         1
                         for pt in state.planner_traits
-                        if normalize_trait_name(pt.key) in combined_traits
+                        if pt.trait.key in combined_traits
                     )
                     total = len(state.planner_traits)
 
@@ -1791,12 +1689,13 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             default_open=True,
         ):
             for ab in cat.active_abilities or []:
-                nd = state.game_data.ability_text[ab]
-                desc = nd.description or "No description"
-                is_fav = _is_favorable_trait(ab, state.planner_traits)
+                trait = create_trait("active_ability", ab)
+                name = trait.get_display_name(state.game_data)
+                desc = trait.get_description(state.game_data)
+                is_fav = trait in (req.trait for req in state.planner_traits)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{nd.name or ab}", color=color)
+                dpg.add_text(f"{prefix}{name}", color=color)
                 if desc:
                     dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
@@ -1805,12 +1704,13 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             default_open=True,
         ):
             for ab in cat.passive_abilities or []:
-                nd = state.game_data.ability_text[ab]
-                desc = nd.description or "No description"
-                is_fav = _is_favorable_trait(ab, state.planner_traits)
+                trait = create_trait("passive_ability", ab)
+                name = trait.get_display_name(state.game_data)
+                desc = trait.get_description(state.game_data)
+                is_fav = trait in (req.trait for req in state.planner_traits)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{nd.name or ab}", color=color)
+                dpg.add_text(f"{prefix}{name}", color=color)
                 if desc:
                     dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
@@ -1818,24 +1718,68 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             label=f"Disorders ({len(cat.disorders or [])})", default_open=True
         ):
             for dis in cat.disorders or []:
-                nd = state.game_data.ability_text[dis]
+                trait = create_trait("disorder", dis)
+                name = trait.get_display_name(state.game_data)
+                desc = trait.get_description(state.game_data)
                 color = COLOR_DANGER
-                dpg.add_text(f"  {nd.name or dis}", color=color)
+                dpg.add_text(f"  {name}", color=color)
                 if desc:
-                    dpg.add_text(
-                        f"    {nd.description or 'No description'}",
-                        color=(255, 150, 150, 255),
-                    )
+                    dpg.add_text(f"    {desc}", color=(255, 150, 150, 255))
 
         with dpg.tree_node(label="Body Parts", default_open=True):
             body_parts: dict[str, int] = asdict(cat.body_parts)
             for part_name, part_id in body_parts.items():
-                name_and_desc = state.game_data.body_part_text[part_name].get(part_id)
-                name = name_and_desc.name if name_and_desc else f"{part_name.title()} {part_id}"
-                desc = name_and_desc.description if name_and_desc else ""
-                dpg.add_text(f"  {name}")
+                body_part_key = f"{part_name.title()}{part_id}"
+                trait = create_trait("body_part", body_part_key)
+                name = trait.get_display_name(state.game_data)
+                desc = trait.get_description(state.game_data)
+                is_fav = trait in (req.trait for req in state.planner_traits)
+                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
+                prefix = "[*] " if is_fav else "  "
+                dpg.add_text(f"{prefix}{name}", color=color)
                 if desc:
-                    dpg.add_text(f"    {desc}")
+                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
+
+        with dpg.tree_node(
+            label=f"Passive Abilities ({len(cat.passive_abilities or [])})",
+            default_open=True,
+        ):
+            for ab in cat.passive_abilities or []:
+                trait = create_trait("passive_ability", ab)
+                name = trait.get_display_name(state.game_data)
+                desc = trait.get_description(state.game_data)
+                is_fav = trait in (req.trait for req in state.planner_traits)
+                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
+                prefix = "[*] " if is_fav else "  "
+                dpg.add_text(f"{prefix}{name}", color=color)
+                if desc:
+                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
+
+        with dpg.tree_node(
+            label=f"Disorders ({len(cat.disorders or [])})", default_open=True
+        ):
+            for dis in cat.disorders or []:
+                trait = create_trait("disorder", dis)
+                name = trait.get_display_name(state.game_data)
+                desc = trait.get_description(state.game_data)
+                color = COLOR_DANGER
+                dpg.add_text(f"  {name}", color=color)
+                if desc:
+                    dpg.add_text(f"    {desc}", color=(255, 150, 150, 255))
+
+        with dpg.tree_node(label="Body Parts", default_open=True):
+            body_parts: dict[str, int] = asdict(cat.body_parts)
+            for part_name, part_id in body_parts.items():
+                body_part_key = f"{part_name.title()}{part_id}"
+                trait = create_trait("body_part", body_part_key)
+                name = trait.get_display_name(state.game_data)
+                desc = trait.get_description(state.game_data)
+                is_fav = trait in (req.trait for req in state.planner_traits)
+                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
+                prefix = "[*] " if is_fav else "  "
+                dpg.add_text(f"{prefix}{name}", color=color)
+                if desc:
+                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
 
 
 def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
@@ -1975,9 +1919,7 @@ def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
             combined_traits = cat_a.all_normalized_traits | cat_b.all_normalized_traits
 
             hits = sum(
-                1
-                for pt in state.planner_traits
-                if normalize_trait_name(pt.key) in combined_traits
+                1 for pt in state.planner_traits if pt.trait.key in combined_traits
             )
             total = len(state.planner_traits)
 

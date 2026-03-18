@@ -110,7 +110,6 @@ class PairFactors:
 
 
 def _calc_ability_inheritance(
-    trait_key: str,
     parent_a: Cat,
     parent_b: Cat,
     stimulation: float,
@@ -122,8 +121,8 @@ def _calc_ability_inheritance(
     parent_a_spells = parent_a.inheritable_abilities
     parent_b_spells = parent_b.inheritable_abilities
 
-    parent_a_has = trait_key in parent_a_spells
-    parent_b_has = trait_key in parent_b_spells
+    parent_a_has = trait.trait.is_possessed_by(parent_a)
+    parent_b_has = trait.trait.is_possessed_by(parent_b)
 
     if not parent_a_has and not parent_b_has:
         return TraitInheritanceProbability(trait, 0.0, "neither", 0.0, 0.0)
@@ -177,7 +176,6 @@ def _calc_ability_inheritance(
 
 
 def _calc_passive_inheritance(
-    trait_key: str,
     parent_a: Cat,
     parent_b: Cat,
     stimulation: float,
@@ -189,8 +187,8 @@ def _calc_passive_inheritance(
     parent_a_passives_norm = parent_a.inheritable_passives
     parent_b_passives_norm = parent_b.inheritable_passives
 
-    parent_a_has = trait_key in parent_a_passives_norm
-    parent_b_has = trait_key in parent_b_passives_norm
+    parent_a_has = trait.trait.is_possessed_by(parent_a)
+    parent_b_has = trait.trait.is_possessed_by(parent_b)
 
     # SKILLSHARE+ SPECIAL: 100% guaranteed
     # Check using RAW passives (must check for + variant)
@@ -259,7 +257,6 @@ def _calc_passive_inheritance(
 
 
 def _calc_mutation_inheritance(
-    trait_key: str,
     parent_a: Cat,
     parent_b: Cat,
     stimulation: float,
@@ -267,12 +264,8 @@ def _calc_mutation_inheritance(
 ) -> TraitInheritanceProbability:
     """Mutation inheritance: 80% inherit, mutation favoring with stimulation."""
 
-    # XXX: ↓ Stubbed as I need to better understand mutation data.
-    parent_a_muts = []
-    parent_b_muts = []
-
-    parent_a_has = trait_key in parent_a_muts
-    parent_b_has = trait_key in parent_b_muts
+    parent_a_has = trait.trait.is_possessed_by(parent_a)
+    parent_b_has = trait.trait.is_possessed_by(parent_b)
 
     if not parent_a_has and not parent_b_has:
         return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
@@ -323,18 +316,13 @@ def calculate_trait_probability(
     if parent_a is None or parent_b is None:
         return TraitInheritanceProbability(trait, 0.0, "unknown", 0.0, 0.0)
 
-    if trait.category == "ability":
-        return _calc_ability_inheritance(
-            trait.key, parent_a, parent_b, stimulation, trait
-        )
-    elif trait.category == "passive":
-        return _calc_passive_inheritance(
-            trait.key, parent_a, parent_b, stimulation, trait
-        )
-    elif trait.category == "mutation":
-        return _calc_mutation_inheritance(
-            trait.key, parent_a, parent_b, stimulation, trait
-        )
+    category = trait.trait.category
+    if category == "active_ability":
+        return _calc_ability_inheritance(parent_a, parent_b, stimulation, trait)
+    elif category == "passive_ability":
+        return _calc_passive_inheritance(parent_a, parent_b, stimulation, trait)
+    elif category == "mutation" or category == "body_part":
+        return _calc_mutation_inheritance(parent_a, parent_b, stimulation, trait)
 
     return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
 
@@ -381,21 +369,9 @@ def trait_coverage(
     """Return list of TraitRequirements that either cat has."""
     matches = []
     for t in traits:
-        a_has = _cat_has_trait(a, t.category, t.key)
-        b_has = _cat_has_trait(b, t.category, t.key)
-        if a_has or b_has:
+        if t.trait.is_possessed_by(a) or t.trait.is_possessed_by(b):
             matches.append(t)
     return matches
-
-
-def _cat_has_trait(cat: Cat, category: str, key: str) -> bool:
-    if category == "mutation":
-        return any(m == key for m in [])
-    elif category == "passive":
-        return any(p == key for p in (cat.passive_abilities or []))
-    elif category == "ability":
-        return any(a == key for a in (cat.active_abilities or []))
-    return False
 
 
 def calculate_pair_factors(

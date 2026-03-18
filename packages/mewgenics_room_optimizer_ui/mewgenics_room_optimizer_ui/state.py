@@ -1,14 +1,16 @@
 """Application state for room optimizer UI."""
+
 from typing import Self
 
 import json
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from mewgenics_parser import Cat
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.trait_dictionary import normalize_trait_name
+from mewgenics_parser.traits import Trait, create_trait, extract_traits_from_cat
 from mewgenics_room_optimizer import (
     OptimizationResult,
     RoomConfig,
@@ -118,8 +120,7 @@ def planner_traits_from_dict(data: list[dict]) -> list[TraitRequirement]:
     """Convert dictionary list to TraitRequirement objects with normalized keys."""
     return [
         TraitRequirement(
-            category=t["category"],
-            key=normalize_trait_key(t["key"]),
+            trait=create_trait(t["category"], t["key"]),
             weight=t.get("weight", 5.0),
         )
         for t in data
@@ -135,20 +136,19 @@ def migrate_planner_traits(traits: list[TraitRequirement]) -> list[TraitRequirem
     seen: dict[tuple[str, str], TraitRequirement] = {}
 
     for t in traits:
-        normalized_key = normalize_trait_key(t.key)
-        key = (t.category, normalized_key)
+        trait_key = t.trait.key
+        category = t.trait.category
+        key = (category, trait_key)
 
         if key not in seen:
             seen[key] = TraitRequirement(
-                category=t.category,
-                key=normalized_key,
+                trait=create_trait(category, trait_key),
                 weight=t.weight,
             )
         else:
             existing = seen[key]
             seen[key] = TraitRequirement(
-                category=t.category,
-                key=normalized_key,
+                trait=create_trait(category, trait_key),
                 weight=max(existing.weight, t.weight),
             )
 
@@ -159,8 +159,8 @@ def planner_traits_to_dict(traits: list[TraitRequirement]) -> list[dict]:
     """Convert TraitRequirement objects to dictionary list."""
     return [
         {
-            "category": t.category,
-            "key": t.key,
+            "category": t.trait.category,
+            "key": t.trait.key,
             "weight": t.weight,
         }
         for t in traits
@@ -281,25 +281,15 @@ class AppState:
         """Return only cats with In House status."""
         return [c for c in self.cats if c.status == "In House"]
 
-    def get_available_body_part_keys(self) -> list[str]:
-        """Extract unique normalized body part categories from alive cats."""
-        body_parts: set[str] = set()
-        for cat in self.alive_cats:
-            body_parts.update(cat.body_part_keys)
-        return sorted(body_parts)
+    def get_available_traits(self, category: str) -> list[Trait]:
+        """Extract unique traits from alive cats for a given category."""
+        traits: list[Trait] = []
+        seen_keys: set[str] = set()
 
-    def get_available_passives(self) -> list[str]:
-        """Extract unique normalized passive abilities from alive cats."""
-        passives = set()
         for cat in self.alive_cats:
-            for p in cat.passive_abilities or []:
-                passives.add(normalize_trait_key(p))
-        return sorted(passives)
+            for trait in extract_traits_from_cat(cat):
+                if trait.category == category and trait.key not in seen_keys:
+                    traits.append(trait)
+                    seen_keys.add(trait.key)
 
-    def get_available_abilities(self) -> list[str]:
-        """Extract unique normalized active abilities from alive cats."""
-        abilities = set()
-        for cat in self.alive_cats:
-            for a in cat.active_abilities or []:
-                abilities.add(normalize_trait_key(a))
-        return sorted(abilities)
+        return sorted(traits, key=lambda t: t.key)
