@@ -35,7 +35,7 @@ class BinaryReader:
         self.pos += 8
         return v
 
-    def str(self) -> str | None:
+    def str(self) -> builtins.str | None:
         """Read length-prefixed UTF-8 string."""
         start = self.pos
         try:
