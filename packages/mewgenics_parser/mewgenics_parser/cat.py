@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import struct
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from types import SimpleNamespace
 from typing import NamedTuple, TypeGuard
@@ -90,6 +90,19 @@ def _read_db_key_candidates(
         if value not in keys:
             keys.append(value)
     return keys
+
+
+class CatBodyPartCategory(StrEnum):
+    TEXTURE = "texture"
+    BODY = "body"
+    HEAD = "head"
+    TAIL = "tail"
+    LEGS = "legs"
+    ARMS = "arms"
+    EYES = "eyes"
+    EYEBROWS = "eyebrows"
+    EARS = "ears"
+    MOUTH = "mouth"
 
 
 @dataclass(slots=True, frozen=True)
@@ -512,10 +525,19 @@ class Cat:
         ]
 
     @property
+    def body_part_keys(self) -> list[str]:
+        """Returns body part identifiers as normalized trait keys for inheritance math."""
+        return [
+            f"{category.title()}{id}"
+            for category, id in asdict(self.body_parts).items()
+        ]
+
+    @property
     def all_normalized_traits(self) -> set[str]:
-        """Returns a unified set of all normalized abilities, passives, and mutations."""
+        """Returns a unified set of all normalized abilities, passives, disorders, and body part keys for this cat."""
         traits: set[str] = set()
-        traits.update(normalize_trait_name(t) for t in (self.active_abilities or []))
-        traits.update(normalize_trait_name(t) for t in (self.passive_abilities or []))
-        # traits.update(normalize_trait_name(t) for t in (self.mutations or []))
+        traits.update(normalize_trait_name(t) for t in self.active_abilities)
+        traits.update(normalize_trait_name(t) for t in self.passive_abilities)
+        traits.update(normalize_trait_name(t) for t in self.disorders)
+        traits.update(self.body_part_keys)
         return traits

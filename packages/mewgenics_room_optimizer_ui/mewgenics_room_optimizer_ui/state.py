@@ -1,8 +1,9 @@
 """Application state for room optimizer UI."""
+from typing import Self
 
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 from mewgenics_parser import Cat
@@ -205,7 +206,7 @@ class AppState:
         return value
 
     @classmethod
-    def from_config(cls) -> "AppState":
+    def from_config(cls) -> Self:
         """Create AppState from saved configuration."""
         config = load_config()
         saved_rooms = {r["key"]: r for r in config.get("rooms", [])}
@@ -280,13 +281,12 @@ class AppState:
         """Return only cats with In House status."""
         return [c for c in self.cats if c.status == "In House"]
 
-    def get_available_mutations(self) -> list[str]:
-        """Extract unique normalized mutations from alive cats."""
-        mutations = set()
-        # for cat in self.alive_cats:
-        #     for m in cat.mutations or []:
-        #         mutations.add(normalize_trait_key(m))
-        return sorted(mutations)
+    def get_available_body_part_keys(self) -> list[str]:
+        """Extract unique normalized body part categories from alive cats."""
+        body_parts: set[str] = set()
+        for cat in self.alive_cats:
+            body_parts.update(cat.body_part_keys)
+        return sorted(body_parts)
 
     def get_available_passives(self) -> list[str]:
         """Extract unique normalized passive abilities from alive cats."""

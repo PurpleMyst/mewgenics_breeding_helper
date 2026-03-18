@@ -61,12 +61,12 @@ class TestGpakIntegration:
 
         # Verify all fields are populated
         assert isinstance(gd.ability_text, dict)
-        assert isinstance(gd.mutation_text_by_part_and_id, dict)
+        assert isinstance(gd.body_part_text, dict)
         assert isinstance(gd.game_strings, dict)
 
         # Verify expected data is present
         assert len(gd.ability_text) > 0
-        assert len(gd.mutation_text_by_part_and_id) > 0
+        assert len(gd.body_part_text) > 0
         assert len(gd.game_strings) > 0
 
     def test_known_abilities(self, gpak_path):
@@ -95,7 +95,7 @@ class TestGpakIntegration:
     def test_visual_mutations_structure(self, gpak_path):
         """Test visual mutation data from real GPAK."""
         gd = GameData.from_gpak(gpak_path)
-        result = gd.mutation_text_by_part_and_id
+        result = gd.body_part_text
         assert list(result.keys()) == snapshot(
             [
                 "body",
@@ -107,13 +107,14 @@ class TestGpakIntegration:
                 "mouth",
                 "tail",
                 "texture",
+                "arms",
             ]
         )
 
     def test_known_visual_mutation(self, gpak_path):
         """Verify known visual mutation has expected description from real GPAK."""
         gd = GameData.from_gpak(gpak_path)
-        result = gd.mutation_text_by_part_and_id
+        result = gd.body_part_text
 
         assert result["eyes"][303] == snapshot(
             NameAndDescription(name="Gem Eyes", description="+1 INT, +1 CHA")

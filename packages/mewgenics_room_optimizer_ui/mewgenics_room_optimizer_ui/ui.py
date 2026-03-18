@@ -1,10 +1,12 @@
 """DearPyGui UI components for room optimizer."""
+from mewgenics_parser.utils import NameAndDescription
 
 from collections.abc import Callable
 from enum import StrEnum
 from pprint import pformat
 from typing import Any
 from dataclasses import asdict
+import re
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat
@@ -20,7 +22,7 @@ LOCATION_COL_WIDTH = 125
 
 
 class TraitCategory(StrEnum):
-    MUTATION = "mutation"
+    BODY_PART = "body_part"
     PASSIVE = "passive"
     ABILITY = "ability"
 
@@ -398,27 +400,26 @@ def build_traits_section(state: AppState) -> None:
     with dpg.collapsing_header(label="Favorable Traits", default_open=True):
         with dpg.child_window(border=True, tag="traits_section"):
             with dpg.tab_bar():
-                with dpg.tab(label="Mutations"):
+                with dpg.tab(label="Body Parts"):
                     dpg.add_input_text(
-                        tag="mutation_filter",
+                        tag="body_part_filter",
                         hint="Filter...",
                         width=-1,
-                        callback=on_trait_filter,
+                        callback=on_body_part_filter,
                         user_data=(
                             state,
-                            "mutation_listbox",
-                            state.get_available_mutations,
+                            "body_part_listbox",
                         ),
                     )
                     dpg.add_listbox(
-                        tag="mutation_listbox",
+                        tag="body_part_listbox",
                         width=-1,
                         num_items=5,
                     )
                     dpg.add_button(
                         label="Add",
                         callback=on_add_trait,
-                        user_data=(state, TraitCategory.MUTATION, "mutation_listbox"),
+                        user_data=(state, TraitCategory.BODY_PART, "body_part_listbox"),
                     )
                 with dpg.tab(label="Passives"):
                     dpg.add_input_text(
@@ -480,15 +481,27 @@ def build_traits_section(state: AppState) -> None:
             dpg.add_group(tag="selected_traits_container")
 
 
+def _split_body_part_key(body_part_key: str) -> tuple[str, int]:
+    match = re.fullmatch(r"(\D+)(\d+)", body_part_key)
+    if not match:
+        raise ValueError(f"String '{body_part_key}' does not match the expected 'text + number' format.")
+    alpha_part, num_part = match.groups()
+    return alpha_part, int(num_part)
+
+def _format_body_part_with_description(
+        body_part_key: str, game_data: GameData) -> str:
+    """Format a body part with its description for display in listbox."""
+    category, part_id = _split_body_part_key(body_part_key)
+    name_desc = game_data.body_part_text.get(category.lower(), {}).get(part_id, NameAndDescription())
+    return " | ".join(filter(None, [body_part_key, name_desc.name, name_desc.description]))
+
+
 def _format_trait_with_description(
-    trait_key: str, game_data: GameData, max_desc_len: int = 40
+    trait_key: str, game_data: GameData
 ) -> str:
     """Format a trait with its description for display in listbox."""
     desc = game_data.ability_text[trait_key].description
-    if desc:
-        truncated = desc[:max_desc_len] + "..." if len(desc) > max_desc_len else desc
-        return f"{trait_key} | {truncated}"
-    return trait_key
+    return f"{trait_key} | {desc}" if desc else trait_key
 
 
 def _extract_trait_key(formatted: str) -> str:
@@ -542,6 +555,20 @@ def on_add_trait(
         )
         state.save()
         update_traits_display(state)
+
+
+def on_body_part_filter(
+    sender: int, app_data: str, user_data: tuple[AppState, str]
+) -> None:
+    """Filter traits listbox with fuzzy matching."""
+    state, listbox_tag = user_data
+    filter_text = app_data or ""
+
+    body_parts = state.get_available_body_part_keys()
+    # first format then filter so that the search can match against the descriptions as well
+    formatted = [_format_body_part_with_description(bp, state.game_data) for bp in body_parts]
+    filtered = substring_match(filter_text, formatted)
+    dpg.configure_item(listbox_tag, items=filtered)
 
 
 def on_trait_filter(
@@ -659,10 +686,10 @@ def _cat_has_favorable_trait(cat: Cat, planner_traits: list[TraitRequirement]) -
     """Check if cat has any favorable trait from planner."""
     for trait in planner_traits:
         norm_trait_key = normalize_trait_name(trait.key)
-        # if trait.category == TraitCategory.MUTATION:
-        #     for m in cat.mutations or []:
-        #         if normalize_trait_name(m) == norm_trait_key:
-        #             return True
+        if trait.category == TraitCategory.BODY_PART:
+            for part, id_ in asdict(cat.body_parts).items():
+                if trait.key == f"{part.title()}{id_}":
+                    return True
         if trait.category == TraitCategory.PASSIVE:
             for p in cat.passive_abilities or []:
                 if normalize_trait_name(p) == norm_trait_key:
@@ -915,9 +942,9 @@ def build_themes() -> None:
 
 def on_global_enter(sender: int, app_data: Any, user_data: Any) -> None:
     """Check which filter is active when Enter is pressed and trigger add."""
-    if dpg.is_item_active("mutation_filter"):
+    if dpg.is_item_active("body_part_filter"):
         on_add_trait(
-            None, None, (user_data, TraitCategory.MUTATION, "mutation_listbox")
+            None, None, (user_data, TraitCategory.BODY_PART, "body_part_listbox")
         )
     elif dpg.is_item_active("passive_filter"):
         on_add_trait(None, None, (user_data, TraitCategory.PASSIVE, "passive_listbox"))
@@ -974,13 +1001,14 @@ def scan_and_load_saves(
 
 def init_traits_lists(state: AppState) -> None:
     """Initialize the trait filter listboxes with available traits from cats."""
-    mutations = state.get_available_mutations()
+    body_part_keys = state.get_available_body_part_keys()
     passives = state.get_available_passives()
     abilities = state.get_available_abilities()
 
-    formatted_mutations = [
-        _format_trait_with_description(m, state.game_data) for m in mutations
+    formatted_body_parts = [
+        _format_body_part_with_description(bp, state.game_data) for bp in body_part_keys
     ]
+
     formatted_passives = [
         _format_trait_with_description(p, state.game_data) for p in passives
     ]
@@ -988,7 +1016,7 @@ def init_traits_lists(state: AppState) -> None:
         _format_trait_with_description(a, state.game_data) for a in abilities
     ]
 
-    dpg.configure_item("mutation_listbox", items=formatted_mutations)
+    dpg.configure_item("body_part_listbox", items=formatted_body_parts)
     dpg.configure_item("passive_listbox", items=formatted_passives)
     dpg.configure_item("ability_listbox", items=formatted_abilities)
 
@@ -1802,7 +1830,7 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
         with dpg.tree_node(label="Body Parts", default_open=True):
             body_parts: dict[str, int] = asdict(cat.body_parts)
             for part_name, part_id in body_parts.items():
-                name_and_desc = state.game_data.mutation_text_by_part_and_id[part_name].get(part_id)
+                name_and_desc = state.game_data.body_part_text[part_name].get(part_id)
                 name = name_and_desc.name if name_and_desc else f"{part_name.title()} {part_id}"
                 desc = name_and_desc.description if name_and_desc else ""
                 dpg.add_text(f"  {name}")
