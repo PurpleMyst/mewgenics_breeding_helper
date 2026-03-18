@@ -50,8 +50,8 @@ class PairCache:
 
 
 def _has_eternalyouth(cat: Cat) -> bool:
-    """Check if cat has EternalYouth passive."""
-    return any(p.lower() == "eternalyouth" for p in (cat.passive_abilities or []))
+    """Check if cat has EternalYouth disorder."""
+    return cat.has_eternal_youth()
 
 
 def can_pair_gay(cat_a: Cat, cat_b: Cat, gay_flags: dict[int, bool]) -> bool:

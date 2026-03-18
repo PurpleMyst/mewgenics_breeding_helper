@@ -11,7 +11,6 @@ from .factors import (
     novel_part_defect_chance,
     inherited_disorder_chance,
     inherited_part_defect_chance,
-    DEFAULT_STIMULATION,
 )
 from .ancestry import (
     AncestorData,

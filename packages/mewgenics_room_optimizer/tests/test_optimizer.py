@@ -24,7 +24,6 @@ from mewgenics_room_optimizer.optimizer import (
 )
 
 
-
 # --- TEST FIXTURES & HELPERS ---
 
 
@@ -99,8 +98,8 @@ class TestUtilities:
         assert _cat_stats_sum(cat) == 28
 
     def test_has_eternalyouth(self):
-        cat_with = make_cat(1, passive_abilities=["Sturdy", "EternalYouth"])
-        cat_without = make_cat(2, passive_abilities=["Sturdy"])
+        cat_with = make_cat(1, disorders=["EternalYouth"])
+        cat_without = make_cat(2, disorders=[])
         assert _has_eternalyouth(cat_with) is True
         assert _has_eternalyouth(cat_without) is False
 
@@ -144,7 +143,7 @@ class TestEternalYouthPlacement:
         cats = [
             make_cat(1, CatGender.MALE, stat_base=(10, 10, 10, 10, 10, 10, 10)),
             make_cat(2, CatGender.FEMALE, stat_base=(10, 10, 10, 10, 10, 10, 10)),
-            make_cat(3, CatGender.FEMALE, passive_abilities=["EternalYouth"]),
+            make_cat(3, CatGender.FEMALE, disorders=["EternalYouth"]),
         ]
 
         params = OptimizationParams(
@@ -221,7 +220,7 @@ class TestSAEvaluator:
                 CatGender.FEMALE,
                 status=CatStatus.IN_HOUSE,
                 room="b1",
-                passive_abilities=["EternalYouth"],
+                disorders=["EternalYouth"],
             ),
         }
 

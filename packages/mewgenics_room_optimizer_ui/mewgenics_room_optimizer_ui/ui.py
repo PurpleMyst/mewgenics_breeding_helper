@@ -89,7 +89,7 @@ def render_cat_table_rows(
         if is_ey_check and eternal_youth_cats:
             is_ey = cat in eternal_youth_cats
         else:
-            is_ey = hasattr(cat, "eternal_youth") and cat.eternal_youth
+            is_ey = cat.has_eternal_youth()
 
         cat_name = name_callback(cat) if name_callback else (cat.name or "Unnamed")
 

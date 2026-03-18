@@ -532,3 +532,7 @@ class Cat:
             for p in self.passive_abilities
             if (n := normalize_ability_key(p)) != SKILLSHARE_BASE_ID
         ]
+
+    def has_eternal_youth(self) -> bool:
+        """Check if cat has EternalYouth disorder."""
+        return any(p.lower() == "eternalyouth" for p in (self.disorders or []))
