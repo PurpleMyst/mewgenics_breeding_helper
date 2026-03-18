@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import struct
-# import warnings
+import warnings
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import NamedTuple, TypeGuard
@@ -532,21 +532,3 @@ class Cat:
             for p in self.passive_abilities
             if (n := normalize_ability_key(p)) != SKILLSHARE_BASE_ID
         ]
-
-    @property
-    def body_part_keys(self) -> list[str]:
-        """Returns body part identifiers as normalized trait keys for inheritance math."""
-        return [
-            f"{category.title()}{id}"
-            for category, id in asdict(self.body_parts).items()
-        ]
-
-    @property
-    def all_normalized_traits(self) -> set[str]:
-        """Returns a unified set of all normalized abilities, passives, disorders, and body part keys for this cat."""
-        traits: set[str] = set()
-        traits.update(normalize_ability_key(t) for t in self.active_abilities)
-        traits.update(normalize_ability_key(t) for t in self.passive_abilities)
-        traits.update(normalize_ability_key(t) for t in self.disorders)
-        traits.update(self.body_part_keys)
-        return traits

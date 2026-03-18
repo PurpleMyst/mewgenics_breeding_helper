@@ -1,14 +1,15 @@
 """DearPyGui UI components for room optimizer."""
 
+import traceback
 from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any
-import traceback
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat, TraitCategory
+from mewgenics_parser.cat import CatStatus
 from mewgenics_parser.gpak import GameData
-from mewgenics_parser.traits import Trait, create_trait
+from mewgenics_parser.traits import Trait, create_trait, extract_traits_from_cat
 from mewgenics_room_optimizer import OptimizationResult, RoomType, can_pair_gay
 from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer import ScoringPreferences, TraitRequirement
@@ -30,21 +31,22 @@ COLOR_DISORDER_DESC = (255, 150, 150, 255)
 COLOR_HIGH_RISK_ROW = (50, 30, 30, 255)
 
 
-def _render_trait_tree_node(
-    label: str, traits: list[Trait], state: AppState, is_danger: bool = False
-) -> None:
+def _render_trait_tree_node(label: str, traits: list[Trait], state: AppState) -> None:
     """Reusable component for rendering a collapsable list of traits in the inspector."""
-    if not traits:
-        return
+    with dpg.tree_node(label=f"{label} ({len(traits)})", default_open=True):
+        if not traits:
+            dpg.add_text("None", color=COLOR_MUTED)
+            return
 
-    with dpg.tree_node(label=label, default_open=True):
         for trait in traits:
             name = trait.get_display_name(state.game_data)
             desc = trait.get_description(state.game_data)
+            if not name and not desc:
+                print(trait)
 
             is_fav = any(trait.key == req.trait.key for req in state.trait_requirements)
 
-            if is_danger:
+            if trait.is_negative():
                 color = COLOR_DANGER
                 prefix = "  "
             else:
@@ -519,9 +521,6 @@ def on_add_trait(
     sender: int | None, app_data: Any, user_data: tuple[AppState, TraitCategory, str]
 ) -> None:
     """Add selected trait to favorable traits."""
-    from mewgenics_parser.traits import create_trait
-    from mewgenics_scorer import TraitRequirement
-
     state, category, listbox_tag = user_data
     selected = dpg.get_value(listbox_tag)
 
@@ -1455,39 +1454,6 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
             else:
                 dpg.add_text("No misplaced cats in this room")
 
-    # Sandbox tab - simulate breeding pairs
-    with dpg.tab(label="Sandbox", parent="details_tab_bar"):
-        dpg.add_text("Manually test breeding combinations for this room.")
-        dpg.add_separator()
-
-        cat_options = [
-            f"{c.name or 'Unnamed'} (ID:{c.db_key})" for c in selected_room.cats
-        ]
-
-        if not cat_options:
-            dpg.add_text("No cats in this room to simulate.")
-        else:
-            with dpg.group(horizontal=True):
-                dpg.add_combo(
-                    items=cat_options,
-                    label="Parent A",
-                    width=200,
-                    callback=on_sandbox_changed,
-                    user_data=(selected_room, state, "A"),
-                    tag="sandbox_combo_a",
-                )
-                dpg.add_combo(
-                    items=cat_options,
-                    label="Parent B",
-                    width=200,
-                    callback=on_sandbox_changed,
-                    user_data=(selected_room, state, "B"),
-                    tag="sandbox_combo_b",
-                )
-
-            dpg.add_separator()
-            dpg.add_group(tag="sandbox_results_container")
-
 
 def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
     """Show pair details in the inspector panel with trait inheritance probabilities."""
@@ -1641,25 +1607,19 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
 
             with dpg.table_row():
                 lover_names = []
-                for lover in cat.lovers or []:
-                    if lover is None:
-                        lover_names.append("Unknown")
-                    else:
-                        name = lover.name or "Unnamed"
-                        if lover.status and lover.status != "In House":
-                            name = f"{name} ({lover.status})"
-                        lover_names.append(name)
+                for lover in cat.lovers:
+                    lover_name = lover.name
+                    if lover.status and lover.status != CatStatus.IN_HOUSE:
+                        lover_name += f" ({lover.status})"
+                    lover_names.append(lover_name)
                 lovers_str = ", ".join(lover_names) if lover_names else "-"
 
                 hater_names = []
                 for hater in cat.haters or []:
-                    if hater is None:
-                        hater_names.append("Unknown")
-                    else:
-                        name = hater.name or "Unnamed"
-                        if hater.status and hater.status != "In House":
-                            name = f"{name} ({hater.status})"
-                        hater_names.append(name)
+                    hater_name = hater.name
+                    if hater.status and hater.status != CatStatus.IN_HOUSE:
+                        hater_name += f" ({hater.status})"
+                    hater_names.append(hater_name)
                 haters_str = ", ".join(hater_names) if hater_names else "-"
 
                 dpg.add_text(f"Name: {cat.name or 'Unnamed'}")
@@ -1670,6 +1630,10 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
                 dpg.add_text(f"Lovers: {lovers_str}", color=COLOR_LOVER)
                 dpg.add_text(f"Haters: {haters_str}", color=COLOR_DANGER)
 
+            with dpg.table_row():
+                for i, stat in enumerate(cat.stat_base):
+                    dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
+
         is_gay = state.gay_flags.get(cat.db_key, False)
         dpg.add_checkbox(
             label="Same-Sex Breeding Preference",
@@ -1678,188 +1642,26 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             user_data=(cat.db_key, state),
         )
 
-        with dpg.group(horizontal=True):
-            for i, stat in enumerate(cat.stat_base):
-                dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
-
         dpg.add_separator()
 
+        all_traits = extract_traits_from_cat(cat)
         active_traits = [
-            create_trait(TraitCategory.ACTIVE_ABILITY, ab)
-            for ab in (cat.active_abilities or [])
+            t for t in all_traits if t.category == TraitCategory.ACTIVE_ABILITY
         ]
         passive_traits = [
-            create_trait(TraitCategory.PASSIVE_ABILITY, ab)
-            for ab in (cat.passive_abilities or [])
+            t for t in all_traits if t.category == TraitCategory.PASSIVE_ABILITY
         ]
         disorder_traits = [
-            create_trait(TraitCategory.DISORDER, dis) for dis in (cat.disorders or [])
+            t for t in all_traits if t.category == TraitCategory.DISORDER
         ]
         body_part_traits = [
-            create_trait(TraitCategory.BODY_PART, f"{part_name.title()}{part_id}")
-            for part_name, part_id in asdict(cat.body_parts).items()
-            if part_id
+            t for t in all_traits if t.category == TraitCategory.BODY_PART
         ]
-
+        _render_trait_tree_node("Active Abilities", active_traits, state)
+        _render_trait_tree_node("Passive Abilities", passive_traits, state)
         _render_trait_tree_node(
-            f"Active Abilities ({len(active_traits)})", active_traits, state
-        )
-        _render_trait_tree_node(
-            f"Passive Abilities ({len(passive_traits)})", passive_traits, state
-        )
-        _render_trait_tree_node(
-            f"Disorders ({len(disorder_traits)})",
+            "Disorders",
             disorder_traits,
             state,
-            is_danger=True,
         )
-        _render_trait_tree_node(
-            f"Body Parts ({len(body_part_traits)})", body_part_traits, state
-        )
-
-
-def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
-    """Handle sandbox dropdown changes."""
-    import re
-
-    from mewgenics_room_optimizer import score_pair
-    from mewgenics_room_optimizer.types import OptimizationParams
-    from mewgenics_scorer import (
-        build_ancestor_contribs,
-        can_breed,
-        is_hater_conflict,
-        is_lover_conflict,
-    )
-
-    selected_room, state, parent_slot = user_data
-    container = "sandbox_results_container"
-
-    if not app_data:
-        return
-
-    match = re.search(r"\(ID:(\d+)\)", app_data)
-    if not match:
-        return
-
-    db_key = int(match.group(1))
-
-    if parent_slot == "A":
-        state.sim_cat_a_key = db_key
-    else:
-        state.sim_cat_b_key = db_key
-
-    if state.sim_cat_a_key is None or state.sim_cat_b_key is None:
-        return
-
-    dpg.delete_item(container, children_only=True)
-
-    cat_a = next(
-        (c for c in selected_room.cats if c.db_key == state.sim_cat_a_key), None
-    )
-    cat_b = next(
-        (c for c in selected_room.cats if c.db_key == state.sim_cat_b_key), None
-    )
-
-    if not cat_a or not cat_b:
-        return
-
-    with dpg.group(parent=container):
-        if cat_a.db_key == cat_b.db_key:
-            dpg.add_text("Cannot breed a cat with itself.", color=COLOR_DANGER)
-            return
-
-        if not can_breed(cat_a, cat_b):
-            dpg.add_text(
-                "Incompatible pairing (Gender mismatch).",
-                color=COLOR_DANGER,
-            )
-            return
-
-        if is_hater_conflict(cat_a, cat_b):
-            dpg.add_text(
-                "Hater conflict - these cats refuse to breed.",
-                color=COLOR_DANGER,
-            )
-            return
-
-        if is_lover_conflict(cat_a, cat_b, state.avoid_lovers):
-            dpg.add_text(
-                "Lover conflict - pair excluded by settings.",
-                color=COLOR_DANGER,
-            )
-            return
-
-        if not can_pair_gay(cat_a, cat_b, state.gay_flags):
-            dpg.add_text(
-                "Gay conflict - one or both cats have same-sex breeding preference but neither is genderless.",
-                color=COLOR_DANGER,
-            )
-            return
-
-        ancestor_contribs = build_ancestor_contribs(state.cats)
-        params = OptimizationParams(
-            min_stats=state.min_stats,
-            max_risk=state.max_risk,
-            avoid_lovers=state.avoid_lovers,
-            scoring_prefs=ScoringPreferences(
-                minimize_variance=state.minimize_variance,
-                prefer_low_aggression=state.prefer_low_aggression,
-                prefer_high_libido=state.prefer_high_libido,
-                prefer_high_charisma=state.prefer_high_charisma,
-                maximize_throughput=state.maximize_throughput,
-            ),
-            trait_requirements=state.trait_requirements,
-            gay_flags=state.gay_flags,
-        )
-
-        pair_result = score_pair(
-            cat_a, cat_b, ancestor_contribs, params, skip_risk_check=True
-        )
-
-        if pair_result is None:
-            dpg.add_text("Could not score this pair.", color=COLOR_DANGER)
-            return
-
-        if dpg.does_item_exist("inspector_tab_bar"):
-            dpg.set_value("inspector_tab_bar", "inspector_pair_tab")
-
-        show_pair_detail_window(pair_result, state)
-
-        disorder = pair_result.factors.expected_disorder_chance * 100
-        part_defect = pair_result.factors.expected_part_defect_chance * 100
-        combined = pair_result.factors.combined_malady_chance * 100
-
-        risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
-        dpg.add_text(
-            f"Expected Quality: {pair_result.quality:.1f} | "
-            f"Disorder: {disorder:.0f}% | Part Defect: {part_defect:.0f}% | Combined: {combined:.0f}%",
-            color=risk_color,
-        )
-
-        with dpg.group(horizontal=True):
-            if pair_result.factors.mutual_lovers:
-                dpg.add_text("[<3 Lovers]", color=COLOR_DISORDER_DESC)
-            if pair_result.factors.libido_factor > 0.6:
-                dpg.add_text("[+ Libido]", color=COLOR_WARNING)
-            if pair_result.factors.aggression_factor > 0.6:
-                dpg.add_text("[- Aggro]", color=COLOR_AGGRESSION)
-            if combined > 50:
-                dpg.add_text("[! Inbred]", color=COLOR_DANGER)
-            if pair_result.factors.combined_malady_chance > state.max_risk:
-                dpg.add_text(
-                    f"[! High Risk (>{state.max_risk * 100:.0f}%)]",
-                    color=COLOR_DANGER,
-                )
-
-        if state.trait_requirements:
-            combined_traits = cat_a.all_normalized_traits | cat_b.all_normalized_traits
-
-            hits = sum(
-                1 for pt in state.trait_requirements if pt.trait.key in combined_traits
-            )
-            total = len(state.trait_requirements)
-
-            if hits > 0:
-                dpg.add_text(
-                    f"[* {hits}/{total} Favorable Traits]", color=COLOR_SUCCESS
-                )
+        _render_trait_tree_node("Body Parts", body_part_traits, state)

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from mewgenics_parser import Cat
+from mewgenics_parser import Cat, TraitCategory
 from mewgenics_parser.trait_dictionary import (
     is_class_active,
     is_class_passive,
@@ -259,7 +259,7 @@ def _calc_passive_inheritance(
     )
 
 
-def _calc_mutation_inheritance(
+def _calc_body_part_inheritance(
     parent_a: Cat,
     parent_b: Cat,
     stimulation: float,
@@ -320,17 +320,17 @@ def calculate_trait_probability(
     """Calculate inheritance probability for a specific trait."""
 
     if parent_a is None or parent_b is None:
-        return TraitInheritanceProbability(trait, 0.0, "unknown", 0.0, 0.0)
+        return TraitInheritanceProbability(trait, 0.0, "Unknown", 0.0, 0.0)
 
     category = trait.trait.category
-    if category == "active_ability":
+    if category == TraitCategory.ACTIVE_ABILITY:
         return _calc_ability_inheritance(parent_a, parent_b, stimulation, trait)
-    elif category == "passive_ability":
+    elif category == TraitCategory.PASSIVE_ABILITY:
         return _calc_passive_inheritance(parent_a, parent_b, stimulation, trait)
-    elif category == "mutation" or category == "body_part":
-        return _calc_mutation_inheritance(parent_a, parent_b, stimulation, trait)
+    elif category == TraitCategory.BODY_PART:
+        return _calc_body_part_inheritance(parent_a, parent_b, stimulation, trait)
 
-    return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
+    return TraitInheritanceProbability(trait, 0.0, "Neither", 0.0, 0.0)
 
 
 def expected_stats(

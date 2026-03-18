@@ -1,6 +1,6 @@
 """Domain model for Mewgenics traits."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import StrEnum
 from typing import Protocol, override
 
@@ -27,6 +27,10 @@ class Trait(Protocol):
     @property
     def category(self) -> TraitCategory:
         """Category of this trait."""
+        ...
+
+    def is_negative(self) -> bool:
+        """Whether this trait is considered negative (e.g., a disorder or defect)."""
         ...
 
     def get_display_name(self, game_data: GameData) -> str:
@@ -63,20 +67,24 @@ class ActiveAbilityTrait(Trait):
         return TraitCategory.ACTIVE_ABILITY
 
     @override
+    def is_negative(self) -> bool:
+        return False
+
+    @override
     def get_display_name(self, game_data: GameData) -> str:
-        nad = game_data.ability_text.get(self._key)
-        return nad.name if nad else self._key
+        nad = game_data.ability_text[self._key]
+        return nad.name or self._key
 
     @override
     def get_description(self, game_data: GameData) -> str:
-        nad = game_data.ability_text.get(self._key)
-        return nad.description if nad else ""
+        nad = game_data.ability_text[self._key]
+        return nad.description
 
     @override
     def get_upgraded_description(self, game_data: GameData) -> str | None:
         upgraded_key = self._key + "2"
-        nad = game_data.ability_text.get(upgraded_key)
-        return nad.description if nad else None
+        desc = game_data.ability_text[upgraded_key].description
+        return desc if desc else None
 
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
@@ -100,20 +108,24 @@ class PassiveAbilityTrait(Trait):
         return TraitCategory.PASSIVE_ABILITY
 
     @override
+    def is_negative(self) -> bool:
+        return False
+
+    @override
     def get_display_name(self, game_data: GameData) -> str:
-        nad = game_data.ability_text.get(self._key)
-        return nad.name if nad else self._key
+        nad = game_data.ability_text[self._key]
+        return nad.name or self._key
 
     @override
     def get_description(self, game_data: GameData) -> str:
-        nad = game_data.ability_text.get(self._key)
-        return nad.description if nad else ""
+        nad = game_data.ability_text[self._key]
+        return nad.description
 
     @override
     def get_upgraded_description(self, game_data: GameData) -> str | None:
         upgraded_key = self._key + "2"
-        nad = game_data.ability_text.get(upgraded_key)
-        return nad.description if nad else None
+        desc = game_data.ability_text[upgraded_key].description
+        return desc if desc else None
 
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
@@ -138,6 +150,13 @@ class BodyPartTrait(Trait):
     def category(self) -> TraitCategory:
         return TraitCategory.BODY_PART
 
+    @override
+    def is_negative(self) -> bool:
+        # XXX: This is a quick and dirty check; the game GONs technically have birth_defect tags we
+        # could leverage if this becomes an issue.
+        _, part_id = self._split_key()
+        return part_id == -2 or (part_id >= 700 and part_id <= 710)
+
     def _split_key(self) -> tuple[str, int]:
         import re
 
@@ -155,13 +174,13 @@ class BodyPartTrait(Trait):
     def get_display_name(self, game_data: GameData) -> str:
         category, part_id = self._split_key()
         name_desc = game_data.body_part_text[category][part_id]
-        return name_desc.name if name_desc else self._key
+        return name_desc.name or self._key
 
     @override
     def get_description(self, game_data: GameData) -> str:
         category, part_id = self._split_key()
         name_desc = game_data.body_part_text[category][part_id]
-        return name_desc.description if name_desc else ""
+        return name_desc.description
 
     @override
     def get_upgraded_description(self, game_data: GameData) -> str | None:
@@ -169,7 +188,8 @@ class BodyPartTrait(Trait):
 
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
-        return self._key in cat.body_part_keys
+        category, part_id = self._split_key()
+        return asdict(cat.body_parts).get(category) == part_id
 
 
 @dataclass(slots=True)
@@ -189,14 +209,18 @@ class DisorderTrait(Trait):
         return TraitCategory.DISORDER
 
     @override
+    def is_negative(self) -> bool:
+        return True
+
+    @override
     def get_display_name(self, game_data: GameData) -> str:
-        nad = game_data.ability_text.get(self._key)
-        return nad.name if nad else self._key
+        name_desc = game_data.ability_text[self._key]
+        return name_desc.name or self._key
 
     @override
     def get_description(self, game_data: GameData) -> str:
-        nad = game_data.ability_text.get(self._key)
-        return nad.description if nad else ""
+        name_desc = game_data.ability_text[self._key]
+        return name_desc.description
 
     @override
     def get_upgraded_description(self, game_data: GameData) -> str | None:
@@ -212,29 +236,17 @@ def extract_traits_from_cat(cat: Cat) -> list[Trait]:
     traits: list[Trait] = []
 
     for ability in cat.active_abilities:
-        normalized = normalize_ability_key(ability)
-        if normalized and not any(
-            t.key == normalized and t.category == "ability" for t in traits
-        ):
-            traits.append(ActiveAbilityTrait(_key=normalized))
+        traits.append(create_trait(TraitCategory.ACTIVE_ABILITY, ability))
 
     for passive in cat.passive_abilities:
-        normalized = normalize_ability_key(passive)
-        if normalized and not any(
-            t.key == normalized and t.category == "passive" for t in traits
-        ):
-            traits.append(PassiveAbilityTrait(_key=normalized))
+        traits.append(create_trait(TraitCategory.PASSIVE_ABILITY, passive))
 
-    for body_part_key in cat.body_part_keys:
-        if not any(t.key == body_part_key for t in traits):
-            traits.append(BodyPartTrait(_key=body_part_key))
+    for category, part_id in asdict(cat.body_parts).items():
+        key = f"{category.title()}{part_id}"
+        traits.append(create_trait(TraitCategory.BODY_PART, key))
 
     for disorder in cat.disorders:
-        normalized = normalize_ability_key(disorder)
-        if normalized and not any(
-            t.key == normalized and t.category == TraitCategory.DISORDER for t in traits
-        ):
-            traits.append(DisorderTrait(_key=normalized))
+        traits.append(create_trait(TraitCategory.DISORDER, disorder))
 
     return traits
 
