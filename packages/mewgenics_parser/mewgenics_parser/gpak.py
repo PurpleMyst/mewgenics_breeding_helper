@@ -4,6 +4,7 @@ import csv
 import io
 import re
 import struct
+import zipfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import DefaultDict, Self
@@ -94,7 +95,7 @@ def _parse_mutation_gon(
     return defaultdict(lambda: NameAndDescription(), result)
 
 
-def _load_gpak_text_strings(gon_contents: dict[str, str]) -> dict[str, str]:
+def _load_game_strings(gon_contents: dict[str, str]) -> dict[str, str]:
     """Load text strings from CSV files in the GPAK."""
     strings: dict[str, str] = {}
     for fname, raw_csv in gon_contents.items():
@@ -117,41 +118,8 @@ class GameData:
     @classmethod
     def from_gpak(cls, gpak_path: str) -> Self:
         """Load all data from the GPAK file."""
-        with open(gpak_path, "rb") as f:
-            # Parse the directory at the start of the file; length of entries is a 4-byte LE int,
-            # followed by that many entries of:
-            # - name length (2-byte LE int)
-            # - name (UTF-8 string)
-            # - size (4-byte LE int)
-            count = struct.unpack("<I", f.read(4))[0]
-            entries = []
-            for _ in range(count):
-                name_len = struct.unpack("<H", f.read(2))[0]
-                name = f.read(name_len).decode("utf-8", errors="replace")
-                size = struct.unpack("<I", f.read(4))[0]
-                entries.append((name, size))
-            dir_end = f.tell()
-
-            # Compute file offsets based on the sizes in the directory
-            file_offsets: dict[str, tuple[int, int]] = {}
-            offset = dir_end
-            for name, size in entries:
-                file_offsets[name] = (offset, size)
-                offset += size
-
-            # Read all .gon files into memory at once
-            gon_contents: dict[str, str] = {}
-            with open(gpak_path, "rb") as f:
-                for fname in file_offsets:
-                    if not fname.endswith(".gon") and not (
-                        fname.startswith("data/text/") and fname.endswith(".csv")
-                    ):
-                        continue
-                    foff, fsz = file_offsets[fname]
-                    f.seek(foff)
-                    gon_contents[fname] = f.read(fsz).decode("utf-8", errors="replace")
-
-        game_strings = _load_gpak_text_strings(gon_contents)
+        gon_contents = cls.read_gon_contents(gpak_path)
+        game_strings = _load_game_strings(gon_contents)
 
         ability_descriptions: dict[str, NameAndDescription] = {}
         for fname, content in gon_contents.items():
@@ -181,3 +149,52 @@ class GameData:
             ),
             game_strings=game_strings,
         )
+
+    @staticmethod
+    def read_gon_contents(gpak_path: str) -> dict[str, str]:
+        """Read GON file contents from the GPAK."""
+        with open(gpak_path, "rb") as f:
+            # Parse the directory at the start of the file; length of entries is a 4-byte LE int,
+            # followed by that many entries of:
+            # - name length (2-byte LE int)
+            # - name (UTF-8 string)
+            # - size (4-byte LE int)
+            count = struct.unpack("<I", f.read(4))[0]
+            entries = []
+            for _ in range(count):
+                name_len = struct.unpack("<H", f.read(2))[0]
+                name = f.read(name_len).decode("utf-8", errors="replace")
+                size = struct.unpack("<I", f.read(4))[0]
+                entries.append((name, size))
+            dir_end = f.tell()
+
+            # Compute file offsets based on the sizes in the directory
+            file_offsets: dict[str, tuple[int, int]] = {}
+            offset = dir_end
+            for name, size in entries:
+                file_offsets[name] = (offset, size)
+                offset += size
+
+            # Read all .gon files into memory at once
+            gon_contents: dict[str, str] = {}
+            for fname in file_offsets:
+                if not fname.endswith(".gon") and not (
+                    fname.startswith("data/text/") and fname.endswith(".csv")
+                ):
+                    continue
+                foff, fsz = file_offsets[fname]
+                f.seek(foff)
+                gon_contents[fname] = f.read(fsz).decode("utf-8", errors="replace")
+
+            return gon_contents
+
+    @classmethod
+    def extract_and_dump(cls, gpak_path: str, output_path: str) -> None:
+        """Create a zip file containing all GON and CSV files extracted from the GPAK."""
+        gon_contents = cls.read_gon_contents(gpak_path)
+        with zipfile.ZipFile(output_path, "w") as zf:
+            for fname, content in gon_contents.items():
+                if fname.endswith(".gon") or (
+                    fname.startswith("data/text/") and fname.endswith(".csv")
+                ):
+                    zf.writestr(fname, content)

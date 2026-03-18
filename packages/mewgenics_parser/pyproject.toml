@@ -19,3 +19,6 @@ dev = [
     "beautifulsoup4>=4.14.3",
     "requests>=2.32.5",
 ]
+
+[project.scripts]
+extract-gpak = "mewgenics_parser:_extract_gpak_script"

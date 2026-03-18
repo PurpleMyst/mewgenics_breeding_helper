@@ -8,7 +8,7 @@ from mewgenics_parser.gpak import (
     _clean_game_text,
     _resolve_game_string,
     _parse_gon_abilities,
-    _load_gpak_text_strings,
+    _load_game_strings,
 )
 
 from mewgenics_parser.utils import NameAndDescription
