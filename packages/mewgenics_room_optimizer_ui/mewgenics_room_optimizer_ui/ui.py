@@ -688,8 +688,8 @@ def update_all_cats_table(
     if trait_filter:
         trait_filtered = []
         for cat in filtered_cats:
-            all_traits = list(cat.all_normalized_traits)
-            if substring_match(trait_filter, all_traits):
+            traits = extract_traits_from_cat(cat)
+            if trait_substring_match(trait_filter, traits, state.game_data):
                 trait_filtered.append(cat)
         filtered_cats = trait_filtered
 
@@ -776,13 +776,13 @@ def build_all_cats_tab(state: AppState) -> None:
                     callback=on_cat_name_filter,
                     user_data=state,
                 )
-                # dpg.add_input_text(
-                #     tag="cat_trait_filter",
-                #     hint="Filter by trait...",
-                #     width=150,
-                #     callback=on_cat_trait_filter,
-                #     user_data=state,
-                # )
+                dpg.add_input_text(
+                    tag="cat_trait_filter",
+                    hint="Filter by trait...",
+                    width=150,
+                    callback=on_cat_trait_filter,
+                    user_data=state,
+                )
                 dpg.add_checkbox(
                     tag="show_all_cats",
                     label="Show non-In-House",
