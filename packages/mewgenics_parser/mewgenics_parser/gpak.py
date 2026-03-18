@@ -90,7 +90,7 @@ def _parse_mutation_gon(
                     ),
                     game_strings,
                 )
-            )
+            ).title()
             desc = _clean_game_text(
                 _resolve_game_string(mutation_info.pop("desc", ""), game_strings)
             )
@@ -109,9 +109,7 @@ def _parse_mutation_gon(
             if category.casefold() not in name.casefold():
                 name = f"{name} ({category.title()})"
 
-            category_text[mutation_id] = NameAndDescription(
-                name=name, description=desc
-            )
+            category_text[mutation_id] = NameAndDescription(name=name, description=desc)
         result[category] = defaultdict(lambda: NameAndDescription(), category_text)
     return result
 

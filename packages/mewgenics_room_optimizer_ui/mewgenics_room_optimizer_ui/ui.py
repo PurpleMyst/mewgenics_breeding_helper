@@ -257,7 +257,6 @@ def build_room_config_section(state: AppState) -> None:
                 row_background=True,
             ):
                 dpg.add_table_column(label="Room Key")
-                dpg.add_table_column(label="Display Name")
                 dpg.add_table_column(label="Type")
                 dpg.add_table_column(label="Max Cats")
                 dpg.add_table_column(label="Base Stim")
@@ -266,13 +265,7 @@ def build_room_config_section(state: AppState) -> None:
             for room in state.room_configs:
                 with dpg.table_row(parent="room_config_table"):
                     dpg.add_text(room.key, tag=f"room_key_{room.key}")
-                    dpg.add_input_text(
-                        default_value=room.display_name,
-                        tag=f"room_name_{room.key}",
-                        width=120,
-                        callback=on_room_config_changed,
-                        user_data=state,
-                    )
+                    dpg.add_text(room.display_name, tag=f"room_name_{room.key}")
                     dpg.add_combo(
                         room_types,
                         default_value=room.room_type.value,
@@ -994,7 +987,6 @@ def on_room_config_changed(sender: int, app_data: Any, user_data: AppState) -> N
 
     new_configs = []
     for room in user_data.room_configs:
-        new_name = dpg.get_value(f"room_name_{room.key}")
         new_type_str = dpg.get_value(f"room_type_{room.key}")
         new_max_str = dpg.get_value(f"room_max_{room.key}")
         new_stim_str = dpg.get_value(f"room_stim_{room.key}")
@@ -1024,7 +1016,6 @@ def on_room_config_changed(sender: int, app_data: Any, user_data: AppState) -> N
         new_configs.append(
             RoomConfig(
                 key=room.key,
-                display_name=new_name,
                 room_type=RoomType(new_type_str),
                 max_cats=new_max,
                 base_stim=new_stim,
@@ -1555,7 +1546,7 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
 
                     with dpg.table_row():
                         dpg.add_text(trait_req.trait.get_display_name(state.game_data))
-                        dpg.add_text(trait_req.trait.category)
+                        dpg.add_text(trait_req.trait.category.display_name)
                         dpg.add_text(
                             f"{prob_result.probability * 100:.1f}%", color=color
                         )

@@ -127,6 +127,6 @@ class TestGpakIntegration:
         )
         assert result["eyes"][706] == snapshot(
             NameAndDescription(
-                name="crossed eyes", description="Start each battle with Confusion 2."
+                name="Crossed Eyes", description="Start each battle with Confusion 2."
             )
         )

@@ -15,6 +15,18 @@ class TraitCategory(StrEnum):
     BODY_PART = "body_part"
     DISORDER = "disorder"
 
+    @property
+    def display_name(self) -> str:
+        return _DISPLAY_NAMES.get(self, self.value.title())
+
+
+_DISPLAY_NAMES: dict[TraitCategory, str] = {
+    TraitCategory.ACTIVE_ABILITY: "Active Ability",
+    TraitCategory.PASSIVE_ABILITY: "Passive Ability",
+    TraitCategory.BODY_PART: "Body Part",
+    TraitCategory.DISORDER: "Disorder",
+}
+
 
 class Trait(Protocol):
     """Protocol defining the interface for all traits in Mewgenics."""

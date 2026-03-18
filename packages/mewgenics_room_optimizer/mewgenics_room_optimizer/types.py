@@ -21,10 +21,16 @@ class RoomConfig:
     """Configuration for a single room."""
 
     key: str
-    display_name: str
     room_type: RoomType
     max_cats: int | None
     base_stim: float
+
+    @property
+    def display_name(self) -> str:
+        """Get display name from ROOM_DISPLAY, fallback to key."""
+        from mewgenics_parser.constants import ROOM_DISPLAY
+
+        return ROOM_DISPLAY.get(self.key, self.key)
 
 
 @dataclass
@@ -86,9 +92,9 @@ class OptimizationResult:
 
 
 DEFAULT_ROOM_CONFIGS = [
-    RoomConfig("Floor1_Large", "Ground Floor Left", RoomType.FIGHTING, None, 50.0),
-    RoomConfig("Floor1_Small", "Ground Floor Right", RoomType.BREEDING, 6, 50.0),
-    RoomConfig("Attic", "Top Floor", RoomType.GENERAL, 6, 50.0),
-    RoomConfig("Floor2_Large", "Second Floor Left", RoomType.NONE, None, 50.0),
-    RoomConfig("Floor2_Small", "Second Floor Right", RoomType.NONE, None, 50.0),
+    RoomConfig("Floor1_Large", RoomType.FIGHTING, None, 50.0),
+    RoomConfig("Floor1_Small", RoomType.BREEDING, 6, 50.0),
+    RoomConfig("Attic", RoomType.GENERAL, 6, 50.0),
+    RoomConfig("Floor2_Large", RoomType.NONE, None, 50.0),
+    RoomConfig("Floor2_Small", RoomType.NONE, None, 50.0),
 ]

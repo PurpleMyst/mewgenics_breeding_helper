@@ -85,7 +85,6 @@ def room_configs_from_dict(data: list[dict]) -> list[RoomConfig]:
     return [
         RoomConfig(
             key=r["key"],
-            display_name=r["display_name"],
             room_type=RoomType(r["room_type"]),
             max_cats=r.get("max_cats"),
             base_stim=r.get("base_stim", 50.0),
@@ -99,7 +98,6 @@ def room_configs_to_dict(configs: list[RoomConfig]) -> list[dict]:
     return [
         {
             "key": r.key,
-            "display_name": r.display_name,
             "room_type": r.room_type.value,
             "max_cats": r.max_cats,
             "base_stim": r.base_stim,
@@ -212,7 +210,6 @@ class AppState:
                 room_configs.append(
                     RoomConfig(
                         key=default.key,
-                        display_name=saved.get("display_name", default.display_name),
                         room_type=RoomType(
                             saved.get("room_type", default.room_type.value)
                         ),

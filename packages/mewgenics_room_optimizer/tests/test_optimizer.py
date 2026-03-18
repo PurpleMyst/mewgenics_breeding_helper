@@ -82,9 +82,9 @@ def make_cat(
 @pytest.fixture
 def basic_rooms():
     return [
-        RoomConfig("breed1", "Breeding 1", RoomType.BREEDING, 4, 50.0),
-        RoomConfig("fight1", "Fighting 1", RoomType.FIGHTING, 2, 1000.0),
-        RoomConfig("gen1", "General 1", RoomType.GENERAL, 1, 50.0),
+        RoomConfig("breed1", RoomType.BREEDING, 4, 50.0),
+        RoomConfig("fight1", RoomType.FIGHTING, 2, 1000.0),
+        RoomConfig("gen1", RoomType.GENERAL, 1, 50.0),
     ]
 
 
@@ -217,7 +217,7 @@ class TestSAEvaluator:
             ),
         }
 
-        room = RoomConfig("b1", "B1", RoomType.BREEDING, max_cats=6, base_stim=50.0)
+        room = RoomConfig("b1", RoomType.BREEDING, max_cats=6, base_stim=50.0)
         state = {1: "b1", 2: "b1", 3: "b1"}
         params = OptimizationParams(stimulation=50.0)
         cache = PairCache()
@@ -260,9 +260,9 @@ class TestSAEvaluator:
         cats_by_id = {c.db_key: c for c in cats}
 
         room_configs = [
-            RoomConfig("breed1", "Breeding 1", RoomType.BREEDING, 4, 50.0),
-            RoomConfig("fight1", "Fighting 1", RoomType.FIGHTING, 2, 50.0),
-            RoomConfig("gen1", "General 1", RoomType.GENERAL, 2, 50.0),
+            RoomConfig("breed1", RoomType.BREEDING, 4, 50.0),
+            RoomConfig("fight1", RoomType.FIGHTING, 2, 50.0),
+            RoomConfig("gen1", RoomType.GENERAL, 2, 50.0),
         ]
 
         # Cat 1 and 2 to breed1, Cat 3 to gen1, Cats 4, 5, 6 to fight1
