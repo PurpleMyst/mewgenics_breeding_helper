@@ -121,7 +121,7 @@ The Room Details panel includes a "Misplaced" tab showing cats currently in a ro
 | Prefer High Libido | Favor high libido cats for faster breeding cycles | On |
 | Prefer High Charisma | Favor high charisma for better breeding odds | On |
 | Base Stimulation | Default stimulation for unconfigured rooms | 50.0 |
-| Density Bonus | Apply exponent boost (`concurrent_breeds ^ 1.5`) to room quality | Off |
+| Maximize Throughput | Apply density exponent (`concurrent_breeds ^ 1.5`) and prioritize maximizing number of breeding pairs | Off |
 
 ### SA Parameters
 
@@ -133,9 +133,10 @@ The Room Details panel includes a "Misplaced" tab showing cats currently in a ro
 
 ### Favorable Traits (Breeding Planner)
 
-Mark specific mutations, passives, or abilities you want to propagate through your breeding program.
+Mark specific mutations, passives, abilities, or body parts you want to propagate through your breeding program.
 
 - Select traits from alive ("In House") cats only
+- Supports active abilities, passive abilities, body parts, and disorders
 - Each trait has a weight (1-10) that affects pair scoring
 - Higher weight = higher priority for that trait in breeding decisions
 - Traits are displayed in the Inspector with `[*]` prefix when marked as favorable
@@ -160,7 +161,7 @@ Click any cat to view detailed information:
 
 - **Bio**: Name, Gender, Age, Status, Room, Lovers, Haters
 - **Stats**: All 7 base stats (STR, DEX, CON, INT, SPD, CHA, LCK)
-- **Abilities**: Active Abilities, Passive Abilities, Mutations
+- **Traits**: Active Abilities, Passive Abilities, Disorders, Body Parts
 - **Options**: Same-Sex Breeder toggle
 
 EY cats display with a teal `[EY]` badge and are excluded from capacity calculations.
@@ -193,7 +194,7 @@ The optimizer uses Parallel Simulated Annealing:
 5. **Evaluation**:
    - Expected breed quality = average quality per valid pair
    - Dilution penalty = `valid_cats / total_cats` (penalizes gender imbalance)
-   - Density bonus (when enabled) = `concurrent_breeds ^ 1.5`
+   - Throughput boost (when Maximize Throughput enabled) = `concurrent_breeds ^ 1.5`
 
 ## Development
 
@@ -218,11 +219,12 @@ just fix
 | "No gpak found" | Copy `resources.gpak` to project root or install directory |
 | "No cats loaded" | Verify the save file path is correct |
 | Empty cat list | Ensure save file has cats with "In House" status |
-| Age shows 100 | Age is capped at 100 unless cat has Eternal Youth passive |
+| Age shows 100 | Age is capped at 100 unless cat has Eternal Youth passive (500 cap) |
 
 ## Known Issues
 
 - Large save files may take time to parse
+- Cat Inspector does not display abilities as upgraded even when the cat has the upgraded version
 
 ## Credits
 
