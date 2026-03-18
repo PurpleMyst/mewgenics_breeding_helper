@@ -47,7 +47,7 @@ def _find_gpak_path() -> str:
 _GAME_DATA = GameData.from_gpak(_find_gpak_path())
 
 
-def _ensure_config_dir():
+def _ensure_config_dir() -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -78,7 +78,7 @@ def load_config() -> dict:
     return _load_default_config()
 
 
-def save_config(config: dict):
+def save_config(config: dict) -> None:
     """Save configuration to disk."""
     _ensure_config_dir()
     with open(CONFIG_FILE, "w") as f:
@@ -263,7 +263,7 @@ class AppState:
             "gay_flags": self.gay_flags,
         }
 
-    def save(self):
+    def save(self) -> None:
         """Save current state to disk."""
         save_config(self.to_config())
 

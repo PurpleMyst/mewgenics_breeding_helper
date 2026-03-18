@@ -1,4 +1,5 @@
 """Entry point for room optimizer UI."""
+
 from pathlib import Path
 
 import argparse
@@ -9,7 +10,7 @@ from mewgenics_room_optimizer_ui.state import AppState
 from mewgenics_room_optimizer_ui.ui import build_ui
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Mewgenics Room Optimizer")
     parser.add_argument(
@@ -32,7 +33,7 @@ def load_startup_save(filepath: str, state: AppState) -> bool:
         return False
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     args = parse_args()
 
@@ -46,7 +47,13 @@ def main():
     build_ui(state)
 
     icon_path = str(Path(__file__).parent / "favicon.ico")
-    dpg.create_viewport(title="Room Optimizer", width=1000, height=700, small_icon=icon_path, large_icon=icon_path)
+    dpg.create_viewport(
+        title="Room Optimizer",
+        width=1000,
+        height=700,
+        small_icon=icon_path,
+        large_icon=icon_path,
+    )
     dpg.setup_dearpygui()
     dpg.set_primary_window("main_window", True)
     dpg.show_viewport()

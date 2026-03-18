@@ -437,6 +437,9 @@ class Cat:
         # Extract age from creation_day stored near the end of the blob (around blob_len - 103).
         # Search a small window around the typical offset to handle varying blob structures.
         if current_day is not None:
+            has_ey = any(p.lower() == "eternalyouth" for p in disorders)
+            # Cap age at 100 unless cat has EternalYouth
+            age_limit = 500 if has_ey else 100
             try:
                 # Try positions from blob_len-100 to blob_len-110, preferring closer to -103
                 for offset_from_end in [
@@ -460,17 +463,11 @@ class Cat:
                     if 0 <= creation_day <= current_day:
                         age = current_day - creation_day
                         # Check if cat has EternalYouth
-                        has_ey = any(
-                            p.lower() == "eternalyouth"
-                            for p in (passive_abilities or [])
-                        )
-                        # Cap age at 100 unless cat has EternalYouth
-                        age_limit = 500 if has_ey else 100
                         if 0 <= age <= age_limit:
                             age = age
                             break
-            except Exception:
-                pass
+            except Exception as e:
+                warnings.warn(f"Failed to extract age for cat {db_key}: {e}")
 
         return cls(
             db_key=db_key,

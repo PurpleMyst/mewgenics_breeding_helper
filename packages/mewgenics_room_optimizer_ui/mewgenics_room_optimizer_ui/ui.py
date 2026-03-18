@@ -3,11 +3,15 @@
 from collections.abc import Callable
 from enum import StrEnum
 from pprint import pformat
+from typing import Any
 
 import dearpygui.dearpygui as dpg
+from mewgenics_parser import Cat
+from mewgenics_parser.gpak import GameData
 from mewgenics_parser.trait_dictionary import normalize_trait_name
-from mewgenics_room_optimizer import RoomType, can_pair_gay
-from mewgenics_scorer import ScoringPreferences
+from mewgenics_room_optimizer import OptimizationResult, RoomType, can_pair_gay
+from mewgenics_room_optimizer.types import ScoredPair
+from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
 from .state import AppState
 
@@ -30,16 +34,16 @@ COLOR_DEFAULT_TEXT = (255, 255, 255, 255)
 
 
 def render_cat_table_rows(
-    cats: list,
+    cats: list[Cat],
     state: AppState,
     parent_table_tag: str,
     show_location: bool = True,
     is_ey_check: bool = False,
-    eternal_youth_cats: list | None = None,
+    eternal_youth_cats: list[Cat] | None = None,
     name_callback: Callable | None = None,
     row_callback: Callable | None = None,
     row_tag_prefix: str = "row",
-):
+) -> None:
     """Universal renderer for cat table rows to enforce consistent UI."""
 
     for cat in cats:
@@ -90,7 +94,10 @@ def render_cat_table_rows(
             dpg.add_text(age_display)
 
             if show_location:
-                dpg.add_text(cat.room_display or current_room, color=loc_color)
+                display_room = (
+                    current_room if current_room is not None else "Unassigned"
+                )
+                dpg.add_text(cat.room_display or display_room, color=loc_color)
 
             for sv in stat_values:
                 dpg.add_text(str(sv))
@@ -105,7 +112,7 @@ def substring_match(query: str, choices: list[str]) -> list[str]:
     return [c for c in choices if query.casefold() in c.casefold()]
 
 
-def build_ui(state: AppState):
+def build_ui(state: AppState) -> None:
     """Build all DPG UI components."""
 
     with dpg.handler_registry():
@@ -135,10 +142,10 @@ def build_ui(state: AppState):
 
     build_themes()
 
-    scan_and_load_saves(state)
+    scan_and_load_saves(user_data=state)
 
 
-def build_menu_bar(state: AppState):
+def build_menu_bar(state: AppState) -> None:
     """Build the menu bar."""
     with dpg.menu_bar():
         with dpg.menu(label="File"):
@@ -151,7 +158,7 @@ def build_menu_bar(state: AppState):
             dpg.add_menu_item(label="Exit", callback=exit_callback)
 
 
-def build_saves_section(state: AppState):
+def build_saves_section(state: AppState) -> None:
     """Build the saves selection section."""
     with dpg.collapsing_header(label="Available Saves", default_open=False):
         with dpg.child_window(height=100, border=True, tag="saves_section"):
@@ -163,7 +170,7 @@ def build_saves_section(state: AppState):
             )
 
 
-def build_toolbar(state: AppState):
+def build_toolbar(state: AppState) -> None:
     """Build the toolbar area."""
     with dpg.group(horizontal=True):
         dpg.add_text(
@@ -183,7 +190,7 @@ def build_toolbar(state: AppState):
         )
 
 
-def build_room_config_section(state: AppState):
+def build_room_config_section(state: AppState) -> None:
     """Build the room configuration section."""
     with dpg.collapsing_header(label="Room Configuration", default_open=False):
         with dpg.child_window(height=180, border=True, tag="room_config_section"):
@@ -236,7 +243,7 @@ def build_room_config_section(state: AppState):
                     )
 
 
-def build_params_section(state: AppState):
+def build_params_section(state: AppState) -> None:
     """Build the optimization parameters section."""
     with dpg.collapsing_header(label="Optimization Parameters", default_open=True):
         with dpg.child_window(height=180, border=True, tag="params_section"):
@@ -361,7 +368,7 @@ def build_params_section(state: AppState):
                 )
 
 
-def on_param_changed(sender, app_data, user_data: AppState):
+def on_param_changed(sender: int, app_data: Any, user_data: AppState) -> None:
     """Handle parameter change - update state and auto-save."""
     tag = dpg.get_item_alias(sender) or dpg.get_item_label(sender)
     if not tag:
@@ -385,7 +392,7 @@ def on_param_changed(sender, app_data, user_data: AppState):
     user_data.save()
 
 
-def build_traits_section(state: AppState):
+def build_traits_section(state: AppState) -> None:
     """Build the favorable traits selection section."""
     with dpg.collapsing_header(label="Favorable Traits", default_open=True):
         with dpg.child_window(border=True, tag="traits_section"):
@@ -473,7 +480,7 @@ def build_traits_section(state: AppState):
 
 
 def _format_trait_with_description(
-    trait_key: str, game_data, max_desc_len: int = 40
+    trait_key: str, game_data: GameData, max_desc_len: int = 40
 ) -> str:
     """Format a trait with its description for display in listbox."""
     desc = game_data.ability_text[trait_key].description
@@ -488,7 +495,7 @@ def _extract_trait_key(formatted: str) -> str:
     return formatted.split(" | ")[0].strip()
 
 
-def on_cat_name_filter(sender, app_data, user_data: AppState):
+def on_cat_name_filter(sender: int, app_data: str, user_data: AppState) -> None:
     """Filter All Cats table by name with fuzzy matching."""
     filter_text = app_data or ""
     update_all_cats_table(
@@ -496,7 +503,7 @@ def on_cat_name_filter(sender, app_data, user_data: AppState):
     )
 
 
-def on_cat_trait_filter(sender, app_data, user_data: AppState):
+def on_cat_trait_filter(sender: int, app_data: str, user_data: AppState) -> None:
     """Filter All Cats table by trait with fuzzy matching."""
     filter_text = app_data or ""
     update_all_cats_table(
@@ -504,7 +511,7 @@ def on_cat_trait_filter(sender, app_data, user_data: AppState):
     )
 
 
-def on_toggle_show_all_cats(sender, app_data, user_data: AppState):
+def on_toggle_show_all_cats(sender: int, app_data: bool, user_data: AppState) -> None:
     """Toggle showing non-In-House cats."""
     update_all_cats_table(
         user_data,
@@ -513,7 +520,9 @@ def on_toggle_show_all_cats(sender, app_data, user_data: AppState):
     )
 
 
-def on_add_trait(sender, app_data, user_data: tuple[AppState, TraitCategory, str]):
+def on_add_trait(
+    sender: int | None, app_data: Any, user_data: tuple[AppState, TraitCategory, str]
+) -> None:
     """Add selected trait to favorable traits."""
     state, category, listbox_tag = user_data
     selected = dpg.get_value(listbox_tag)
@@ -534,7 +543,9 @@ def on_add_trait(sender, app_data, user_data: tuple[AppState, TraitCategory, str
         update_traits_display(state)
 
 
-def on_trait_filter(sender, app_data, user_data: tuple[AppState, str, Callable]):
+def on_trait_filter(
+    sender: int, app_data: str, user_data: tuple[AppState, str, Callable]
+) -> None:
     """Filter traits listbox with fuzzy matching."""
     state, listbox_tag, get_traits_func = user_data
     filter_text = app_data or ""
@@ -546,7 +557,7 @@ def on_trait_filter(sender, app_data, user_data: tuple[AppState, str, Callable])
     dpg.configure_item(listbox_tag, items=formatted)
 
 
-def on_clear_traits(sender, app_data, user_data: AppState):
+def on_clear_traits(sender: int, app_data: Any, user_data: AppState) -> None:
     """Clear all favorable traits."""
     user_data.planner_traits.clear()
     user_data.save()
@@ -559,7 +570,7 @@ def _is_favorable_trait(trait_key: str, planner_traits: list) -> bool:
     return any(normalize_trait_name(t.key) == normalized for t in planner_traits)
 
 
-def on_toggle_gay(sender, app_data, user_data: tuple[int, AppState]):
+def on_toggle_gay(sender: int, app_data: bool, user_data: tuple[int, AppState]) -> None:
     """Set gay flag for a cat based on checkbox state."""
     db_key, state = user_data
     state.gay_flags[db_key] = app_data
@@ -569,7 +580,9 @@ def on_toggle_gay(sender, app_data, user_data: tuple[int, AppState]):
         show_cat_detail_window(cat, state)
 
 
-def on_trait_weight_changed(sender, app_data, user_data: tuple[int, AppState]):
+def on_trait_weight_changed(
+    sender: int, app_data: int, user_data: tuple[int, AppState]
+) -> None:
     """Handle trait weight change."""
     index, state = user_data
     new_weight = max(1, min(10, int(app_data)))
@@ -577,7 +590,9 @@ def on_trait_weight_changed(sender, app_data, user_data: tuple[int, AppState]):
     state.save()
 
 
-def on_remove_trait(sender, app_data, user_data: tuple[int, AppState]):
+def on_remove_trait(
+    sender: int, app_data: Any, user_data: tuple[int, AppState]
+) -> None:
     """Remove a trait from favorable traits."""
     index, state = user_data
     state.planner_traits.pop(index)
@@ -585,7 +600,7 @@ def on_remove_trait(sender, app_data, user_data: tuple[int, AppState]):
     update_traits_display(state)
 
 
-def update_traits_display(state: AppState):
+def update_traits_display(state: AppState) -> None:
     """Update the selected traits display."""
     container = "selected_traits_container"
     if not dpg.does_item_exist(container):
@@ -639,7 +654,7 @@ def update_traits_display(state: AppState):
             )
 
 
-def _cat_has_favorable_trait(cat, planner_traits: list) -> bool:
+def _cat_has_favorable_trait(cat: Cat, planner_traits: list[TraitRequirement]) -> bool:
     """Check if cat has any favorable trait from planner."""
     for trait in planner_traits:
         norm_trait_key = normalize_trait_name(trait.key)
@@ -658,7 +673,9 @@ def _cat_has_favorable_trait(cat, planner_traits: list) -> bool:
     return False
 
 
-def _get_assigned_room_key(cat_db_key: int, results) -> str | None:
+def _get_assigned_room_key(
+    cat_db_key: int, results: OptimizationResult | None
+) -> str | None:
     """Get the room key a cat is assigned to in optimization results."""
     if not results:
         return None
@@ -670,7 +687,7 @@ def _get_assigned_room_key(cat_db_key: int, results) -> str | None:
 
 def update_all_cats_table(
     state: AppState, name_filter: str = "", trait_filter: str = ""
-):
+) -> None:
     """Update the All Cats table with filtered cats."""
     table = "all_cats_table"
     placeholder = "all_cats_placeholder"
@@ -753,7 +770,9 @@ def update_all_cats_table(
             dpg.add_text(trait_badge)
 
 
-def on_decrement_weight(sender, app_data, user_data: tuple[int, AppState]):
+def on_decrement_weight(
+    sender: int, app_data: Any, user_data: tuple[int, AppState]
+) -> None:
     """Decrement trait weight."""
     index, state = user_data
     state.planner_traits[index].weight = max(1, state.planner_traits[index].weight - 1)
@@ -761,7 +780,9 @@ def on_decrement_weight(sender, app_data, user_data: tuple[int, AppState]):
     update_traits_display(state)
 
 
-def on_increment_weight(sender, app_data, user_data: tuple[int, AppState]):
+def on_increment_weight(
+    sender: int, app_data: Any, user_data: tuple[int, AppState]
+) -> None:
     """Increment trait weight."""
     index, state = user_data
     state.planner_traits[index].weight = min(10, state.planner_traits[index].weight + 1)
@@ -769,7 +790,7 @@ def on_increment_weight(sender, app_data, user_data: tuple[int, AppState]):
     update_traits_display(state)
 
 
-def build_results_tab(state: AppState):
+def build_results_tab(state: AppState) -> None:
     """Build the results tab with room summary and details."""
     with dpg.collapsing_header(label="Results", default_open=True):
         with dpg.child_window(height=200, border=True, tag="results_section"):
@@ -795,7 +816,7 @@ def build_results_tab(state: AppState):
             )
 
 
-def build_all_cats_tab(state: AppState):
+def build_all_cats_tab(state: AppState) -> None:
     """Build the All Cats tab with searchable cat table."""
     with dpg.collapsing_header(label="All Cats", default_open=True):
         with dpg.child_window(height=350, border=True, tag="all_cats_section"):
@@ -853,7 +874,7 @@ def build_all_cats_tab(state: AppState):
         update_all_cats_table(state)
 
 
-def build_inspector_section(state: AppState):
+def build_inspector_section(state: AppState) -> None:
     """Build the inspector panel with tabs for cat and pair inspection."""
     with dpg.collapsing_header(label="Inspector", default_open=True):
         with dpg.child_window(border=True, tag="inspector_section"):
@@ -875,7 +896,7 @@ def build_inspector_section(state: AppState):
                 dpg.add_group(tag="inspector_pair_container")
 
 
-def build_themes():
+def build_themes() -> None:
     """Build application themes."""
     with dpg.theme() as global_theme:
         with dpg.theme_component(dpg.mvAll):
@@ -891,7 +912,7 @@ def build_themes():
     dpg.bind_theme(global_theme)
 
 
-def on_global_enter(sender, app_data, user_data):
+def on_global_enter(sender: int, app_data: Any, user_data: Any) -> None:
     """Check which filter is active when Enter is pressed and trigger add."""
     if dpg.is_item_active("mutation_filter"):
         on_add_trait(
@@ -903,7 +924,9 @@ def on_global_enter(sender, app_data, user_data):
         on_add_trait(None, None, (user_data, TraitCategory.ABILITY, "ability_listbox"))
 
 
-def scan_and_load_saves(sender=None, app_data=None, user_data: AppState | None = None):
+def scan_and_load_saves(
+    sender: int | None = None, app_data: Any = None, user_data: AppState | None = None
+) -> None:
     """Scan for saves and auto-load the newest."""
     from mewgenics_parser import find_save_files, parse_save
 
@@ -948,7 +971,7 @@ def scan_and_load_saves(sender=None, app_data=None, user_data: AppState | None =
         dpg.set_value("cat_count_text", "Cats: 0")
 
 
-def init_traits_lists(state: AppState):
+def init_traits_lists(state: AppState) -> None:
     """Initialize the trait filter listboxes with available traits from cats."""
     mutations = state.get_available_mutations()
     passives = state.get_available_passives()
@@ -971,7 +994,7 @@ def init_traits_lists(state: AppState):
     update_traits_display(state)
 
 
-def on_save_selected(sender, app_data, user_data: AppState):
+def on_save_selected(sender: int, app_data: str, user_data: AppState) -> None:
     """Handle save selection from listbox."""
     from mewgenics_parser import find_save_files, parse_save
 
@@ -1001,12 +1024,12 @@ def on_save_selected(sender, app_data, user_data: AppState):
         print(f"Error loading save: {e}")
 
 
-def save_config_callback(sender, app_data, user_data: AppState):
+def save_config_callback(sender: int, app_data: Any, user_data: AppState) -> None:
     """Save configuration to disk."""
     user_data.save()
 
 
-def on_room_config_changed(sender, app_data, user_data: AppState):
+def on_room_config_changed(sender: int, app_data: Any, user_data: AppState) -> None:
     """Handle room config change - auto-save immediately."""
     from mewgenics_room_optimizer import RoomConfig
 
@@ -1060,12 +1083,12 @@ def on_room_config_changed(sender, app_data, user_data: AppState):
         dpg.set_value("status_text", "Invalid room config - fix errors and try again")
 
 
-def exit_callback(sender, app_data, user_data):
+def exit_callback(sender: int, app_data: Any, user_data: Any) -> None:
     """Exit the application."""
     dpg.destroy_context()
 
 
-def run_optimization(sender, app_data, user_data: AppState):
+def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     """Run the optimization."""
     from mewgenics_room_optimizer import optimize_sa
     from mewgenics_room_optimizer.types import OptimizationParams
@@ -1125,7 +1148,7 @@ def run_optimization(sender, app_data, user_data: AppState):
     update_results_table(results, user_data)
 
 
-def update_results_table(results, state):
+def update_results_table(results: OptimizationResult, state: AppState) -> None:
     """Update the results table with optimization results."""
     clear_results_table()
     clear_details_section()
@@ -1169,7 +1192,7 @@ def update_results_table(results, state):
             dpg.highlight_table_row("results_table", i, row_color)
 
 
-def clear_results_table():
+def clear_results_table() -> None:
     """Clear the results table."""
     table = "results_table"
     if dpg.does_item_exist(table):
@@ -1180,7 +1203,7 @@ def clear_results_table():
     dpg.show_item("results_placeholder")
 
 
-def clear_details_section():
+def clear_details_section() -> None:
     """Clear the details section."""
     section = "details_section"
     if dpg.does_item_exist(section):
@@ -1190,7 +1213,7 @@ def clear_details_section():
                 dpg.delete_item(child)
 
 
-def clear_inspector(state: AppState | None = None):
+def clear_inspector(state: AppState | None = None) -> None:
     """Clear the inspector panel and show placeholder."""
     container = "inspector_container"
     if dpg.does_item_exist(container):
@@ -1208,7 +1231,9 @@ def clear_inspector(state: AppState | None = None):
         state.selected_pair_index = None
 
 
-def on_all_cats_cat_selected(sender, app_data, user_data):
+def on_all_cats_cat_selected(
+    sender: int, app_data: bool, user_data: tuple[int, AppState]
+) -> None:
     """Handle cat selection in All Cats table with radio behavior."""
     db_key, state = user_data
 
@@ -1230,7 +1255,9 @@ def on_all_cats_cat_selected(sender, app_data, user_data):
     show_cat_detail_window(cat, state)
 
 
-def on_room_selected(sender, app_data, user_data):
+def on_room_selected(
+    sender: int, app_data: bool, user_data: tuple[str, AppState]
+) -> None:
     """Handle room selection in results table."""
     selected_key, state = user_data
 
@@ -1267,7 +1294,9 @@ def on_room_selected(sender, app_data, user_data):
     build_details_tabs(selected_room, state)
 
 
-def on_pair_selected(sender, app_data, user_data):
+def on_pair_selected(
+    sender: int, app_data: bool, user_data: tuple[int, ScoredPair, AppState]
+) -> None:
     """Handle pair selection with radio behavior - only one pair selected at a time."""
     pair_index, pair, state = user_data
 
@@ -1287,7 +1316,7 @@ def on_pair_selected(sender, app_data, user_data):
     show_pair_detail_window(pair, state)
 
 
-def build_details_tabs(selected_room, state):
+def build_details_tabs(selected_room: Any, state: AppState) -> None:
     """Build the tabbed details view for a selected room."""
     dpg.add_tab_bar(parent="details_section", tag="details_tab_bar")
 
@@ -1533,7 +1562,7 @@ def build_details_tabs(selected_room, state):
             dpg.add_group(tag="sandbox_results_container")
 
 
-def show_pair_detail_window(pair, state):
+def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
     """Show pair details in the inspector panel with trait inheritance probabilities."""
     from mewgenics_scorer import calculate_trait_probability
 
@@ -1624,7 +1653,9 @@ def show_pair_detail_window(pair, state):
             dpg.add_text("No favorable traits configured", color=COLOR_MUTED)
 
 
-def on_cat_selected(sender, app_data, user_data):
+def on_cat_selected(
+    sender: int, app_data: bool, user_data: tuple[Cat, AppState]
+) -> None:
     """Handle cat selection - show detail window with radio behavior."""
     cat, state = user_data
 
@@ -1641,7 +1672,7 @@ def on_cat_selected(sender, app_data, user_data):
     show_cat_detail_window(cat, state)
 
 
-def show_cat_detail_window(cat, state):
+def show_cat_detail_window(cat: Cat, state: AppState) -> None:
     """Show cat details in the inspector panel."""
     from mewgenics_parser.constants import STAT_NAMES
 
@@ -1767,16 +1798,16 @@ def show_cat_detail_window(cat, state):
                         color=(255, 150, 150, 255),
                     )
 
-        with dpg.tree_node(label=f"Mutations", default_open=True):
+        with dpg.tree_node(label="Body Parts", default_open=True):
             # for mut in cat.mutations or []:
             #     is_fav = _is_favorable_trait(mut, state.planner_traits)
             #     color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
             #     prefix = "[*] " if is_fav else "  "
             #     dpg.add_text(f"{prefix}{mut}", color=color)
-            dpg.add_text(pformat(cat.mutation_ids_by_category))
+            dpg.add_text(pformat(cat.body_parts))
 
 
-def on_sandbox_changed(sender, app_data, user_data):
+def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
     """Handle sandbox dropdown changes."""
     import re
 
