@@ -104,8 +104,8 @@ def _parse_mutation_gon(
                 stat_change = mutation_info.get(stat_name.lower())
                 if isinstance(stat_change, int):
                     stat_descriptions.append(f"{stat_change:+} {stat_name}")
-            if stat_descriptions and not desc:
-                desc = ", ".join(stat_descriptions)
+            if stat_descriptions:
+                desc += (" " if desc else "") + ", ".join(stat_descriptions)
             if category.casefold() not in name.casefold():
                 name = f"{name} ({category.title()})"
 
