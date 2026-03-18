@@ -601,7 +601,7 @@ def update_traits_display(state: AppState) -> None:
             upgraded_desc = trait.get_upgraded_description(state.game_data)
 
             trait_text = dpg.add_text(
-                f"[{int(trait_req.weight):2}] {trait.category}: {display_name}"
+                f"[{int(trait_req.weight):2}] {trait.category.display_name}: {display_name}"
             )
 
             tooltip_lines = []
