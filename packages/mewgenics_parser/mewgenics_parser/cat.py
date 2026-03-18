@@ -4,17 +4,29 @@ from __future__ import annotations
 
 import math
 import struct
+import warnings
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TypeGuard
+from types import SimpleNamespace
+from typing import NamedTuple, TypeGuard
 
 import lz4.block
 
 from .binary import BinaryReader
 from .constants import _IDENT_RE, _JUNK_STRINGS, ROOM_DISPLAY, STAT_NAMES
-from .trait_dictionary import is_disorder, SKILLSHARE_BASE_ID, normalize_trait_name
+from .trait_dictionary import SKILLSHARE_BASE_ID, is_disorder, normalize_trait_name
 
-Stats = tuple[int, int, int, int, int, int, int]
+
+class Stats(NamedTuple):
+    """Structured representation of a cat's stats."""
+
+    strength: int
+    dexterity: int
+    constitution: int
+    intelligence: int
+    speed: int
+    charisma: int
+    luck: int
 
 
 class CatGender(StrEnum):
@@ -80,62 +92,86 @@ def _read_db_key_candidates(
     return keys
 
 
-@dataclass(init=False, slots=True)
+@dataclass(slots=True, frozen=True)
+class CatBodyParts:
+    """Structured representation of a cat's body part identifiers."""
+
+    texture: int
+    body: int
+    head: int
+    tail: int
+    legs: int
+    arms: int
+    eyes: int
+    eyebrows: int
+    ears: int
+    mouth: int
+
+
+@dataclass(slots=True)
 class Cat:
     """Main data model representing a cat in Mewgenics."""
 
     db_key: int
-    # unique_id: str
+    """Unique identifier from the save file, used for relationships and lookups."""
+
     name: str
+    """Cat's name, decoded from UTF-16 in the blob. Defaults to 'Unnamed' if missing."""
+
     gender: CatGender
-    # gender_source: str
-    # breed_id: int
-    # collar: str
+    """Cat's gender, normalized from multiple possible save data representations."""
+
     status: CatStatus
+    """Current status of the cat (In House, Adventure, or Gone), determined from save data context."""
+
     room: str | None
+    """Current room if In House, or None if on Adventure or Gone. Decoded from save data context."""
+
     stat_base: Stats
-    # stat_mod: list
-    # stat_sec: list
+    """Base stats tuple (HP, STR, DEX, INT, WIS, LUK, CHA) directly from the blob."""
+
     stat_total: Stats
+    """Total stats tuple (base + modifiers) calculated from the blob's base, mod, and sec stat groups."""
+
     age: int | None
+    """Calculated age based on creation_day from the blob and current_day passed to from_blob. Capped at 100 unless EternalYouth is present, in which case capped at 500. None if creation_day is missing or invalid."""
 
     aggression: float | None
+    """Aggression personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
+
     libido: float | None
+    """Libido personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
+
     coi: float | None
+    """Coefficient of Inbreeding (COI), a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
 
-    active_abilities: list
-    passive_abilities: list
-    disorders: list
+    active_abilities: list[str]
+    """List of active ability keys extracted from the blob's ability run, normalized to exclude junk entries."""
 
-    # equipment: list
-    mutation_ids_by_category: dict[str, list[int]]
-    # mutation_chip_items: list
-    # visual_mutation_entries: list
-    # visual_mutation_ids: list
-    # visual_mutation_slots: dict
-    # body_parts: dict
-    # gender_token_fields: tuple
-    # gender_token: str
-    # name_tag: str
+    passive_abilities: list[str]
+    """List of passive ability keys extracted from the blob's ability run, normalized to exclude junk entries."""
 
-    parent_a: Cat | None = field(default=None, repr=False)
-    parent_b: Cat | None = field(default=None, repr=False)
-    # children: list = field(default_factory=list, repr=False)
+    disorders: list[str]
+    """List of disorder keys extracted from the blob's ability run, normalized to exclude junk entries."""
 
-    lovers: list = field(default_factory=list, repr=False)
-    haters: list = field(default_factory=list, repr=False)
+    body_parts: CatBodyParts
+    """Structured body part identifiers extracted from specific body slot indices in the blob."""
 
-    # generation: int = field(default=0, repr=False)
+    parent_a: Cat | None
+    """Direct parent cat A, assigned after parsing based on UID references. None if unknown or not found."""
 
-    # Private attributes (not included in dataclass repr)
-    # _uid_int: int = field(repr=False, default=0)
-    # _parent_uid_a: int = field(repr=False, default=0)
-    # _parent_uid_b: int = field(repr=False, default=0)
-    # _lover_uids: list = field(repr=False, default_factory=list)
-    # _hater_uids: list = field(repr=False, default_factory=list)
+    parent_b: Cat | None
+    """Direct parent cat B, assigned after parsing based on UID references. None if unknown or not found."""
 
-    def __init__(
-        self,
+    lovers: list[Cat]
+    """List of lover cats, assigned after parsing based on UID references. Empty if none or unknown."""
+
+    haters: list[Cat]
+    """List of hater cats, assigned after parsing based on UID references. Empty if none or unknown."""
+
+    @classmethod
+    def from_blob(
+        cls,
         blob: bytes,
         cat_key: int,
         house_info: dict,
@@ -146,29 +182,27 @@ class Cat:
         raw = lz4.block.decompress(blob[4:], uncompressed_size=uncomp_size)
         r = BinaryReader(raw)
 
-        def _stats() -> Stats:
-            return (r.u32(), r.u32(), r.u32(), r.u32(), r.u32(), r.u32(), r.u32())
+        def _stats(*, signed: bool) -> Stats:
+            n = r.i32 if signed else r.u32
+            return Stats(n(), n(), n(), n(), n(), n(), n())
 
-        def _stats_signed() -> Stats:
-            return (r.i32(), r.i32(), r.i32(), r.i32(), r.i32(), r.i32(), r.i32())
-
-        self.db_key = cat_key
+        db_key = cat_key
 
         # Location / status
         if cat_key in adventure_keys:
-            self.status = CatStatus.ADVENTURE
-            self.room = None
+            status = CatStatus.ADVENTURE
+            room = None
         elif cat_key in house_info:
-            self.status = CatStatus.IN_HOUSE
-            self.room = house_info[cat_key]
+            status = CatStatus.IN_HOUSE
+            room = house_info[cat_key]
         else:
-            self.status = CatStatus.GONE
-            self.room = None
+            status = CatStatus.GONE
+            room = None
 
         # Blob fields
         _breed_id = r.u32()
         _uid_int = r.u64()  # cat's own unique id (seed)
-        self.name = r.utf16str() or "Unnamed"
+        name = r.utf16str() or "Unnamed"
 
         # Optional post-name tag string (empty for most cats). Some fields below
         # are anchored to the byte immediately after this string.
@@ -185,10 +219,9 @@ class Cat:
         r.u32()
 
         r.skip(64)
-        T = [r.u32() for _ in range(72)]
-        _body_parts = {"texture": T[0], "bodyShape": T[3], "headShape": T[8]}
 
-        _MUTATION_INDICES_BY_CATEGORY = {
+        body_slots = [r.u32() for _ in range(72)]
+        body_part_indices = {
             "texture": [0],
             "body": [3],
             "head": [8],
@@ -200,10 +233,32 @@ class Cat:
             "ears": [58, 63],
             "mouth": [68],
         }
-        self.mutation_ids_by_category = {
-            category: [T[i] for i in indices if i < len(T)]
-            for category, indices in _MUTATION_INDICES_BY_CATEGORY.items()
-        }
+        body_part_values = {}
+        for part, indices in body_part_indices.items():
+            value = 0
+            for i in indices:
+                if i < len(body_slots):
+                    new_value = body_slots[i]
+                    if new_value == 0:
+                        continue
+                    if value != 0 and new_value != value:
+                        warnings.warn(
+                            f"Conflicting values for {part} for cat {db_key}: {value} vs {new_value}"
+                        )
+                    value = new_value
+            body_part_values[part] = value
+        body_parts = CatBodyParts(
+            texture=body_part_values.get("texture", 0),
+            body=body_part_values.get("body", 0),
+            head=body_part_values.get("head", 0),
+            tail=body_part_values.get("tail", 0),
+            legs=body_part_values.get("legs", 0),
+            arms=body_part_values.get("arms", 0),
+            eyes=body_part_values.get("eyes", 0),
+            eyebrows=body_part_values.get("eyebrows", 0),
+            ears=body_part_values.get("ears", 0),
+            mouth=body_part_values.get("mouth", 0),
+        )
 
         _gender_token_fields = tuple(r.u32() for _ in range(3))
         raw_gender = r.str()
@@ -221,27 +276,27 @@ class Cat:
             2: CatGender.NONBINARY,
         }.get(sex_code)  # type: ignore[call-overload]
         if gender_from_code:
-            self.gender = gender_from_code
-            # self.gender_source = "sex_code"
+            gender = gender_from_code
+            # gender_source = "sex_code"
         else:
-            self.gender = _normalize_gender(raw_gender)
-            # self.gender_source = "token_fallback"
+            gender = _normalize_gender(raw_gender)
+            # gender_source = "token_fallback"
         r.f64()
 
-        self.stat_base = _stats()
-        stat_mod = _stats_signed()
-        stat_sec = _stats_signed()
-        self.stat_total = tuple(
-            b + m + s for b, m, s in zip(self.stat_base, stat_mod, stat_sec)
+        stat_base = _stats(signed=False)
+        stat_mod = _stats(signed=True)
+        stat_sec = _stats(signed=True)
+        stat_total = Stats(
+            *(b + m + s for b, m, s in zip(stat_base, stat_mod, stat_sec))
         )
 
         # Personality stats (age, aggression, libido, coi).
         # Libido and coi are doubles anchored after the post-name tag string.
         # Age is stored as creation_day at offset (blob_len - 103), then calculated as (current_day - creation_day).
-        self.age = None
-        self.aggression = None  # None = unknown
-        self.libido = None
-        self.coi = None
+        age = None
+        aggression = None  # None = unknown
+        libido = None
+        coi = None
 
         def _read_personality(offset: int) -> float | None:
             i = personality_anchor + offset
@@ -255,21 +310,21 @@ class Cat:
                 return None
             return float(v)
 
-        self.libido = _read_personality(32)
-        self.coi = _read_personality(40)
-        self.aggression = _read_personality(64)
+        libido = _read_personality(32)
+        coi = _read_personality(40)
+        aggression = _read_personality(64)
 
         # Relationship slots: direct db_key references relative to the byte
         # immediately after the optional post-name tag string.
         _lover_uids = _read_db_key_candidates(
-            raw, self.db_key, (48,), base_offset=personality_anchor
+            raw, db_key, (48,), base_offset=personality_anchor
         )
         _hater_uids = _read_db_key_candidates(
-            raw, self.db_key, (72,), base_offset=personality_anchor
+            raw, db_key, (72,), base_offset=personality_anchor
         )
-        self.lovers = []
-        self.haters = []
-        # self.children = []  # direct offspring; assigned by parse_save
+        lovers = []
+        haters = []
+        # children = []  # direct offspring; assigned by parse_save
 
         # ── Ability run — anchored on "DefaultMove" ─────────────────────────
         # The ability block is a u64-length-prefixed ASCII identifier run.
@@ -308,7 +363,7 @@ class Cat:
                 run_items.append(item)
 
             # Active abilities: items[1-5] (skip DefaultMove at [0])
-            self.active_abilities = [x for x in run_items[1:6] if _valid_str(x)]
+            active_abilities = [x for x in run_items[1:6] if _valid_str(x)]
 
             # Passive1 is in run_items[10] (if the run is long enough)
             passives: list[str] = []
@@ -338,9 +393,7 @@ class Cat:
                 except Exception:
                     break
 
-            self.passive_abilities, self.disorders = _split_passives_and_disorders(
-                passives
-            )
+            passive_abilities, disorders = _split_passives_and_disorders(passives)
             _equipment = []  # equipment parsing requires separate byte-marker logic
 
         else:
@@ -360,10 +413,8 @@ class Cat:
             if found != -1:
                 r.seek(found)
 
-            self.active_abilities = [
-                a for a in [r.str() for _ in range(6)] if _valid_str(a)
-            ]
-            self.equipment = [s for s in [r.str() for _ in range(4)] if _valid_str(s)]
+            active_abilities = [a for a in [r.str() for _ in range(6)] if _valid_str(a)]
+            equipment = [s for s in [r.str() for _ in range(4)] if _valid_str(s)]
 
             all_passives: list[str] = []
             first = r.str()
@@ -379,9 +430,7 @@ class Cat:
                 if _valid_str(p):
                     all_passives.append(p)
 
-            self.passive_abilities, self.disorders = _split_passives_and_disorders(
-                all_passives
-            )
+            passive_abilities, disorders = _split_passives_and_disorders(all_passives)
 
         # _mutation_chip_items = visual_items
 
@@ -413,15 +462,37 @@ class Cat:
                         # Check if cat has EternalYouth
                         has_ey = any(
                             p.lower() == "eternalyouth"
-                            for p in (self.passive_abilities or [])
+                            for p in (passive_abilities or [])
                         )
                         # Cap age at 100 unless cat has EternalYouth
                         age_limit = 500 if has_ey else 100
                         if 0 <= age <= age_limit:
-                            self.age = age
+                            age = age
                             break
             except Exception:
                 pass
+
+        return cls(
+            db_key=db_key,
+            name=name,
+            gender=gender,
+            status=status,
+            room=room,
+            stat_base=stat_base,
+            stat_total=stat_total,
+            age=age,
+            aggression=aggression,
+            libido=libido,
+            coi=coi,
+            active_abilities=active_abilities,
+            passive_abilities=passive_abilities,
+            disorders=disorders,
+            body_parts=body_parts,
+            parent_a=None,
+            parent_b=None,
+            lovers=lovers,
+            haters=haters,
+        )
 
     @property
     def room_display(self) -> str:

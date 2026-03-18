@@ -136,7 +136,7 @@ def parse_save(path: str) -> SaveData:
 
     cats: list[Cat] = []
     for key, blob in rows:
-        cat = Cat(blob, key, house, adv, current_day)
+        cat = Cat.from_blob(blob, key, house, adv, current_day)
         cats.append(cat)
 
     cats_by_key: dict = {c.db_key: c for c in cats}

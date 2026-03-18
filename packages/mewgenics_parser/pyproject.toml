@@ -22,3 +22,6 @@ dev = [
 
 [project.scripts]
 extract-gpak = "mewgenics_parser:_extract_gpak_script"
+
+[tool.inline-snapshot]
+format-command="ruff format --stdin-filename {filename}"

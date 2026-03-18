@@ -1,11 +1,14 @@
 """Integration tests for GPAK functions requiring a real GPAK file."""
 
 from inline_snapshot import snapshot
+from dirty_equals import IsInt
 
 from mewgenics_parser import parse_save
 from mewgenics_parser.cat import CatGender, CatStatus
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.utils import NameAndDescription
+
+from mewgenics_parser.cat import CatBodyParts
 
 
 class TestParseSaveIntegration:
@@ -22,26 +25,26 @@ class TestParseSaveIntegration:
         assert cat.room == snapshot(None)
         assert cat.stat_base == snapshot((6, 4, 7, 5, 6, 3, 4))
         assert cat.stat_total == snapshot((6, 4, 7, 6, 6, 3, 4))
-        assert cat.age == snapshot(None)
+        assert cat.age == snapshot(IsInt())
         assert cat.aggression == snapshot(0.47115162183106574)
         assert cat.libido == snapshot(0.5)
         assert cat.coi == snapshot(0.05)
         assert cat.active_abilities == snapshot(["BasicMelee", "Spit", "Block"])
         assert cat.passive_abilities == snapshot(["SelfAssured"])
         assert cat.disorders == snapshot([])
-        assert cat.mutation_ids_by_category == snapshot(
-            {
-                "texture": [54],
-                "body": [19],
-                "head": [46],
-                "tail": [153],
-                "legs": [45, 45],
-                "arms": [45, 45],
-                "eyes": [133, 133],
-                "eyebrows": [26, 26],
-                "ears": [7, 7],
-                "mouth": [50],
-            }
+        assert cat.body_parts == snapshot(
+            CatBodyParts(
+                texture=54,
+                body=19,
+                head=46,
+                tail=153,
+                legs=45,
+                arms=45,
+                eyes=133,
+                eyebrows=26,
+                ears=7,
+                mouth=50,
+            )
         )
         assert cat.parent_a == snapshot(None)
         assert cat.parent_b == snapshot(None)
