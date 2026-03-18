@@ -1115,7 +1115,6 @@ def update_results_table(results: OptimizationResult, state: AppState) -> None:
     for i, room in enumerate(results.rooms):
         avg_quality = 0.0
         avg_risk = 0.0
-        print(len(room.pairs))
         if room.pairs:
             avg_quality = sum(p.quality for p in room.pairs) / len(room.pairs)
             avg_risk = sum(
