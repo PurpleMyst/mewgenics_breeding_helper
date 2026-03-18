@@ -776,13 +776,13 @@ def build_all_cats_tab(state: AppState) -> None:
                     callback=on_cat_name_filter,
                     user_data=state,
                 )
-                dpg.add_input_text(
-                    tag="cat_trait_filter",
-                    hint="Filter by trait...",
-                    width=150,
-                    callback=on_cat_trait_filter,
-                    user_data=state,
-                )
+                # dpg.add_input_text(
+                #     tag="cat_trait_filter",
+                #     hint="Filter by trait...",
+                #     width=150,
+                #     callback=on_cat_trait_filter,
+                #     user_data=state,
+                # )
                 dpg.add_checkbox(
                     tag="show_all_cats",
                     label="Show non-In-House",
@@ -1294,17 +1294,6 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                     combined = pair.factors.combined_malady_chance * 100
                     risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
 
-                    combined_traits = (
-                        pair.cat_a.all_normalized_traits
-                        | pair.cat_b.all_normalized_traits
-                    )
-
-                    hits = sum(
-                        1
-                        for pt in state.trait_requirements
-                        if pt.trait.key in combined_traits
-                    )
-                    total = len(state.trait_requirements)
 
                     with dpg.table_row():
                         dpg.add_selectable(
@@ -1338,10 +1327,6 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                                 badge = dpg.add_text("[!]", color=COLOR_DANGER)
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Inbreeding Risk")
-                            if hits > 0:
-                                badge = dpg.add_text("[*]", color=COLOR_SUCCESS)
-                                with dpg.tooltip(badge):
-                                    dpg.add_text(f"{hits}/{total} Favorable Traits")
         else:
             dpg.add_text("No breeding pairs in this room")
 
