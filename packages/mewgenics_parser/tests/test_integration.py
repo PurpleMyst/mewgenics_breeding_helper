@@ -109,3 +109,23 @@ class TestGpakIntegration:
                 "texture",
             ]
         )
+
+    def test_known_visual_mutation(self, gpak_path):
+        """Verify known visual mutation has expected description from real GPAK."""
+        gd = GameData.from_gpak(gpak_path)
+        result = gd.mutation_text_by_part_and_id
+
+        assert result["eyes"][303] == snapshot(
+            NameAndDescription(name="Gem Eyes", description="+1 INT, +1 CHA")
+        )
+        assert result["eyes"][306] == snapshot(
+            NameAndDescription(
+                name="Confusing Eyes",
+                description="Your basic attack has a 10% chance to inflict Confusion 3.",
+            )
+        )
+        assert result["eyes"][706] == snapshot(
+            NameAndDescription(
+                name="crossed eyes", description="Start each battle with Confusion 2."
+            )
+        )

@@ -1,4 +1,5 @@
 """GPAK file parsing utilities."""
+from mewgenics_parser.constants import STAT_NAMES
 
 import csv
 import io
@@ -71,27 +72,39 @@ def _parse_mutation_gon(
     content: str, game_strings: dict[str, str], category: str
 ) -> DefaultDict[int, NameAndDescription]:
     """Parse a mutation GON file into {mutation_id: NameAndDescription}."""
-    d = _parse_gon_to_dicts(content)
+    gon_data = _parse_gon_to_dicts(content)
     result: dict[int, NameAndDescription] = {}
-    for mutation_id_str, data in d.items():
-        if not isinstance(data, dict):
-            continue
-        try:
-            mutation_id = int(mutation_id_str)
-        except ValueError:
-            continue
-        name_val = _clean_game_text(
-            _resolve_game_string(
-                data.get("name", f"{category.title()} Mutation {mutation_id}"),
-                game_strings,
+    for _category, mutations in gon_data.items():
+        for mutation_id_str, mutation_info in mutations.items():
+            if not isinstance(mutation_info, dict):
+                continue
+            try:
+                mutation_id = int(mutation_id_str)
+            except ValueError:
+                continue
+            name_val = _clean_game_text(
+                _resolve_game_string(
+                    mutation_info.pop("name", f"{category.title()} Mutation {mutation_id}"),
+                    game_strings,
+                )
             )
-        )
-        desc_val = _clean_game_text(
-            _resolve_game_string(data.get("desc", ""), game_strings)
-        )
-        if not name_val and not desc_val:
-            continue
-        result[mutation_id] = NameAndDescription(name=name_val, description=desc_val)
+            desc_val = _clean_game_text(
+                _resolve_game_string(mutation_info.pop("desc", ""), game_strings)
+            )
+
+            # Mutations with complex effects usually have a description, while the ones that simply
+            # add a stat bonus/malus often have an empty description and just list the bonus/malus
+            # in the mutation_info, leaving the description field empty. In that case, we can try to
+            # construct a more informative description from the mutation_info.
+            stat_descriptions = []
+            for stat_name in STAT_NAMES:
+                stat_change = mutation_info.get(stat_name.lower())
+                if isinstance(stat_change, int):
+                    stat_descriptions.append(f"{stat_change:+} {stat_name}")
+            if stat_descriptions and not desc_val:
+                desc_val = ", ".join(stat_descriptions)
+
+            result[mutation_id] = NameAndDescription(name=name_val, description=desc_val)
     return defaultdict(lambda: NameAndDescription(), result)
 
 

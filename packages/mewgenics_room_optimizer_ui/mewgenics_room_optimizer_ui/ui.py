@@ -4,6 +4,7 @@ from collections.abc import Callable
 from enum import StrEnum
 from pprint import pformat
 from typing import Any
+from dataclasses import asdict
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat
@@ -1799,12 +1800,14 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
                     )
 
         with dpg.tree_node(label="Body Parts", default_open=True):
-            # for mut in cat.mutations or []:
-            #     is_fav = _is_favorable_trait(mut, state.planner_traits)
-            #     color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
-            #     prefix = "[*] " if is_fav else "  "
-            #     dpg.add_text(f"{prefix}{mut}", color=color)
-            dpg.add_text(pformat(cat.body_parts))
+            body_parts: dict[str, int] = asdict(cat.body_parts)
+            for part_name, part_id in body_parts.items():
+                name_and_desc = state.game_data.mutation_text_by_part_and_id[part_name].get(part_id)
+                name = name_and_desc.name if name_and_desc else f"{part_name.title()} {part_id}"
+                desc = name_and_desc.description if name_and_desc else ""
+                dpg.add_text(f"  {name}")
+                if desc:
+                    dpg.add_text(f"    {desc}")
 
 
 def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:

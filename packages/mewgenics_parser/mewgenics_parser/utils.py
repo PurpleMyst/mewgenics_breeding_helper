@@ -48,12 +48,13 @@ def _parse_gon_to_dicts(text: str, *, comment_key: str = "name") -> dict[str, An
         ("BLOCK_COMMENT", r"/\*[\s\S]*?\*/"),  # Multi-line or inline block comments
         ("LINE_COMMENT", r"//[^\n]*"),  # Single-line comments
         ("STRING", r'"[^"]*"'),  # String literals
+        ("ARRAY", r"\[[^\]]*\]"),  # Arrays e.g., [1 .1] or [3, .1]
         ("LBRACE", r"\{"),  # Block start
         ("RBRACE", r"\}"),  # Block end
         (
             "LITERAL",
-            r"(?:(?!//|/\*)[^\s\{\}])+",
-        ),  # Keys/Values (stops if it hits a comment)
+            r"(?:(?!//|/\*)[^\s\{\}\[\]])+",
+        ),  # Keys/Values (stops at comments, braces, brackets)
         ("SKIP", r"\s+"),  # Whitespace
     ]
 
@@ -109,10 +110,22 @@ def _parse_gon_to_dicts(text: str, *, comment_key: str = "name") -> dict[str, An
                         ].strip()  # Strip /* and */
                     i += 1
 
-            elif next_kind in ("LITERAL", "STRING"):
+            elif next_kind in ("LITERAL", "STRING", "ARRAY"):
                 # Assign Key-Value pair
                 if next_kind == "STRING":
                     parsed_val = next_val[1:-1]
+                elif next_kind == "ARRAY":
+                    # Strip brackets, normalize delimiters (commas to spaces), and parse
+                    inner_str = next_val[1:-1].replace(",", " ")
+                    parsed_val = []
+                    for item in inner_str.split():
+                        try:
+                            parsed_val.append(int(item))
+                        except ValueError:
+                            try:
+                                parsed_val.append(float(item))
+                            except ValueError:
+                                parsed_val.append(item)
                 else:
                     try:
                         parsed_val = int(next_val)
