@@ -3,9 +3,8 @@
 from unittest.mock import patch
 
 import pytest
-from mewgenics_parser import Cat, create_trait, TraitCategory
+from mewgenics_parser import Cat
 from mewgenics_parser.cat import CatGender, CatStatus, CatBodyParts, Stats
-from mewgenics_scorer import TraitRequirement
 
 from mewgenics_room_optimizer import (
     OptimizationParams,
@@ -23,24 +22,7 @@ from mewgenics_room_optimizer.optimizer import (
     _generate_pairs,
     _has_eternalyouth,
 )
-from mewgenics_scorer import TraitRequirement
 
-from mewgenics_room_optimizer import (
-    OptimizationParams,
-    RoomConfig,
-    RoomType,
-    can_pair_gay,
-    optimize_sa,
-)
-from mewgenics_room_optimizer.optimizer import (
-    PairCache,
-    _build_results_from_state_dict,
-    _cat_stats_sum,
-    _evaluate_state,
-    _filter_cats,
-    _generate_pairs,
-    _has_eternalyouth,
-)
 
 
 # --- TEST FIXTURES & HELPERS ---
@@ -103,7 +85,7 @@ def make_cat(
 def basic_rooms():
     return [
         RoomConfig("breed1", "Breeding 1", RoomType.BREEDING, 4, 50.0),
-        RoomConfig("fight1", "Fighting 1", RoomType.FIGHTING, 2, 50.0),
+        RoomConfig("fight1", "Fighting 1", RoomType.FIGHTING, 2, 1000.0),
         RoomConfig("gen1", "General 1", RoomType.GENERAL, 1, 50.0),
     ]
 
@@ -182,7 +164,7 @@ class TestEternalYouthPlacement:
 class TestGayPairsExclusion:
     def test_can_pair_gay_filters_pairs_in_evaluation(self):
         """Gay pairs should return None from score_pair, excluding them from breeding."""
-        from mewgenics_room_optimizer.optimizer import score_pair, PairCache
+        from mewgenics_room_optimizer.optimizer import score_pair
 
         cat1 = make_cat(1, CatGender.MALE)
         cat2 = make_cat(2, CatGender.MALE)
@@ -248,7 +230,7 @@ class TestSAEvaluator:
         params = OptimizationParams(stimulation=50.0)
         cache = PairCache()
 
-        score = _evaluate_state(state, cats, [room], cache, {}, params)
+        _score = _evaluate_state(state, cats, [room], cache, {}, params)
 
         # Should have at least one pair scored
         assert mock_score_pair.called

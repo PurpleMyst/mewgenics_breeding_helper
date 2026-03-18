@@ -2,7 +2,6 @@
 
 import traceback
 from collections.abc import Callable
-from dataclasses import asdict
 from typing import Any
 
 import dearpygui.dearpygui as dpg
@@ -10,7 +9,7 @@ from mewgenics_parser import Cat, TraitCategory
 from mewgenics_parser.cat import CatStatus
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import Trait, create_trait, extract_traits_from_cat
-from mewgenics_room_optimizer import OptimizationResult, RoomType, can_pair_gay
+from mewgenics_room_optimizer import OptimizationResult, RoomType
 from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
@@ -1047,7 +1046,7 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     """Run the optimization."""
     from mewgenics_room_optimizer import optimize_sa
     from mewgenics_room_optimizer.types import OptimizationParams
-    from mewgenics_scorer import ScoringPreferences, build_ancestor_contribs
+    from mewgenics_scorer import build_ancestor_contribs
 
     if not user_data.cats:
         return
