@@ -8,17 +8,21 @@ This project is a Python-based tool for parsing Mewgenics save files. It uses a 
 mewgenics_breeding_helper/
 ├── pyproject.toml              # Root workspace config (uv)
 ├── packages/
-│   └── mewgenics_parser/       # Main parsing package
-│       ├── pyproject.toml
-│       └── mewgenics_parser/
-│           ├── __init__.py
-│           ├── binary.py       # BinaryReader helper
-│           ├── cat.py          # Cat data model (dataclass)
-│           ├── constants.py    # Constants and regex patterns
-│           ├── gpak.py         # GPAK file handling
-│           ├── save.py         # Save file parsing
-│           ├── visual.py       # Visual mutation handling
-│           └── data/           # Static data (abilities, visual names)
+│   ├── mewgenics_parser/        # Save file parsing, trait definitions
+│   │   └── mewgenics_parser/
+│   │       ├── __init__.py
+│   │       ├── binary.py        # BinaryReader helper
+│   │       ├── cat.py           # Cat data model (dataclass)
+│   │       ├── constants.py     # Constants and regex patterns
+│   │       ├── gpak.py         # GPAK file handling
+│   │       ├── save.py         # Save file parsing
+│   │       ├── traits.py       # Trait domain models
+│   │       ├── trait_dictionary.py  # Trait constants
+│   │       ├── visual.py       # Visual mutation handling
+│   │       └── data/           # Static data (abilities, visual names)
+│   ├── mewgenics_scorer/       # Trait scoring logic
+│   ├── mewgenics_room_optimizer/   # Room optimization algorithm
+│   └── mewgenics_room_optimizer_ui/ # DearPyGui UI application
 └── MewgenicsBreedingManager/   # Submodule - reference only, do not modify
 ```
 
@@ -29,17 +33,24 @@ mewgenics_breeding_helper/
 # Install dependencies (requires uv)
 uv sync
 
+# Install dev dependencies
+uv sync --group dev
+
 # Add a new dependency to a package
 uv add <package> -p packages/mewgenics_parser
 
-# Run the package (if it has a CLI entry point)
-uv run -p packages/mewgenics_parser <module>
+# Run the UI application
+uv run room-optimizer
+# or
+uv run -p packages/mewgenics_room_optimizer_ui mewgenics_room_optimizer_ui.app:main
+
+# Extract GPAK contents
+uv run extract-gpak <path_to_gpak>
 ```
 
 ### Testing
-This project currently has no test suite. When adding tests:
 ```bash
-# Run all tests (pytest recommended)
+# Run all tests (pytest)
 pytest
 
 # Run a single test file
@@ -47,33 +58,46 @@ pytest tests/test_cat.py
 
 # Run a single test function
 pytest tests/test_cat.py::test_parse_cat
+
+# Run tests with coverage
+pytest --cov=mewgenics_parser --cov=mewgenics_scorer
 ```
 
 ### Linting and Formatting
-No linting tools are currently configured. When adding them, use:
 ```bash
-# Format code (ruff recommended)
+# Format code (ruff)
 ruff format .
 
 # Lint code
 ruff check .
+
+# Fix auto-fixable issues
+ruff check --fix .
+```
+
+### Type Checking
+```bash
+# Run type checker (ty)
+ty check .
+
+# Type check a specific file
+ty check packages/mewgenics_parser/mewgenics_parser/cat.py
 ```
 
 ## Code Style Guidelines
 
 ### Type Hints
 - Use Python 3.14+ type syntax (e.g., `list[Cat]`, `dict[str, int]`)
-- Use union types for complex scenarios: `str | None` is acceptable
-- `from __future__ import annotations` is present in files that are straight ported from
-  MewgenicsBreedingManager, but new code should use standard type hints without it and rely on
-  Python 3.14's native deferred evaluation of annotations.
+- Use union types: `str | None` is preferred over Optional[str]
+- `from __future__ import annotations` is only for files ported from MewgenicsBreedingManager
+- New code should use standard type hints
 
 ### Naming Conventions
 - **Classes**: PascalCase (e.g., `Cat`, `BinaryReader`, `SaveData`)
 - **Functions/variables**: snake_case (e.g., `parse_save`, `_valid_str`)
 - **Private methods/attributes**: prefix with underscore (e.g., `_parent_uid_a`)
 - **Constants**: UPPER_SNAKE_CASE (e.g., `STAT_NAMES`, `ROOM_DISPLAY`)
-- **Private module-level constants**: UPPER_SCANE with underscore prefix (e.g., `_IDENT_RE`, `_JUNK_STRINGS`)
+- **Private module-level constants**: UPPER_SNAKE with underscore prefix (e.g., `_IDENT_RE`, `_JUNK_STRINGS`)
 
 ### Imports
 - Use relative imports within packages: `from .binary import BinaryReader`
@@ -82,16 +106,17 @@ ruff check .
 - Use trailing commas in multi-line imports
 
 ### Dataclasses
-- Use `@dataclass` for data models
-- Use `slots=True` for memory efficiency
+- Use `@dataclass` for data models with `slots=True` for memory efficiency
 - Use `init=False` when custom `__init__` is needed (see `cat.py`)
 - Use `field(default=None, repr=False)` for computed/private fields
 - Use `field(default_factory=list)` for mutable defaults
+- Store raw/internal data with underscore prefix and `repr=False`
 
 ### Docstrings
 - Use """triple quotes""" for module-level and public function docstrings
 - Follow Google-style docstrings for functions with Args/Returns sections
 - Keep docstrings concise but descriptive
+- Omit docstrings for trivial getters/setters
 
 ### Error Handling
 - Use broad `except Exception` sparingly, only when specific handling isn't possible
@@ -105,16 +130,6 @@ ruff check .
 - Use blank lines to separate logical sections within functions
 - Use blank lines between top-level definitions (2 lines) and methods (1 line)
 - Use underscores in large numeric literals: `4_294_967_296`
-
-### Private Attributes Pattern
-For dataclasses, store raw/internal data with underscore prefix and `repr=False`:
-```python
-@dataclass(slots=True)
-class Cat:
-    name: str
-    _raw: bytes = field(repr=False, default=b"")
-    _uid_int: int = field(repr=False, default=0)
-```
 
 ### Performance Considerations
 - Use `frozenset` for constant lookup sets (e.g., `_JUNK_STRINGS`)
@@ -135,10 +150,15 @@ string = r.str()   # length-prefixed UTF-8 string
 string = r.utf16str()  # length-prefixed UTF-16LE string
 ```
 
-### Save File Parsing
-Use SQLite read-only mode for .sav files:
+### Trait Operations
+Use the traits module for working with cat traits:
 ```python
-conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+from mewgenics_parser.traits import extract_traits_from_cat, create_trait, TraitCategory
+
+traits = extract_traits_from_cat(cat)  # Extract all traits as domain objects
+trait = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")  # Create specific trait
+name = trait.get_display_name(game_data)  # Get display name
+desc = trait.get_description(game_data)  # Get description
 ```
 
 ### Property Methods
@@ -146,12 +166,15 @@ Use `@property` for computed attributes:
 ```python
 @property
 def room_display(self) -> str:
-    """Return human-readable room name."""
     return ROOM_DISPLAY.get(self.room, self.room)
 ```
 
 ## Important Notes
 
 1. **Do not modify MewgenicsBreedingManager submodule** - it's a reference for understanding the game data format
-2. **This is a new project** with code adapted from MewgenicsBreedingManager, but with different conventions - follow the packages/ directory style
-3. **Python 3.14+ required** - use the `.python-version` file as reference
+2. **Python 3.14+ required for packages**, 3.13+ for root - check `.python-version` for details
+3. **Use uv for all package management** - don't use pip directly
+4. **Inline snapshot testing** - use `ruff format` to format inline snapshot updates:
+   ```bash
+   ruff format --stdin-filename <file> < file.py > tmp.py && mv tmp.py file.py
+   ```
