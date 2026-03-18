@@ -164,6 +164,51 @@ def room_display(self) -> str:
     return ROOM_DISPLAY.get(self.room, self.room)
 ```
 
+## Mewgenics Reference Guide  Information
+
+The core meta-progression of Mewgenics revolves around cultivating optimal genetics. Breeding relies on combining cats with high base stats and favorable traits while manipulating environmental variables (furniture) to control the RNG of inheritance.
+
+#### 1. The House & Room Stats
+The physical environment dictates breeding behavior and genetic transfer. Furniture modifies these parameters on a per-room basis (except Appeal, which is global).
+* **Comfort:** The "Behavior" dial. High comfort increases breeding frequency and prevents cats from fighting. Negatively impacted by overcrowding (more than 4 cats) and uncleaned poop.
+* **Stimulation:** The "Genetics" dial. This is the most critical stat for optimization. It directly scales the probability of kittens inheriting the *higher* of their parents' stats, spells, and passives.
+* **Health:** The "Recovery" dial. Prevents diseases and cures injuries overnight. Low health risks hygiene-related disorders.
+* **Mutation:** The "Chaos" dial. Increases the odds of a cat spontaneously mutating overnight. 
+* **Appeal:** The "Stray Quality" dial (Global). Determines the base stat quality and trait loadout of stray cats that arrive at your house.
+
+#### 2. Cat Stats & Breeding Prerequisites
+* **Base Stats Only:** Kittens only inherit **Base Stats** (STR, DEX, CON, INT, SPD, CHA, LCK). Temporary modifications from items, injuries, or diseases are ignored.
+* **Libido & Aggression:** Hidden stats (until unlocked via Tink) that dictate how often a cat initiates breeding or fighting.
+* **Gender:** Cats are Male, Female, or Fluid (`?` / Spidercats). Gay/Same-sex pairs will happily partner up but cannot produce offspring unless one of the cats is Fluid (`?`).
+
+#### 3. The Inheritance Math (Internal Engine Rules)
+When the day ends and two cats breed, the game's engine (`glaiel::CatData::breed`) executes the following order of operations:
+
+**A. Stat Inheritance**
+For each of the 7 stats, the game picks either the mother's or father's base stat. The probability of inheriting the *higher* of the two stats scales with room Stimulation:
+$$P(\text{Higher Stat}) = \frac{1.0 + 0.01 \times \text{Stimulation}}{2.0 + 0.01 \times \text{Stimulation}}$$
+*Note:* Stimulation has diminishing returns for stats. At 0 Stimulation, it is a 50/50 coin flip. At 50 Stimulation, it is a 60% chance. At 100 Stimulation, it is roughly 66.6%.
+
+**B. Spell Inheritance**
+Parents pass down Active Abilities. If class spells are present, the game has a $0.01 \times \text{Stimulation}$ probability of forcing the selection from the parent with class spells.
+* **First Spell Chance:** $0.2 + 0.025 \times \text{Stimulation}$ (Guaranteed at 32+ Stimulation).
+* **Second Spell Chance:** $0.02 + 0.005 \times \text{Stimulation}$.
+
+**C. Passive Inheritance**
+* **Passive Chance:** $0.05 + 0.01 \times \text{Stimulation}$ (Guaranteed at 95+ Stimulation).
+* **SkillShare+ Override:** If a parent has the upgraded *SkillShare+* ability, the game guarantees their *other* passive is passed down, bypassing standard inheritance logic.
+
+**D. Disorders & Birth Defects (Inbreeding)**
+* **Inherited Disorders:** There is a flat **15%** chance to inherit a random disorder from the mother, and a **15%** chance from the father. This is completely unaffected by room furniture.
+* **Birth Defects:** If the kitten inherits fewer than 2 disorders, it rolls for a spontaneous birth defect based on the parents' Inbreeding Coefficient:
+    $$P(\text{Birth Defect}) = 0.02 + 0.4 \times \max(\text{Inbreeding} - 0.2, 0.0)$$
+    *If the inbreeding coefficient is >0.05, the kitten may also roll for physical deformed parts later in the generation step.*
+
+**E. Body Parts & Mutations**
+Mutations are treated as specific part variants (e.g., a mutated arm).
+* There is an **80%** chance that all body parts are inherited perfectly from the parents. If this fails, a random part-set (e.g., both legs) is randomly generated.
+* If only one parent has a mutated part, the game attempts to favor the mutation using the exact same formula as Stat Inheritance ($P(\text{Higher Stat})$). Otherwise, it is a 50/50 split between parents.
+
 ## Important Notes
 
 1. **Do not modify MewgenicsBreedingManager submodule** - it's a reference for understanding the game data format
