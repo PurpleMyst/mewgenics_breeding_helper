@@ -1,6 +1,6 @@
 """Domain model for Mewgenics traits."""
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Protocol, override
 
@@ -150,13 +150,6 @@ class BodyPartTrait(Trait):
     def category(self) -> TraitCategory:
         return TraitCategory.BODY_PART
 
-    @override
-    def is_negative(self) -> bool:
-        # XXX: This is a quick and dirty check; the game GONs technically have birth_defect tags we
-        # could leverage if this becomes an issue.
-        _, part_id = self._split_key()
-        return part_id == -2 or (part_id >= 700 and part_id <= 710)
-
     def _split_key(self) -> tuple[str, int]:
         import re
 
@@ -169,6 +162,18 @@ class BodyPartTrait(Trait):
             category = category[:-1]
             part_id = -part_id
         return category.lower(), part_id
+
+    @override
+    def is_negative(self) -> bool:
+        # XXX: This is a quick and dirty check; the game GONs technically have birth_defect tags we
+        # could leverage if this becomes an issue.
+        _, part_id = self._split_key()
+        return part_id == -2 or (part_id >= 700 and part_id <= 710)
+
+    def is_mutation(self) -> bool:
+        # XXX: Same hack as is_negative; however I don't think mutations are tagged. ¯\_(ツ)_/¯
+        _, part_id = self._split_key()
+        return part_id >= 300
 
     @override
     def get_display_name(self, game_data: GameData) -> str:
