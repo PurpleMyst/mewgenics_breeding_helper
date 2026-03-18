@@ -41,47 +41,42 @@ uv add <package> -p packages/mewgenics_parser
 
 # Run the UI application
 uv run room-optimizer
-# or
-uv run -p packages/mewgenics_room_optimizer_ui mewgenics_room_optimizer_ui.app:main
-
-# Extract GPAK contents
-uv run extract-gpak <path_to_gpak>
 ```
 
 ### Testing
 ```bash
 # Run all tests (pytest)
-pytest
+uv run pytest
 
 # Run a single test file
-pytest tests/test_cat.py
+uv run pytest tests/test_cat.py
 
 # Run a single test function
-pytest tests/test_cat.py::test_parse_cat
+uv run pytest tests/test_cat.py::test_parse_cat
 
 # Run tests with coverage
-pytest --cov=mewgenics_parser --cov=mewgenics_scorer
+uv run pytest --cov=mewgenics_parser --cov=mewgenics_scorer
 ```
 
 ### Linting and Formatting
 ```bash
 # Format code (ruff)
-ruff format .
+uv run ruff format .
 
 # Lint code
-ruff check .
+uv run ruff check .
 
 # Fix auto-fixable issues
-ruff check --fix .
+uv run ruff check --fix .
 ```
 
 ### Type Checking
 ```bash
 # Run type checker (ty)
-ty check .
+uv run ty check .
 
 # Type check a specific file
-ty check packages/mewgenics_parser/mewgenics_parser/cat.py
+uv run ty check packages/mewgenics_parser/mewgenics_parser/cat.py
 ```
 
 ## Code Style Guidelines
@@ -174,7 +169,4 @@ def room_display(self) -> str:
 1. **Do not modify MewgenicsBreedingManager submodule** - it's a reference for understanding the game data format
 2. **Python 3.14+ required for all packages and root** - check `.python-version` for details
 3. **Use uv for all package management** - don't use pip directly
-4. **Inline snapshot testing** - use `ruff format` to format inline snapshot updates:
-   ```bash
-   ruff format --stdin-filename <file> < file.py > tmp.py && mv tmp.py file.py
-   ```
+4. **Use uv run for all tools** - ruff, ty, pytest, etc.
