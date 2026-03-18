@@ -6,15 +6,13 @@ from mewgenics_parser.trait_dictionary import (
     is_class_active,
     is_class_passive,
 )
-
-from .ancestry import AncestorData, coi_from_contribs
-from .compatibility import (
-    can_breed,
-    is_hater_conflict,
-    is_lover_conflict,
-    is_mutual_lovers,
+from mewgenics_parser.traits import (
+    BodyPartTrait,
+    cat_has_defect_in_slot,
+    cat_has_mutation_in_slot,
 )
-from .types import ScoringPreferences, TraitRequirement
+
+from .types import TraitRequirement
 
 DEFAULT_STIMULATION = 50.0
 
@@ -34,19 +32,106 @@ def _better_chance(stimulation: float) -> float:
     return (1.0 + 0.01 * stimulation) / (2.0 + 0.01 * stimulation)
 
 
-def expected_disorder_chance(coi: float) -> float:
-    """Game Step 7: Base 2% chance. CoI > 0.20 adds up to 40% (capped)."""
+def novel_disorder_chance(coi: float) -> float:
+    """Game Step 7: Base 2% chance. CoI > 0.20 adds up to 40% (capped).
+
+    This is the chance for a NEW disorder caused by inbreeding, not inherited from parents.
+    """
     # Exact game math: 0.02 + 0.4 * min(max(coi - 0.2, 0.0), 1.0)
     coi_penalty = min(max(coi - 0.20, 0.0), 1.0)
     return 0.02 + (0.4 * coi_penalty)
 
 
-def expected_part_defect_chance(coi: float) -> float:
-    """Game Step 8, 13: If CoI > 0.05, chance = 1.5 * CoI."""
+def novel_part_defect_chance(coi: float) -> float:
+    """Game Step 8, 13: If CoI > 0.05, chance = 1.5 * CoI.
+
+    This is the chance for NEW birth defect parts caused by inbreeding, not inherited from parents.
+    """
     if coi <= 0.05:
         return 0.0
     # Cap at 1.0 (by COI > 0.90, first pass is already guaranteed)
     return min(1.5 * coi, 1.0)
+
+
+def inherited_disorder_chance(parent_a: Cat, parent_b: Cat) -> float:
+    """Game Step 6: 15% chance to inherit a random disorder from each parent.
+
+    Only applies if parent has disorders. Pool dilution: 15% / len(disorders).
+    Returns P(any disorder inherited) = 1 - P(no disorder from mom) * P(no disorder from dad)
+    """
+    mom_has = len(parent_a.disorders) > 0 if parent_a.disorders else False
+    dad_has = len(parent_b.disorders) > 0 if parent_b.disorders else False
+
+    if not mom_has and not dad_has:
+        return 0.0
+
+    # 15% chance per parent, diluted by pool size
+    # P(no disorder from mom) = 1 - (0.15 / pool_size) if mom has disorders, else 1
+    if mom_has:
+        mom_no = 1.0 - (0.15 / len(parent_a.disorders))
+    else:
+        mom_no = 1.0
+
+    if dad_has:
+        dad_no = 1.0 - (0.15 / len(parent_b.disorders))
+    else:
+        dad_no = 1.0
+
+    # P(any disorder) = 1 - P(no disorder from mom) * P(no disorder from dad)
+    return 1.0 - (mom_no * dad_no)
+
+
+def inherited_part_defect_chance(
+    parent_a: Cat,
+    parent_b: Cat,
+    stimulation: float = DEFAULT_STIMULATION,
+) -> float:
+    """Game Step 9: For each slot with a negative part, calculate inheritance.
+
+    Returns combined OR probability: P(any defect part inherited).
+    Uses 80% inherit chance with mutation/defect favoring logic.
+    """
+    # Get all body part slots
+    from dataclasses import asdict
+
+    slots = asdict(parent_a.body_parts).keys()
+
+    inherit_all_chance = 0.8
+    mutation_favor_chance = _better_chance(stimulation)
+
+    # Calculate probability for each slot having a defect inherited
+    # P(any slot inherits) = 1 - P(no slots inherit)
+    slot_probs = []
+
+    for slot in slots:
+        a_has_defect = cat_has_defect_in_slot(parent_a, slot)
+        b_has_defect = cat_has_defect_in_slot(parent_b, slot)
+
+        if not a_has_defect and not b_has_defect:
+            continue
+
+        # Determine selection probability based on favoring
+        if a_has_defect and not b_has_defect:
+            select_a_prob = mutation_favor_chance
+        elif b_has_defect and not a_has_defect:
+            select_a_prob = 1.0 - mutation_favor_chance
+        else:
+            # Both have defects in this slot or neither - 50/50
+            select_a_prob = 0.5
+
+        # Probability of inheriting THIS slot's defect
+        slot_prob = inherit_all_chance * max(select_a_prob, 1.0 - select_a_prob)
+        slot_probs.append(slot_prob)
+
+    if not slot_probs:
+        return 0.0
+
+    # Combined OR probability: P(any slot inherits) = 1 - P(no slots inherit)
+    combined = 1.0
+    for p in slot_probs:
+        combined *= 1.0 - p
+
+    return 1.0 - combined
 
 
 def _spell_inheritance_chance(stimulation: float) -> tuple[float, float]:
@@ -64,37 +149,6 @@ def _passive_inheritance_chance(stimulation: float) -> float:
 def _class_favoring_chance(stimulation: float) -> float:
     """Returns chance to favor parent with class traits."""
     return min(0.01 * stimulation, 1.0)
-
-    # TODO: If Mom has "Frostbit" and Dad has "Horns" (different mutation same slot),
-    # both parents are "mutated" but current logic incorrectly favors Mom for Frostbit.
-    # Fix requires mapping mutations to body part slots.
-
-    # If only one parent has mutation, apply favoring
-    if parent_a_has and parent_b_has:
-        parent_a_select_prob = 0.5
-    elif parent_a_has:
-        parent_a_select_prob = mutation_favor_chance
-    else:
-        parent_a_select_prob = 1.0 - mutation_favor_chance
-
-    final_prob = inherit_all_chance * (
-        parent_a_select_prob if parent_a_has else (1.0 - parent_a_select_prob)
-    )
-
-    if parent_a_has and parent_b_has:
-        parent_source = f"{parent_a.name} or {parent_b.name}"
-    elif parent_a_has:
-        parent_source = parent_a.name
-    else:
-        parent_source = parent_b.name
-
-    return TraitInheritanceProbability(
-        trait=trait,
-        probability=final_prob,
-        parent_source=parent_source,
-        inherit_chance=inherit_all_chance,
-        parent_favor_chance=mutation_favor_chance,
-    )
 
 
 def calculate_trait_probability(
@@ -115,8 +169,47 @@ def calculate_trait_probability(
         return _calc_passive_inheritance(parent_a, parent_b, stimulation, trait)
     elif category == TraitCategory.BODY_PART:
         return _calc_body_part_inheritance(parent_a, parent_b, stimulation, trait)
+    elif category == TraitCategory.DISORDER:
+        return _calc_disorder_inheritance(parent_a, parent_b, trait)
 
     return TraitInheritanceProbability(trait, 0.0, "Neither", 0.0, 0.0)
+
+
+def _calc_disorder_inheritance(
+    parent_a: Cat,
+    parent_b: Cat,
+    trait: TraitRequirement,
+) -> TraitInheritanceProbability:
+    """Disorder inheritance: 15% chance per parent with pool dilution."""
+
+    parent_a_has = trait.trait.is_possessed_by(parent_a)
+    parent_b_has = trait.trait.is_possessed_by(parent_b)
+
+    if not parent_a_has and not parent_b_has:
+        return TraitInheritanceProbability(trait, 0.0, "Neither", 0.0, 0.0)
+
+    inherit_chance = 0.15
+
+    final_prob = 0.0
+    if parent_a_has:
+        final_prob += inherit_chance / len(parent_a.disorders)
+    if parent_b_has:
+        final_prob += inherit_chance / len(parent_b.disorders)
+
+    if parent_a_has and parent_b_has:
+        parent_source = f"{parent_a.name} or {parent_b.name}"
+    elif parent_a_has:
+        parent_source = parent_a.name
+    else:
+        parent_source = parent_b.name
+
+    return TraitInheritanceProbability(
+        trait=trait,
+        probability=final_prob,
+        parent_source=parent_source,
+        inherit_chance=inherit_chance,
+        parent_favor_chance=0.0,
+    )
 
 
 def expected_stats(
@@ -288,8 +381,12 @@ def _calc_body_part_inheritance(
 ) -> TraitInheritanceProbability:
     """Mutation inheritance: 80% inherit, mutation favoring with stimulation."""
 
-    parent_a_has = trait.trait.is_possessed_by(parent_a)
-    parent_b_has = trait.trait.is_possessed_by(parent_b)
+    body_trait: BodyPartTrait = trait.trait  # type: ignore[assignment]
+    assert isinstance(body_trait, BodyPartTrait)
+    slot = body_trait.get_slot()
+
+    parent_a_has = body_trait.is_possessed_by(parent_a)
+    parent_b_has = body_trait.is_possessed_by(parent_b)
 
     if not parent_a_has and not parent_b_has:
         return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
@@ -300,17 +397,18 @@ def _calc_body_part_inheritance(
     # Mutation favoring: (1.0 + 0.01*Stim) / (2.0 + 0.01*Stim)
     mutation_favor_chance = _better_chance(stimulation)
 
-    # TODO: If Mom has "Frostbit" and Dad has "Horns" (different mutation same slot),
-    # both parents are "mutated" but current logic incorrectly favors Mom for Frostbit.
-    # Fix requires mapping mutations to body part slots.
+    # Check if each parent has a mutation in THIS specific slot
+    parent_a_slot_mutated = cat_has_mutation_in_slot(parent_a, slot)
+    parent_b_slot_mutated = cat_has_mutation_in_slot(parent_b, slot)
 
-    # If only one parent has mutation, apply favoring
-    if parent_a_has and parent_b_has:
-        parent_a_select_prob = 0.5
-    elif parent_a_has:
+    # Apply favoring only when ONE parent has mutation in THIS slot
+    if parent_a_slot_mutated and not parent_b_slot_mutated:
         parent_a_select_prob = mutation_favor_chance
-    else:
+    elif parent_b_slot_mutated and not parent_a_slot_mutated:
         parent_a_select_prob = 1.0 - mutation_favor_chance
+    else:
+        # Both mutated in this slot, or neither mutated - 50/50
+        parent_a_select_prob = 0.5
 
     final_prob = inherit_all_chance * (
         parent_a_select_prob if parent_a_has else (1.0 - parent_a_select_prob)
@@ -330,37 +428,3 @@ def _calc_body_part_inheritance(
         inherit_chance=inherit_all_chance,
         parent_favor_chance=mutation_favor_chance,
     )
-
-
-def calculate_trait_probability(
-    trait: TraitRequirement,
-    parent_a: Cat | None,
-    parent_b: Cat | None,
-    stimulation: float = DEFAULT_STIMULATION,
-) -> TraitInheritanceProbability:
-    """Calculate inheritance probability for a specific trait."""
-
-    if parent_a is None or parent_b is None:
-        return TraitInheritanceProbability(trait, 0.0, "Unknown", 0.0, 0.0)
-
-    category = trait.trait.category
-    if category == TraitCategory.ACTIVE_ABILITY:
-        return _calc_ability_inheritance(parent_a, parent_b, stimulation, trait)
-    elif category == TraitCategory.PASSIVE_ABILITY:
-        return _calc_passive_inheritance(parent_a, parent_b, stimulation, trait)
-    elif category == TraitCategory.BODY_PART:
-        return _calc_body_part_inheritance(parent_a, parent_b, stimulation, trait)
-
-    return TraitInheritanceProbability(trait, 0.0, "Neither", 0.0, 0.0)
-
-
-def expected_stats(
-    a: Cat, b: Cat, stimulation: float = DEFAULT_STIMULATION
-) -> list[float]:
-    """Calculate expected stat values for offspring."""
-    chance = _better_chance(stimulation)
-    return [
-        max(a.stat_base[i], b.stat_base[i]) * chance
-        + min(a.stat_base[i], b.stat_base[i]) * (1 - chance)
-        for i in range(7)
-    ]

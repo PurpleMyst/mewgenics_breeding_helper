@@ -2,12 +2,7 @@
 
 from dataclasses import dataclass
 
-from mewgenics_parser import Cat, TraitCategory
-from mewgenics_parser.trait_dictionary import (
-    has_skillshare_plus,
-    is_class_active,
-    is_class_passive,
-)
+from mewgenics_parser import Cat
 
 from .ancestry import AncestorData, coi_from_contribs
 from .compatibility import (
@@ -20,8 +15,10 @@ from .inheritance import (
     TraitInheritanceProbability,
     calculate_trait_probability,
     expected_stats,
-    expected_disorder_chance,
-    expected_part_defect_chance,
+    novel_disorder_chance,
+    novel_part_defect_chance,
+    inherited_disorder_chance,
+    inherited_part_defect_chance,
 )
 
 from .types import ScoringPreferences, TraitRequirement
@@ -43,8 +40,10 @@ class PairFactors:
     lover_conflict: bool
     mutual_lovers: bool
 
-    expected_disorder_chance: float
-    expected_part_defect_chance: float
+    novel_disorder_chance: float
+    novel_part_defect_chance: float
+    inherited_disorder_chance: float
+    inherited_part_defect_chance: float
 
     expected_stats: list[float]
     total_expected_stats: float
@@ -59,10 +58,17 @@ class PairFactors:
 
     @property
     def combined_malady_chance(self) -> float:
-        """Probability of any birth malady (disorder OR part defect)."""
-        return 1.0 - (1.0 - self.expected_disorder_chance) * (
-            1.0 - self.expected_part_defect_chance
+        """Probability of any birth malady (novel OR inherited, disorder OR part defect)."""
+        # Disorder union: P(A or B) = 1 - (1-A)(1-B)
+        disorder_prob = 1.0 - (1.0 - self.novel_disorder_chance) * (
+            1.0 - self.inherited_disorder_chance
         )
+        # Part defect union
+        defect_prob = 1.0 - (1.0 - self.novel_part_defect_chance) * (
+            1.0 - self.inherited_part_defect_chance
+        )
+        # Total malady union
+        return 1.0 - (1.0 - disorder_prob) * (1.0 - defect_prob)
 
 
 def _stat_variance(a: Cat, b: Cat) -> float:
@@ -112,8 +118,10 @@ def calculate_pair_factors(
         hater_conflict=is_hater_conflict(a, b),
         lover_conflict=is_lover_conflict(a, b, avoid_lovers),
         mutual_lovers=is_mutual_lovers(a, b),
-        expected_disorder_chance=expected_disorder_chance(coi),
-        expected_part_defect_chance=expected_part_defect_chance(coi),
+        novel_disorder_chance=novel_disorder_chance(coi),
+        novel_part_defect_chance=novel_part_defect_chance(coi),
+        inherited_disorder_chance=inherited_disorder_chance(a, b),
+        inherited_part_defect_chance=inherited_part_defect_chance(a, b, stimulation),
         expected_stats=exp_stats,
         total_expected_stats=sum(exp_stats),
         stat_variance=_stat_variance(a, b),

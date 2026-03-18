@@ -7,8 +7,10 @@ from .factors import (
     calculate_pair_quality,
     calculate_trait_probability,
     expected_stats,
-    expected_disorder_chance,
-    expected_part_defect_chance,
+    novel_disorder_chance,
+    novel_part_defect_chance,
+    inherited_disorder_chance,
+    inherited_part_defect_chance,
     DEFAULT_STIMULATION,
 )
 from .ancestry import (
@@ -31,6 +33,10 @@ __all__ = [
     "calculate_pair_quality",
     "calculate_trait_probability",
     "expected_stats",
+    "novel_disorder_chance",
+    "novel_part_defect_chance",
+    "inherited_disorder_chance",
+    "inherited_part_defect_chance",
     "build_ancestor_contribs",
     "coi_from_contribs",
     "AncestorData",

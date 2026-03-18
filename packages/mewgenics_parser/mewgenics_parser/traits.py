@@ -196,6 +196,42 @@ class BodyPartTrait(Trait):
         category, part_id = self._split_key()
         return asdict(cat.body_parts).get(category) == part_id
 
+    def get_slot(self) -> str:
+        """Return the body part slot name (e.g., 'ears', 'head')."""
+        category, _ = self._split_key()
+        return category
+
+    def get_part_id(self) -> int:
+        """Return the part ID number."""
+        _, part_id = self._split_key()
+        return part_id
+
+
+def cat_has_mutation_in_slot(cat: Cat, slot: str) -> bool:
+    """Check if a cat has a mutation in a given slot.
+
+    Returns True only for mutations (part_id >= 300).
+    Does NOT return True for negative birth defects.
+    """
+    part_id = getattr(cat.body_parts, slot, None)
+    if part_id is None:
+        return False
+    temp_trait = BodyPartTrait(_key=f"{slot}{part_id}")
+    return temp_trait.is_mutation()
+
+
+def cat_has_defect_in_slot(cat: Cat, slot: str) -> bool:
+    """Check if a cat has a negative body part in a given slot.
+
+    Uses is_negative() - returns True for birth defects.
+    Mutations that aren't negative return False.
+    """
+    part_id = getattr(cat.body_parts, slot, None)
+    if part_id is None:
+        return False
+    temp_trait = BodyPartTrait(_key=f"{slot}{part_id}")
+    return temp_trait.is_negative()
+
 
 @dataclass(slots=True)
 class DisorderTrait(Trait):

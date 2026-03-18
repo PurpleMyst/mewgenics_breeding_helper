@@ -167,8 +167,8 @@ class TestCalculatePairFactors:
         # Unrelated cats have CoI = 0.0, so:
         # - disorder chance = 2% (base)
         # - part defect chance = 0% (CoI <= 0.05)
-        assert result.expected_disorder_chance == 0.02
-        assert result.expected_part_defect_chance == 0.0
+        assert result.novel_disorder_chance == 0.02
+        assert result.novel_part_defect_chance == 0.0
 
     def test_total_expected_stats(self):
         a = make_cat(1, CatGender.MALE, stat_base=[10, 0, 0, 0, 0, 0, 0])

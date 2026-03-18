@@ -33,8 +33,8 @@ def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
     name_b = pair.cat_b.name or "Unnamed"
     names_display = f"{name_a} + {name_b}"
 
-    disorder = pair.factors.expected_disorder_chance * 100
-    part_defect = pair.factors.expected_part_defect_chance * 100
+    disorder = pair.factors.novel_disorder_chance * 100
+    part_defect = pair.factors.novel_part_defect_chance * 100
     combined = pair.factors.combined_malady_chance * 100
     risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
 
