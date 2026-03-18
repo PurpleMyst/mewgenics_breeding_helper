@@ -9,3 +9,6 @@ dependencies = [
 
 [tool.uv.sources]
 mewgenics_parser = { workspace = true }
+
+[tool.inline-snapshot]
+format-command="ruff format --stdin-filename {filename}"

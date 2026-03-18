@@ -12,3 +12,6 @@ dependencies = [
 
 [project.scripts]
 room-optimizer = "mewgenics_room_optimizer_ui.app:main"
+
+[tool.inline-snapshot]
+format-command="ruff format --stdin-filename {filename}"

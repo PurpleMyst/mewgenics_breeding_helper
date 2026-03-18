@@ -43,3 +43,6 @@ dev = [
     "ruff>=0.15.6",
     "ty>=0.0.23",
 ]
+
+[tool.inline-snapshot]
+format-command="ruff format --stdin-filename {filename}"

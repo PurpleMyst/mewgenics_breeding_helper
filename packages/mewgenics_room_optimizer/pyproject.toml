@@ -19,3 +19,6 @@ test = [
 dev = [
     "dirty-equals>=0.11",
 ]
+
+[tool.inline-snapshot]
+format-command="ruff format --stdin-filename {filename}"
