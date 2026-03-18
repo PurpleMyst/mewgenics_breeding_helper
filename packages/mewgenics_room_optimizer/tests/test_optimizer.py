@@ -105,6 +105,55 @@ class TestUtilities:
             assert not (a.gender == "female" and b.gender == "female")
 
 
+class TestEternalYouthPlacement:
+    @patch("mewgenics_room_optimizer.optimizer.calculate_pair_quality")
+    def test_ey_cats_routed_to_best_breeding_room(self, mock_quality, basic_rooms):
+        """EY cats should be placed in breeding room with highest base_stim."""
+        mock_quality.return_value = 50.0
+
+        cats = [
+            make_mock_cat(1, "male", stat_base=[10] * 7),
+            make_mock_cat(2, "female", stat_base=[10] * 7),
+            make_mock_cat(3, "female", passive_abilities=["EternalYouth"]),
+        ]
+
+        params = OptimizationParams(
+            sa_temperature=1.0,
+            sa_neighbors_per_temp=2,
+            gay_flags={},
+        )
+
+        result = optimize_sa(cats, basic_rooms, params, {})  # type: ignore[arg-type]
+
+        ey_cat = next(c for c in cats if _has_eternalyouth(c))
+        ey_room = next(r for r in result.rooms if ey_cat in r.eternal_youth_cats)
+
+        assert ey_room.room.key == "breed1"
+
+
+class TestGayPairsExclusion:
+    def test_can_pair_gay_filters_pairs_in_evaluation(self):
+        """Gay pairs should return None from score_pair, excluding them from breeding."""
+        from mewgenics_room_optimizer.optimizer import score_pair, PairCache
+
+        cat1 = make_mock_cat(1, "male")
+        cat2 = make_mock_cat(2, "male")
+        cat3 = make_mock_cat(3, "female")
+
+        cats_by_id = {1: cat1, 2: cat2, 3: cat3}
+
+        params = OptimizationParams(
+            gay_flags={1: True, 2: False, 3: False},
+        )
+        cache = PairCache()
+
+        result_male_gay_female_straight = score_pair(cat1, cat3, {}, params)
+        assert result_male_gay_female_straight is None
+
+        result_male_straight_female_straight = score_pair(cat2, cat3, {}, params)
+        assert result_male_straight_female_straight is not None
+
+
 class TestConstraints:
     def test_filter_cats(self):
         cats = [
