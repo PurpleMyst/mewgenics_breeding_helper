@@ -172,7 +172,7 @@ def room_display(self) -> str:
 ## Important Notes
 
 1. **Do not modify MewgenicsBreedingManager submodule** - it's a reference for understanding the game data format
-2. **Python 3.14+ required for packages**, 3.13+ for root - check `.python-version` for details
+2. **Python 3.14+ required for all packages and root** - check `.python-version` for details
 3. **Use uv for all package management** - don't use pip directly
 4. **Inline snapshot testing** - use `ruff format` to format inline snapshot updates:
    ```bash

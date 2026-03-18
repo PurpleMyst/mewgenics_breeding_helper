@@ -2,7 +2,7 @@
 name = "mewgenics_scorer"
 version = "0.1.0"
 description = "Pair scoring factors for Mewgenics breeding optimization"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "mewgenics_parser",
 ]
