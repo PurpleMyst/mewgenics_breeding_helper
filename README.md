@@ -89,16 +89,18 @@ The Room Details panel includes a "Misplaced" tab showing cats currently in a ro
 - **True Stimulation**: `base_stim + Eternal_Youth_cats` in the room
 - Higher stimulation increases the chance offspring inherit higher stats from parents
 
-## Badge Legend
+## Factor Columns
 
-| Badge | Meaning | Color |
-|-------|---------|-------|
-| `[<3]` | Mutual lovers (breeding pair) | Pink |
-| `[+]` | High libido bonus | Gold |
-| `[-]` | Low aggression bonus | Blue |
-| `[!]` | High inbreeding risk (50%+ combined malady) | Red |
-| `[*]` | Favorable trait match | Green |
-| `[EY]` | Eternal Youth passive | Teal |
+The Pairs table displays individual columns for each breeding factor:
+
+| Column | Description | Color Coding |
+|--------|-------------|--------------|
+| **Lovers** | Whether both cats are mutual lovers | Green = Yes, Gray = No |
+| **Libido** | Combined libido factor (0.0-1.0) | Green >= 0.6 |
+| **Aggr** | Combined aggression factor (0.0-1.0) | Green <= 0.4, Red > 0.4 (lower is better) |
+| **Char** | Combined charisma factor (0.0-1.0) | Green >= 0.4 |
+| **Var** | Stat variance (lower = more consistent offspring) | Green <= 5, Red > 10, Yellow 5-10 |
+| **Trait EV** | Trait Expected Value: `sum(probability × weight) × 5.0` | Green > 0, Gray = 0 |
 
 ### Location Colors (in tables)
 

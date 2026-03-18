@@ -15,6 +15,7 @@ from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
 from .state import AppState
+from .helpers import get_pair_summary_data
 
 LOCATION_COL_WIDTH = 125
 
@@ -1284,49 +1285,74 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                 dpg.add_table_column(label="Names", width_fixed=True)
                 dpg.add_table_column(label="Quality", width_fixed=True)
                 dpg.add_table_column(label="Risk", width_fixed=True)
-                dpg.add_table_column(label="Badges", width_stretch=True)
+                dpg.add_table_column(label="Lovers", width_fixed=True)
+                dpg.add_table_column(label="Libido", width_fixed=True)
+                dpg.add_table_column(label="Aggr", width_fixed=True)
+                dpg.add_table_column(label="Char", width_fixed=True)
+                dpg.add_table_column(label="Var", width_fixed=True)
+                dpg.add_table_column(label="Trait EV", width_fixed=True)
 
                 for i, pair in enumerate(selected_room.pairs):
-                    name_a = pair.cat_a.name or "Unnamed"
-                    name_b = pair.cat_b.name or "Unnamed"
-                    disorder = pair.factors.expected_disorder_chance * 100
-                    part_defect = pair.factors.expected_part_defect_chance * 100
-                    combined = pair.factors.combined_malady_chance * 100
-                    risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
-
+                    summary = get_pair_summary_data(pair, state)
 
                     with dpg.table_row():
                         dpg.add_selectable(
-                            label=f"{name_a} + {name_b}",
+                            label=summary.names_display,
                             callback=on_pair_selected,
                             user_data=(i, pair, state),
                             tag=f"pair_selectable_{i}",
                         )
-                        dpg.add_text(f"{pair.quality:.1f}")
+                        dpg.add_text(f"{summary.quality:.1f}")
                         dpg.add_text(
-                            f"D:{disorder:2.0f}% P:{part_defect:2.0f}% C:{combined:2.0f}%",
-                            color=risk_color,
+                            f"D:{summary.disorder_pct:2.0f}% P:{summary.part_defect_pct:2.0f}% C:{summary.combined_pct:2.0f}%",
+                            color=summary.risk_color,
                         )
 
-                        with dpg.group(horizontal=True):
-                            if pair.factors.mutual_lovers:
-                                badge = dpg.add_text("[<3]")
-                                with dpg.tooltip(badge):
-                                    dpg.add_text("Mutual Lovers")
-                            libido = getattr(pair.factors, "libido_factor", 0)
-                            if libido > 0.6:
-                                badge = dpg.add_text("[+]", color=COLOR_WARNING)
-                                with dpg.tooltip(badge):
-                                    dpg.add_text("High Libido")
-                            agg = getattr(pair.factors, "aggression_factor", 0)
-                            if agg > 0.6:
-                                badge = dpg.add_text("[-]", color=COLOR_AGGRESSION)
-                                with dpg.tooltip(badge):
-                                    dpg.add_text("High Aggression")
-                            if combined > 50:
-                                badge = dpg.add_text("[!]", color=COLOR_DANGER)
-                                with dpg.tooltip(badge):
-                                    dpg.add_text("High Inbreeding Risk")
+                        lovers_color = (
+                            COLOR_SUCCESS if summary.mutual_lovers else COLOR_MUTED
+                        )
+                        dpg.add_text(
+                            "Y" if summary.mutual_lovers else "N", color=lovers_color
+                        )
+
+                        libido_color = (
+                            COLOR_SUCCESS
+                            if summary.libido_factor >= 0.6
+                            else COLOR_MUTED
+                        )
+                        dpg.add_text(f"{summary.libido_factor:.2f}", color=libido_color)
+
+                        aggr_color = (
+                            COLOR_SUCCESS
+                            if summary.aggression_factor <= 0.4
+                            else COLOR_DANGER
+                        )
+                        dpg.add_text(
+                            f"{summary.aggression_factor:.2f}", color=aggr_color
+                        )
+
+                        char_color = (
+                            COLOR_SUCCESS
+                            if summary.charisma_factor >= 0.4
+                            else COLOR_MUTED
+                        )
+                        dpg.add_text(f"{summary.charisma_factor:.2f}", color=char_color)
+
+                        var_color = (
+                            COLOR_SUCCESS
+                            if summary.stat_variance <= 5.0
+                            else (
+                                COLOR_DANGER
+                                if summary.stat_variance > 10.0
+                                else COLOR_WARNING
+                            )
+                        )
+                        dpg.add_text(f"{summary.stat_variance:.1f}", color=var_color)
+
+                        ev_color = (
+                            COLOR_SUCCESS if summary.trait_ev > 0 else COLOR_MUTED
+                        )
+                        dpg.add_text(f"{summary.trait_ev:.2f}", color=ev_color)
         else:
             dpg.add_text("No breeding pairs in this room")
 
@@ -1453,19 +1479,13 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
 
     dpg.delete_item(container, children_only=True)
 
+    summary = get_pair_summary_data(pair, state)
+
     with dpg.group(parent=container):
-        name_a = pair.cat_a.name or "Unnamed"
-        name_b = pair.cat_b.name or "Unnamed"
-        dpg.add_text(f"Pair: {name_a} + {name_b}", tag="pair_names")
-
-        disorder = pair.factors.expected_disorder_chance * 100
-        part_defect = pair.factors.expected_part_defect_chance * 100
-        combined = pair.factors.combined_malady_chance * 100
-        risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
-
+        dpg.add_text(f"Pair: {summary.names_display}", tag="pair_names")
         dpg.add_text(
-            f"Quality: {pair.quality:.1f} | Disorder: {disorder:.0f}% | Part Defect: {part_defect:.0f}% | Combined: {combined:.0f}%",
-            color=risk_color,
+            f"Quality: {summary.quality:.1f} | Disorder: {summary.disorder_pct:.0f}% | Part Defect: {summary.part_defect_pct:.0f}% | Combined: {summary.combined_pct:.0f}%",
+            color=summary.risk_color,
         )
 
         if state.trait_requirements:

@@ -1,0 +1,65 @@
+"""Helper functions for UI rendering."""
+
+from dataclasses import dataclass
+
+from mewgenics_room_optimizer import ScoredPair
+from mewgenics_room_optimizer_ui.state import AppState
+
+COLOR_SUCCESS = (100, 255, 100, 255)
+COLOR_DANGER = (255, 100, 100, 255)
+
+
+@dataclass
+class PairSummaryData:
+    """Common pair data for reuse in table and detail views."""
+
+    names_display: str
+    quality: float
+    disorder_pct: float
+    part_defect_pct: float
+    combined_pct: float
+    risk_color: tuple[int, int, int, int]
+    mutual_lovers: bool
+    libido_factor: float
+    aggression_factor: float
+    charisma_factor: float
+    stat_variance: float
+    trait_ev: float
+
+
+def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
+    """Extract common pair data for reuse in table and detail views."""
+    name_a = pair.cat_a.name or "Unnamed"
+    name_b = pair.cat_b.name or "Unnamed"
+    names_display = f"{name_a} + {name_b}"
+
+    disorder = pair.factors.expected_disorder_chance * 100
+    part_defect = pair.factors.expected_part_defect_chance * 100
+    combined = pair.factors.combined_malady_chance * 100
+    risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
+
+    mutual_lovers = pair.factors.mutual_lovers
+    libido_factor = pair.factors.libido_factor
+    aggression_factor = pair.factors.aggression_factor
+    charisma_factor = pair.factors.charisma_factor
+    stat_variance = pair.factors.stat_variance
+
+    trait_ev = (
+        sum(p.probability * p.trait.weight for p in pair.factors.trait_probabilities)
+        * 5.0
+    )
+
+    return PairSummaryData(
+        names_display=names_display,
+        quality=pair.quality,
+        disorder_pct=disorder,
+        part_defect_pct=part_defect,
+        combined_pct=combined,
+        risk_color=risk_color,
+        mutual_lovers=mutual_lovers,
+        libido_factor=libido_factor,
+        aggression_factor=aggression_factor,
+        charisma_factor=charisma_factor,
+        stat_variance=stat_variance,
+        trait_ev=trait_ev,
+    )
