@@ -1438,6 +1438,14 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                         )
 
             if misplaced:
+                # Sort by age then name
+                misplaced.sort(
+                    key=lambda x: (
+                        x["cat"].age if x["cat"].age is not None else 999,
+                        x["cat"].name or "",
+                    )
+                )
+
                 with dpg.table(
                     tag="misplaced_table",
                     header_row=True,
@@ -1445,6 +1453,7 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                     row_background=True,
                 ):
                     dpg.add_table_column(label="Name", width_fixed=True)
+                    dpg.add_table_column(label="Age", width_fixed=True)
                     dpg.add_table_column(
                         label="In Save",
                         width_fixed=True,
@@ -1458,8 +1467,10 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
 
                     for item in misplaced:
                         cat = item["cat"]
+                        age = cat.age if cat.age is not None else 0
                         with dpg.table_row():
                             dpg.add_text(cat.name or "Unnamed")
+                            dpg.add_text(str(age))
                             dpg.add_text(selected_room.room.display_name)
                             dpg.add_text(item["assigned_room"])
             else:
