@@ -49,11 +49,6 @@ class PairCache:
         self._cache.clear()
 
 
-def _has_eternalyouth(cat: Cat) -> bool:
-    """Check if cat has EternalYouth disorder."""
-    return cat.has_eternal_youth()
-
-
 def can_pair_gay(cat_a: Cat, cat_b: Cat, gay_flags: dict[int, bool]) -> bool:
     """Check if gay cats can breed based on gender restrictions."""
     is_a_gay = gay_flags.get(cat_a.db_key, False)
@@ -376,8 +371,8 @@ def optimize_sa(
             ),
         )
 
-    sa_cats = [c for c in filtered_cats if not _has_eternalyouth(c)]
-    ey_cats = [c for c in filtered_cats if _has_eternalyouth(c)]
+    sa_cats = [c for c in filtered_cats if not c.has_eternal_youth()]
+    ey_cats = [c for c in filtered_cats if c.has_eternal_youth()]
 
     # Deterministically place EY cats into the best breeding room
     breeding_rooms = [r for r in room_configs if r.room_type == RoomType.BREEDING]

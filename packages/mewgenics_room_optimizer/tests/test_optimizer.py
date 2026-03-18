@@ -20,7 +20,6 @@ from mewgenics_room_optimizer.optimizer import (
     _evaluate_state,
     _filter_cats,
     _generate_pairs,
-    _has_eternalyouth,
 )
 
 
@@ -97,12 +96,6 @@ class TestUtilities:
         cat = make_cat(1, stat_base=(1, 2, 3, 4, 5, 6, 7))
         assert _cat_stats_sum(cat) == 28
 
-    def test_has_eternalyouth(self):
-        cat_with = make_cat(1, disorders=["EternalYouth"])
-        cat_without = make_cat(2, disorders=[])
-        assert _has_eternalyouth(cat_with) is True
-        assert _has_eternalyouth(cat_without) is False
-
     def test_can_pair_gay(self):
         gay_flags = {1: True, 2: False, 3: True}
         cat1, cat2, cat3 = make_cat(1), make_cat(2), make_cat(3)
@@ -154,7 +147,7 @@ class TestEternalYouthPlacement:
 
         result = optimize_sa(cats, basic_rooms, params, {})
 
-        ey_cat = next(c for c in cats if _has_eternalyouth(c))
+        ey_cat = next(c for c in cats if c.has_eternal_youth())
         ey_room = next(r for r in result.rooms if ey_cat in r.eternal_youth_cats)
 
         assert ey_room.room.key == "breed1"
