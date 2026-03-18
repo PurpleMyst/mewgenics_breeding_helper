@@ -1,24 +1,18 @@
 """Tests for mewgenics_scorer factors module."""
 
 import pytest
-from mewgenics_parser import TraitCategory, create_trait, Cat
-from mewgenics_parser.cat import Stats, CatStatus, CatBodyParts, CatGender
+from inline_snapshot import snapshot
+from mewgenics_parser import Cat, TraitCategory, create_trait
+from mewgenics_parser.cat import CatBodyParts, CatGender, CatStatus, Stats
 
-from mewgenics_scorer.factors import (
-    DEFAULT_STIMULATION,
-    PairFactors,
+from mewgenics_scorer.factors import *
+from mewgenics_scorer.factors import _aggression_factor, _libido_factor, _stat_variance
+from mewgenics_scorer.inheritance import *
+from mewgenics_scorer.inheritance import (
     _better_chance,
     _class_favoring_chance,
-    _default_01,
     _passive_inheritance_chance,
     _spell_inheritance_chance,
-    aggression_factor,
-    calculate_pair_factors,
-    calculate_trait_probability,
-    expected_stats,
-    libido_factor,
-    stat_variance,
-    trait_coverage,
 )
 from mewgenics_scorer.types import TraitRequirement
 
@@ -71,39 +65,6 @@ def make_cat(
     )
 
 
-class TestBetterChance:
-    """Tests for _better_chance function."""
-
-    def test_default_stimulation(self):
-        chance = _better_chance(DEFAULT_STIMULATION)
-        expected = (1.0 + 0.01 * 50) / (2.0 + 0.01 * 50)
-        assert abs(chance - expected) < 0.0001
-
-    def test_zero_stimulation(self):
-        chance = _better_chance(0.0)
-        assert chance == 0.5
-
-    def test_high_stimulation(self):
-        chance = _better_chance(100.0)
-        assert chance > 0.5
-
-
-class TestDefault01:
-    """Tests for _default_01 function."""
-
-    def test_value_in_range(self):
-        assert _default_01(0.5) == 0.5
-
-    def test_none_returns_half(self):
-        assert _default_01(None) == 0.5
-
-    def test_clamps_above_one(self):
-        assert _default_01(1.5) == 1.0
-
-    def test_clamps_below_zero(self):
-        assert _default_01(-0.5) == 0.0
-
-
 class TestExpectedStats:
     """Tests for expected_stats function."""
 
@@ -130,12 +91,12 @@ class TestStatVariance:
     def test_identical_stats(self):
         a = make_cat(1, stat_base=[5, 5, 5, 5, 5, 5, 5])
         b = make_cat(2, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        assert stat_variance(a, b) == 0.0
+        assert _stat_variance(a, b) == 0.0
 
     def test_all_different(self):
         a = make_cat(1, stat_base=[10, 10, 10, 10, 10, 10, 10])
         b = make_cat(2, stat_base=[0, 0, 0, 0, 0, 0, 0])
-        assert stat_variance(a, b) == 70.0  # 7 * 10
+        assert _stat_variance(a, b) == 70.0  # 7 * 10
 
 
 class TestAggressionFactor:
@@ -144,19 +105,19 @@ class TestAggressionFactor:
     def test_both_low_aggression(self):
         a = make_cat(1, aggression=0.1)
         b = make_cat(2, aggression=0.1)
-        result = aggression_factor(a, b)
+        result = _aggression_factor(a, b)
         assert result > 0.8  # High factor for low aggression
 
     def test_both_high_aggression(self):
         a = make_cat(1, aggression=0.9)
         b = make_cat(2, aggression=0.9)
-        result = aggression_factor(a, b)
+        result = _aggression_factor(a, b)
         assert result < 0.2  # Low factor for high aggression
 
     def test_unknown_aggression_defaults(self):
         a = make_cat(1, aggression=None)
         b = make_cat(2, aggression=None)
-        assert aggression_factor(a, b) == 0.5
+        assert _aggression_factor(a, b) == 0.5
 
 
 class TestLibidoFactor:
@@ -165,65 +126,19 @@ class TestLibidoFactor:
     def test_both_low_libido(self):
         a = make_cat(1, libido=0.1)
         b = make_cat(2, libido=0.1)
-        result = libido_factor(a, b)
+        result = _libido_factor(a, b)
         assert result < 0.2
 
     def test_both_high_libido(self):
         a = make_cat(1, libido=0.9)
         b = make_cat(2, libido=0.9)
-        result = libido_factor(a, b)
+        result = _libido_factor(a, b)
         assert result > 0.8
 
     def test_unknown_libido_defaults(self):
         a = make_cat(1, libido=None)
         b = make_cat(2, libido=None)
-        assert libido_factor(a, b) == 0.5
-
-
-class TestTraitCoverage:
-    """Tests for trait_coverage function."""
-
-    def test_a_has_trait(self):
-        a = make_cat(1, passives=["Host"])
-        b = make_cat(2)
-        traits = [
-            TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
-        ]
-        result = trait_coverage(a, b, traits)
-        # Check the key of the returned TraitRequirement
-        assert len(result) == 1
-        assert result[0].trait.key == "Host"
-
-    def test_b_has_trait(self):
-        a = make_cat(1)
-        b = make_cat(2, passives=["Host"])
-        traits = [
-            TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
-        ]
-        result = trait_coverage(a, b, traits)
-        assert len(result) == 1
-        assert result[0].trait.key == "Host"
-
-    def test_neither_has_trait(self):
-        a = make_cat(1)
-        b = make_cat(2)
-        traits = [
-            TraitRequirement(trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Host"))
-        ]
-        result = trait_coverage(a, b, traits)
-        assert len(result) == 0
-
-    def test_passive_ability(self):
-        a = make_cat(1, passives=["Sturdy"])
-        b = make_cat(2)
-        traits = [
-            TraitRequirement(
-                trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
-            )
-        ]
-        result = trait_coverage(a, b, traits)
-        assert len(result) == 1
-        assert result[0].trait.key == "Sturdy"
+        assert _libido_factor(a, b) == 0.5
 
 
 class TestCalculatePairFactors:
