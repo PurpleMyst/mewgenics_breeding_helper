@@ -125,7 +125,7 @@ def _calc_ability_inheritance(
     parent_b_has = trait.trait.is_possessed_by(parent_b)
 
     if not parent_a_has and not parent_b_has:
-        return TraitInheritanceProbability(trait, 0.0, "neither", 0.0, 0.0)
+        return TraitInheritanceProbability(trait, 0.0, "Neither", 0.0, 0.0)
 
     # Base inheritance chance: 0.2 + 0.025 * stim
     inherit_chance = _spell_inheritance_chance(stimulation)[0]
@@ -196,7 +196,7 @@ def _calc_passive_inheritance(
         return TraitInheritanceProbability(
             trait=trait,
             probability=1.0,
-            parent_source="parent_a (SkillShare+)",
+            parent_source=f"{parent_a.name} (SkillShare+)",
             inherit_chance=1.0,
             parent_favor_chance=0.0,
         )
@@ -205,7 +205,7 @@ def _calc_passive_inheritance(
         return TraitInheritanceProbability(
             trait=trait,
             probability=1.0,
-            parent_source="parent_b (SkillShare+)",
+            parent_source=f"{parent_b.name} (SkillShare+)",
             inherit_chance=1.0,
             parent_favor_chance=0.0,
         )
@@ -243,9 +243,12 @@ def _calc_passive_inheritance(
             (1.0 - parent_a_select_prob) / max(1, parent_b_pool_size)
         ) * inherit_chance
 
-    parent_source = "parent_a" if parent_a_select_prob > 0.5 else "parent_b"
     if parent_a_has and parent_b_has:
-        parent_source = "either"
+        parent_source = f"{parent_a.name} or {parent_b.name}"
+    elif parent_a_has:
+        parent_source = parent_a.name
+    else:
+        parent_source = parent_b.name
 
     return TraitInheritanceProbability(
         trait=trait,
@@ -292,9 +295,12 @@ def _calc_mutation_inheritance(
         parent_a_select_prob if parent_a_has else (1.0 - parent_a_select_prob)
     )
 
-    parent_source = "parent_a" if parent_a_select_prob > 0.5 else "parent_b"
     if parent_a_has and parent_b_has:
-        parent_source = "either"
+        parent_source = f"{parent_a.name} or {parent_b.name}"
+    elif parent_a_has:
+        parent_source = parent_a.name
+    else:
+        parent_source = parent_b.name
 
     return TraitInheritanceProbability(
         trait=trait,

@@ -251,6 +251,16 @@ class Cat:
             for i in indices:
                 if i < len(body_slots):
                     new_value = body_slots[i]
+
+                    # Handle the case where -2 is stored as 0xFFFFFFFE in an unsigned field. This
+                    # can happen due to how the game encodes certain body part states.
+                    # Further investigation is needed to determine if everything isn't just stored
+                    # as signed values that are being misread as unsigned, but for now we'll just
+                    # patch this specific case since it seems to be the only one that occurs in
+                    # practice.
+                    if new_value == ((-2) & ((1 << 32) - 1)):
+                        new_value = -2
+
                     if new_value == 0:
                         continue
                     # if value != 0 and new_value != value:

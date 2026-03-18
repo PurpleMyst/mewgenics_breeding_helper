@@ -138,31 +138,30 @@ class BodyPartTrait(Trait):
     def category(self) -> TraitCategory:
         return TraitCategory.BODY_PART
 
-    @override
-    def get_display_name(self, game_data: GameData) -> str:
+    def _split_key(self) -> tuple[str, int]:
         import re
 
         match = re.fullmatch(r"(\D+)(\d+)", self._key)
         if not match:
-            return self._key
+            raise ValueError(f"Invalid body part key format: {self._key}")
         category, part_id = match.groups()
-        category_lower = category.lower()
-        part_id_int = int(part_id)
-        nad = game_data.body_part_text.get(category_lower, {}).get(part_id_int)
-        return nad.name if nad else self._key
+        part_id = int(part_id)
+        if category.endswith("-"):
+            category = category[:-1]
+            part_id = -part_id
+        return category.lower(), part_id
+
+    @override
+    def get_display_name(self, game_data: GameData) -> str:
+        category, part_id = self._split_key()
+        name_desc = game_data.body_part_text[category][part_id]
+        return name_desc.name if name_desc else self._key
 
     @override
     def get_description(self, game_data: GameData) -> str:
-        import re
-
-        match = re.fullmatch(r"(\D+)(\d+)", self._key)
-        if not match:
-            return ""
-        category, part_id = match.groups()
-        category_lower = category.lower()
-        part_id_int = int(part_id)
-        nad = game_data.body_part_text.get(category_lower, {}).get(part_id_int)
-        return nad.description if nad else ""
+        category, part_id = self._split_key()
+        name_desc = game_data.body_part_text[category][part_id]
+        return name_desc.description if name_desc else ""
 
     @override
     def get_upgraded_description(self, game_data: GameData) -> str | None:

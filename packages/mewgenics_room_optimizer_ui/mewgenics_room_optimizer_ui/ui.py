@@ -25,6 +25,49 @@ COLOR_EY_TEAL = (0, 255, 255, 255)
 COLOR_MUTED = (150, 150, 150, 255)
 COLOR_LOVER = (255, 150, 200, 255)
 COLOR_DEFAULT_TEXT = (255, 255, 255, 255)
+COLOR_AGGRESSION = (100, 200, 255, 255)
+COLOR_DISORDER_DESC = (255, 150, 150, 255)
+COLOR_HIGH_RISK_ROW = (50, 30, 30, 255)
+
+
+def _render_trait_tree_node(
+    label: str, traits: list[Trait], state: AppState, is_danger: bool = False
+) -> None:
+    """Reusable component for rendering a collapsable list of traits in the inspector."""
+    if not traits:
+        return
+
+    with dpg.tree_node(label=label, default_open=True):
+        for trait in traits:
+            name = trait.get_display_name(state.game_data)
+            desc = trait.get_description(state.game_data)
+
+            is_fav = any(trait.key == req.trait.key for req in state.trait_requirements)
+
+            if is_danger:
+                color = COLOR_DANGER
+                prefix = "  "
+            else:
+                color = COLOR_SUCCESS if is_fav else COLOR_DEFAULT_TEXT
+                prefix = "[*] " if is_fav else "  "
+
+            dpg.add_text(f"{prefix}{name}", color=color)
+            if desc:
+                dpg.add_text(f"    {desc}", color=COLOR_MUTED)
+
+
+def _format_trait_for_listbox(trait: Trait, game_data: GameData) -> str:
+    """Ensure consistent string formatting across all trait listboxes."""
+    parts = [trait.key]
+    display_name = trait.get_display_name(game_data)
+    if display_name and display_name not in parts:
+        parts.append(display_name)
+
+    description = trait.get_description(game_data)
+    if description and description not in parts:
+        parts.append(description)
+
+    return " | ".join(parts)
 
 
 def render_cat_table_rows(
@@ -505,16 +548,7 @@ def on_trait_filter(
 
     traits = state.get_available_traits(category)
     filtered = trait_substring_match(filter_text, traits, state.game_data)
-    formatted = []
-    for t in filtered:
-        parts = [t.key]
-        display_name = t.get_display_name(state.game_data)
-        if display_name and display_name not in parts:
-            parts.append(display_name)
-        description = t.get_description(state.game_data)
-        if description and description not in parts:
-            parts.append(description)
-        formatted.append(" | ".join(parts))
+    formatted = [_format_trait_for_listbox(t, state.game_data) for t in filtered]
 
     dpg.configure_item(listbox_tag, items=formatted)
 
@@ -666,52 +700,19 @@ def update_all_cats_table(
 
     dpg.hide_item(placeholder)
 
-    for cat in filtered_cats:
-        total_stats = sum(cat.stat_base)
-        sex_display = (
-            cat.gender.value if hasattr(cat.gender, "value") else str(cat.gender)
-        )
+    def all_cats_row_callback(
+        sender: int, app_data: bool, user_data: tuple[Cat, AppState]
+    ) -> None:
+        cat, state = user_data
+        on_all_cats_cat_selected(sender, app_data, (cat.db_key, state))
 
-        age = cat.age
-        if age is None:
-            age = 0
-        age = min(age, 100)
-        if hasattr(cat, "eternal_youth") and cat.eternal_youth:
-            age_display = f"{age} [EY]"
-        else:
-            age_display = str(age)
-
-        # Get assigned room and determine location color
-        assigned_room = _get_assigned_room_key(cat.db_key, state.results)
-        current_room = cat.room
-        if assigned_room is None:
-            location_color = COLOR_WARNING
-        elif current_room == assigned_room:
-            location_color = COLOR_SUCCESS
-        else:
-            location_color = COLOR_DANGER
-
-        # Get individual stats from total_stats dict
-        stat_values = cat.stat_total
-
-        has_fav = _cat_has_favorable_trait(cat, state.trait_requirements)
-        trait_badge = "[*] " if has_fav else ""
-
-        with dpg.table_row(parent=table):
-            dpg.add_selectable(
-                label=cat.name,
-                span_columns=True,
-                callback=on_all_cats_cat_selected,
-                user_data=(cat.db_key, state),
-                tag=f"all_cats_row_{cat.db_key}",
-            )
-            dpg.add_text(str(sex_display))
-            dpg.add_text(age_display)
-            dpg.add_text(cat.room_display, color=location_color)
-            for sv in stat_values:
-                dpg.add_text(str(sv))
-            dpg.add_text(str(total_stats))
-            dpg.add_text(trait_badge)
+    render_cat_table_rows(
+        cats=filtered_cats,
+        state=state,
+        parent_table_tag=table,
+        row_callback=all_cats_row_callback,
+        row_tag_prefix="all_cats_row",
+    )
 
 
 def on_decrement_weight(
@@ -921,8 +922,12 @@ def scan_and_load_saves(
                 dpg.add_text("Error loading save!")
                 dpg.add_separator()
                 dpg.add_text(str(e))
-                dpg.add_input_text(multiline=True, readonly=True, default_value=traceback.format_exc())
-                dpg.add_button(label="Close", callback=lambda: dpg.delete_item("error_modal"))
+                dpg.add_input_text(
+                    multiline=True, readonly=True, default_value=traceback.format_exc()
+                )
+                dpg.add_button(
+                    label="Close", callback=lambda: dpg.delete_item("error_modal")
+                )
     else:
         dpg.set_value("status_text", "No saves found")
         dpg.set_value("cat_count_text", "Cats: 0")
@@ -932,21 +937,14 @@ def init_traits_lists(state: AppState) -> None:
     """Initialize the trait filter listboxes with available traits from cats."""
     for category in TraitCategory:
         traits = state.get_available_traits(category)
-        formatted = []
-        for t in traits:
-            parts = [t.key]
-            display_name = t.get_display_name(state.game_data)
-            if display_name and display_name not in parts:
-                parts.append(display_name)
-            description = t.get_description(state.game_data)
-            if description and description not in parts:
-                parts.append(description)
-            formatted.append(" | ".join(parts))
+        formatted = [_format_trait_for_listbox(t, state.game_data) for t in traits]
         listbox_tag = f"{category.value}_listbox"
         if dpg.does_item_exist(listbox_tag):
             dpg.configure_item(listbox_tag, items=formatted)
         else:
-            print(f"Warning: Tried to initialize traits listbox for {category.value} but it does not exist in the UI")
+            print(
+                f"Warning: Tried to initialize traits listbox for {category.value} but it does not exist in the UI"
+            )
 
     update_traits_display(state)
 
@@ -1121,7 +1119,7 @@ def update_results_table(results: OptimizationResult, state: AppState) -> None:
                 p.factors.combined_malady_chance * 100 for p in room.pairs
             ) / len(room.pairs)
 
-        row_color = (50, 30, 30, 255) if avg_risk > 15 else (0, 0, 0, 0)
+        row_color = COLOR_HIGH_RISK_ROW if avg_risk > 15 else (0, 0, 0, 0)
 
         with dpg.table_row(parent="results_table"):
             dpg.add_selectable(
@@ -1136,12 +1134,12 @@ def update_results_table(results: OptimizationResult, state: AppState) -> None:
             ey_count = len(room.eternal_youth_cats)
             dpg.add_text(
                 f"{ey_count}",
-                color=(100, 200, 255, 255) if ey_count > 0 else (200, 200, 200, 255),
+                color=COLOR_EY_TEAL if ey_count > 0 else COLOR_MUTED,
             )
             dpg.add_text(f"{avg_quality:.1f}")
             dpg.add_text(
                 f"{avg_risk:2.0f}%",
-                color=COLOR_DANGER if avg_risk > 15 else (200, 200, 200, 255),
+                color=COLOR_DANGER if avg_risk > 15 else COLOR_MUTED,
             )
 
         if avg_risk > 15:
@@ -1334,7 +1332,7 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                                     dpg.add_text("High Libido")
                             agg = getattr(pair.factors, "aggression_factor", 0)
                             if agg > 0.6:
-                                badge = dpg.add_text("[-]", color=(100, 200, 255, 255))
+                                badge = dpg.add_text("[-]", color=COLOR_AGGRESSION)
                                 with dpg.tooltip(badge):
                                     dpg.add_text("High Aggression")
                             if combined > 50:
@@ -1378,50 +1376,23 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                 dpg.add_table_column(label="Sum", width_fixed=True)
                 dpg.add_table_column(label="Traits", width_fixed=True)
 
-                for cat in all_cats:
+                def details_name_callback(cat: Cat) -> str:
                     is_ey = cat in selected_room.eternal_youth_cats
                     cat_name = cat.name or "Unnamed"
                     if is_ey:
-                        cat_name = f"{cat_name} [EY]"
-                    total_stats = sum(cat.stat_total)
-                    age = cat.age if cat.age is not None else "-"
+                        return f"{cat_name} [EY]"
+                    return cat_name
 
-                    # Get assigned room and determine location color
-                    assigned_room = _get_assigned_room_key(cat.db_key, state.results)
-                    current_room = cat.room
-                    if assigned_room is None:
-                        location_color = COLOR_WARNING
-                    elif current_room == assigned_room:
-                        location_color = COLOR_SUCCESS
-                    else:
-                        location_color = COLOR_DANGER
-
-                    # Get individual stats from total_stats dict
-                    stat_values = cat.stat_total
-
-                    has_fav = _cat_has_favorable_trait(cat, state.trait_requirements)
-                    trait_badge = "[*]" if has_fav else ""
-
-                    with dpg.table_row():
-                        dpg.add_selectable(
-                            label=cat_name,
-                            span_columns=True,
-                            callback=on_cat_selected,
-                            user_data=(cat, state),
-                            tag=f"cat_row_{cat.db_key}",
-                        )
-                        dpg.add_text(cat.gender)
-                        dpg.add_text(str(age))
-                        dpg.add_text(
-                            cat.room_display or current_room, color=location_color
-                        )
-                        for sv in stat_values:
-                            dpg.add_text(str(sv))
-                        dpg.add_text(str(total_stats))
-                        dpg.add_text(
-                            trait_badge,
-                            color=COLOR_SUCCESS if has_fav else COLOR_MUTED,
-                        )
+                render_cat_table_rows(
+                    cats=all_cats,
+                    state=state,
+                    parent_table_tag="cats_detail_table",
+                    is_ey_check=True,
+                    eternal_youth_cats=list(selected_room.eternal_youth_cats),
+                    name_callback=details_name_callback,
+                    row_callback=on_cat_selected,
+                    row_tag_prefix="cat_row",
+                )
         else:
             dpg.add_text("No cats in this room")
 
@@ -1603,7 +1574,7 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
             if ev >= 1:
                 dpg.add_text(
                     f"[* EV: {ev:.2f} from {hits}/{total} traits]",
-                    color=(100, 255, 100, 255),
+                    color=COLOR_SUCCESS,
                 )
         else:
             dpg.add_text("No favorable traits configured", color=COLOR_MUTED)
@@ -1713,102 +1684,38 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
 
         dpg.add_separator()
 
-        with dpg.tree_node(
-            label=f"Active Abilities ({len(cat.active_abilities or [])})",
-            default_open=True,
-        ):
-            for ab in cat.active_abilities or []:
-                trait = create_trait(TraitCategory.ACTIVE_ABILITY, ab)
-                name = trait.get_display_name(state.game_data)
-                desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.trait_requirements)
-                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
-                prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{name}", color=color)
-                if desc:
-                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
+        active_traits = [
+            create_trait(TraitCategory.ACTIVE_ABILITY, ab)
+            for ab in (cat.active_abilities or [])
+        ]
+        passive_traits = [
+            create_trait(TraitCategory.PASSIVE_ABILITY, ab)
+            for ab in (cat.passive_abilities or [])
+        ]
+        disorder_traits = [
+            create_trait(TraitCategory.DISORDER, dis) for dis in (cat.disorders or [])
+        ]
+        body_part_traits = [
+            create_trait(TraitCategory.BODY_PART, f"{part_name.title()}{part_id}")
+            for part_name, part_id in asdict(cat.body_parts).items()
+            if part_id
+        ]
 
-        with dpg.tree_node(
-            label=f"Passive Abilities ({len(cat.passive_abilities or [])})",
-            default_open=True,
-        ):
-            for ab in cat.passive_abilities or []:
-                trait = create_trait(TraitCategory.PASSIVE_ABILITY, ab)
-                name = trait.get_display_name(state.game_data)
-                desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.trait_requirements)
-                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
-                prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{name}", color=color)
-                if desc:
-                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
-
-        with dpg.tree_node(
-            label=f"Disorders ({len(cat.disorders or [])})", default_open=True
-        ):
-            for dis in cat.disorders or []:
-                trait = create_trait(TraitCategory.DISORDER, dis)
-                name = trait.get_display_name(state.game_data)
-                desc = trait.get_description(state.game_data)
-                color = COLOR_DANGER
-                dpg.add_text(f"  {name}", color=color)
-                if desc:
-                    dpg.add_text(f"    {desc}", color=(255, 150, 150, 255))
-
-        with dpg.tree_node(label="Body Parts", default_open=True):
-            body_parts: dict[str, int] = asdict(cat.body_parts)
-            for part_name, part_id in body_parts.items():
-                body_part_key = f"{part_name.title()}{part_id}"
-                trait = create_trait(TraitCategory.BODY_PART, body_part_key)
-                name = trait.get_display_name(state.game_data)
-                desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.trait_requirements)
-                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
-                prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{name}", color=color)
-                if desc:
-                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
-
-        with dpg.tree_node(
-            label=f"Passive Abilities ({len(cat.passive_abilities or [])})",
-            default_open=True,
-        ):
-            for ab in cat.passive_abilities or []:
-                trait = create_trait(TraitCategory.PASSIVE_ABILITY, ab)
-                name = trait.get_display_name(state.game_data)
-                desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.trait_requirements)
-                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
-                prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{name}", color=color)
-                if desc:
-                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
-
-        with dpg.tree_node(
-            label=f"Disorders ({len(cat.disorders or [])})", default_open=True
-        ):
-            for dis in cat.disorders or []:
-                trait = create_trait(TraitCategory.DISORDER, dis)
-                name = trait.get_display_name(state.game_data)
-                desc = trait.get_description(state.game_data)
-                color = COLOR_DANGER
-                dpg.add_text(f"  {name}", color=color)
-                if desc:
-                    dpg.add_text(f"    {desc}", color=(255, 150, 150, 255))
-
-        with dpg.tree_node(label="Body Parts", default_open=True):
-            body_parts: dict[str, int] = asdict(cat.body_parts)
-            for part_name, part_id in body_parts.items():
-                body_part_key = f"{part_name.title()}{part_id}"
-                trait = create_trait(TraitCategory.BODY_PART, body_part_key)
-                name = trait.get_display_name(state.game_data)
-                desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.trait_requirements)
-                color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
-                prefix = "[*] " if is_fav else "  "
-                dpg.add_text(f"{prefix}{name}", color=color)
-                if desc:
-                    dpg.add_text(f"    {desc}", color=(180, 180, 180, 255))
+        _render_trait_tree_node(
+            f"Active Abilities ({len(active_traits)})", active_traits, state
+        )
+        _render_trait_tree_node(
+            f"Passive Abilities ({len(passive_traits)})", passive_traits, state
+        )
+        _render_trait_tree_node(
+            f"Disorders ({len(disorder_traits)})",
+            disorder_traits,
+            state,
+            is_danger=True,
+        )
+        _render_trait_tree_node(
+            f"Body Parts ({len(body_part_traits)})", body_part_traits, state
+        )
 
 
 def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
@@ -1864,28 +1771,28 @@ def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
         if not can_breed(cat_a, cat_b):
             dpg.add_text(
                 "Incompatible pairing (Gender mismatch).",
-                color=(255, 100, 100, 255),
+                color=COLOR_DANGER,
             )
             return
 
         if is_hater_conflict(cat_a, cat_b):
             dpg.add_text(
                 "Hater conflict - these cats refuse to breed.",
-                color=(255, 100, 100, 255),
+                color=COLOR_DANGER,
             )
             return
 
         if is_lover_conflict(cat_a, cat_b, state.avoid_lovers):
             dpg.add_text(
                 "Lover conflict - pair excluded by settings.",
-                color=(255, 100, 100, 255),
+                color=COLOR_DANGER,
             )
             return
 
         if not can_pair_gay(cat_a, cat_b, state.gay_flags):
             dpg.add_text(
                 "Gay conflict - one or both cats have same-sex breeding preference but neither is genderless.",
-                color=(255, 100, 100, 255),
+                color=COLOR_DANGER,
             )
             return
 
@@ -1931,17 +1838,17 @@ def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
 
         with dpg.group(horizontal=True):
             if pair_result.factors.mutual_lovers:
-                dpg.add_text("[<3 Lovers]", color=(255, 150, 150, 255))
+                dpg.add_text("[<3 Lovers]", color=COLOR_DISORDER_DESC)
             if pair_result.factors.libido_factor > 0.6:
                 dpg.add_text("[+ Libido]", color=COLOR_WARNING)
             if pair_result.factors.aggression_factor > 0.6:
-                dpg.add_text("[- Aggro]", color=(100, 200, 255, 255))
+                dpg.add_text("[- Aggro]", color=COLOR_AGGRESSION)
             if combined > 50:
                 dpg.add_text("[! Inbred]", color=COLOR_DANGER)
             if pair_result.factors.combined_malady_chance > state.max_risk:
                 dpg.add_text(
                     f"[! High Risk (>{state.max_risk * 100:.0f}%)]",
-                    color=(255, 100, 100, 255),
+                    color=COLOR_DANGER,
                 )
 
         if state.trait_requirements:
@@ -1954,5 +1861,5 @@ def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
 
             if hits > 0:
                 dpg.add_text(
-                    f"[* {hits}/{total} Favorable Traits]", color=(100, 255, 100, 255)
+                    f"[* {hits}/{total} Favorable Traits]", color=COLOR_SUCCESS
                 )
