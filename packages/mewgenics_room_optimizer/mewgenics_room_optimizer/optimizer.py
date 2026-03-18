@@ -6,7 +6,6 @@ from dataclasses import replace
 from typing import Callable
 
 from mewgenics_parser import Cat
-from mewgenics_parser.trait_dictionary import normalize_trait_name
 from mewgenics_scorer import (
     AncestorData,
     ScoringPreferences,
@@ -118,7 +117,7 @@ def score_pair(
         ancestor_contribs,
         stimulation=params.stimulation,
         avoid_lovers=params.avoid_lovers,
-        planner_traits=params.planner_traits,
+        trait_requirements=params.trait_requirements,
     )
 
     if not skip_risk_check and factors.combined_malady_chance > params.max_risk:
@@ -133,18 +132,6 @@ def score_pair(
         factors=factors,
         quality=quality,
     )
-
-
-def _has_planner_trait(cat: Cat, params: OptimizationParams) -> bool:
-    """Check if cat has any planner-selected traits."""
-    for trait in params.planner_traits:
-        for passive in cat.passive_abilities or []:
-            if normalize_trait_name(passive) == trait.key:
-                return True
-        for ability in cat.active_abilities or []:
-            if normalize_trait_name(ability) == trait.key:
-                return True
-    return False
 
 
 def _can_fit_single(
@@ -507,7 +494,11 @@ def _build_results_from_state_dict(
     fighting_rooms = [r for r in room_configs if r.room_type == RoomType.FIGHTING]
 
     # Trait carriers to General rooms first
-    trait_cats = [c for c in unassigned if _has_planner_trait(c, params)]
+    trait_cats = [
+        c
+        for c in unassigned
+        if any(t.trait.is_possessed_by(c) for t in params.trait_requirements)
+    ]
     for cat in trait_cats:
         for room in general_rooms:
             if _can_fit_single(room, len(rooms_content[room.key])):

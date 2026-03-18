@@ -1,15 +1,15 @@
 """DearPyGui UI components for room optimizer."""
 
 from collections.abc import Callable
-from typing import Any
 from dataclasses import asdict
+from typing import Any
 
 import dearpygui.dearpygui as dpg
-from mewgenics_parser import Cat
+from mewgenics_parser import Cat, TraitCategory
 from mewgenics_parser.gpak import GameData
+from mewgenics_parser.traits import Trait, create_trait
 from mewgenics_room_optimizer import OptimizationResult, RoomType, can_pair_gay
 from mewgenics_room_optimizer.types import ScoredPair
-from mewgenics_parser.traits import Trait, create_trait
 from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
 from .state import AppState
@@ -66,7 +66,7 @@ def render_cat_table_rows(
         stat_values = cat.stat_total
         total = sum(stat_values)
 
-        has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
+        has_fav = _cat_has_favorable_trait(cat, state.trait_requirements)
         trait_badge = "[*]" if has_fav else ""
         badge_color = COLOR_SUCCESS if has_fav else COLOR_MUTED
 
@@ -472,7 +472,7 @@ def on_toggle_show_all_cats(sender: int, app_data: bool, user_data: AppState) ->
 
 
 def on_add_trait(
-    sender: int | None, app_data: Any, user_data: tuple[AppState, str, str]
+    sender: int | None, app_data: Any, user_data: tuple[AppState, TraitCategory, str]
 ) -> None:
     """Add selected trait to favorable traits."""
     from mewgenics_parser.traits import create_trait
@@ -488,7 +488,7 @@ def on_add_trait(
 
     if selected:
         actual_key = selected.split(" | ")[0].strip()
-        state.planner_traits.append(
+        state.trait_requirements.append(
             TraitRequirement(trait=create_trait(category, actual_key), weight=5.0)
         )
         state.save()
@@ -504,17 +504,23 @@ def on_trait_filter(
 
     traits = state.get_available_traits(category)
     filtered = trait_substring_match(filter_text, traits, state.game_data)
-    formatted = [
-        f"{t.key} | {t.get_display_name(state.game_data)} | {t.get_description(state.game_data)}"
-        for t in filtered
-    ]
+    formatted = []
+    for t in filtered:
+        parts = [t.key]
+        display_name = t.get_display_name(state.game_data)
+        if display_name and display_name not in parts:
+            parts.append(display_name)
+        description = t.get_description(state.game_data)
+        if description and description not in parts:
+            parts.append(description)
+        formatted.append(" | ".join(parts))
 
     dpg.configure_item(listbox_tag, items=formatted)
 
 
 def on_clear_traits(sender: int, app_data: Any, user_data: AppState) -> None:
     """Clear all favorable traits."""
-    user_data.planner_traits.clear()
+    user_data.trait_requirements.clear()
     user_data.save()
     update_traits_display(user_data)
 
@@ -535,7 +541,7 @@ def on_trait_weight_changed(
     """Handle trait weight change."""
     index, state = user_data
     new_weight = max(1, min(10, int(app_data)))
-    state.planner_traits[index].weight = float(new_weight)
+    state.trait_requirements[index].weight = float(new_weight)
     state.save()
 
 
@@ -544,7 +550,7 @@ def on_remove_trait(
 ) -> None:
     """Remove a trait from favorable traits."""
     index, state = user_data
-    state.planner_traits.pop(index)
+    state.trait_requirements.pop(index)
     state.save()
     update_traits_display(state)
 
@@ -557,7 +563,7 @@ def update_traits_display(state: AppState) -> None:
 
     dpg.delete_item(container, children_only=True)
 
-    for i, trait_req in enumerate(state.planner_traits):
+    for i, trait_req in enumerate(state.trait_requirements):
         with dpg.group(horizontal=True, parent=container):
             trait = trait_req.trait
 
@@ -603,9 +609,11 @@ def update_traits_display(state: AppState) -> None:
             )
 
 
-def _cat_has_favorable_trait(cat: Cat, planner_traits: list[TraitRequirement]) -> bool:
+def _cat_has_favorable_trait(
+    cat: Cat, trait_requirements: list[TraitRequirement]
+) -> bool:
     """Check if cat has any favorable trait from planner."""
-    return any(req.trait.is_possessed_by(cat) for req in planner_traits)
+    return any(req.trait.is_possessed_by(cat) for req in trait_requirements)
 
 
 def _get_assigned_room_key(
@@ -685,7 +693,7 @@ def update_all_cats_table(
         # Get individual stats from total_stats dict
         stat_values = cat.stat_total
 
-        has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
+        has_fav = _cat_has_favorable_trait(cat, state.trait_requirements)
         trait_badge = "[*] " if has_fav else ""
 
         with dpg.table_row(parent=table):
@@ -710,7 +718,9 @@ def on_decrement_weight(
 ) -> None:
     """Decrement trait weight."""
     index, state = user_data
-    state.planner_traits[index].weight = max(1, state.planner_traits[index].weight - 1)
+    state.trait_requirements[index].weight = max(
+        1, state.trait_requirements[index].weight - 1
+    )
     state.save()
     update_traits_display(state)
 
@@ -720,7 +730,9 @@ def on_increment_weight(
 ) -> None:
     """Increment trait weight."""
     index, state = user_data
-    state.planner_traits[index].weight = min(10, state.planner_traits[index].weight + 1)
+    state.trait_requirements[index].weight = min(
+        10, state.trait_requirements[index].weight + 1
+    )
     state.save()
     update_traits_display(state)
 
@@ -850,11 +862,17 @@ def build_themes() -> None:
 def on_global_enter(sender: int, app_data: Any, user_data: Any) -> None:
     """Check which filter is active when Enter is pressed and trigger add."""
     if dpg.is_item_active("body_part_filter"):
-        on_add_trait(None, None, (user_data, "body_part", "body_part_listbox"))
+        on_add_trait(
+            None, None, (user_data, TraitCategory.BODY_PART, "body_part_listbox")
+        )
     elif dpg.is_item_active("passive_filter"):
-        on_add_trait(None, None, (user_data, "passive_ability", "passive_listbox"))
+        on_add_trait(
+            None, None, (user_data, TraitCategory.PASSIVE_ABILITY, "passive_listbox")
+        )
     elif dpg.is_item_active("ability_filter"):
-        on_add_trait(None, None, (user_data, "active_ability", "ability_listbox"))
+        on_add_trait(
+            None, None, (user_data, TraitCategory.ACTIVE_ABILITY, "ability_listbox")
+        )
 
 
 def scan_and_load_saves(
@@ -1057,7 +1075,7 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
         max_risk=max_risk,
         avoid_lovers=avoid_lovers,
         scoring_prefs=scoring_prefs,
-        planner_traits=user_data.planner_traits,
+        trait_requirements=user_data.trait_requirements,
         sa_temperature=sa_temp,
         sa_cooling_rate=sa_cooling,
         sa_neighbors_per_temp=sa_neighbors,
@@ -1275,10 +1293,10 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
 
                     hits = sum(
                         1
-                        for pt in state.planner_traits
+                        for pt in state.trait_requirements
                         if pt.trait.key in combined_traits
                     )
-                    total = len(state.planner_traits)
+                    total = len(state.trait_requirements)
 
                     with dpg.table_row():
                         dpg.add_selectable(
@@ -1370,7 +1388,7 @@ def build_details_tabs(selected_room: Any, state: AppState) -> None:
                     # Get individual stats from total_stats dict
                     stat_values = cat.stat_total
 
-                    has_fav = _cat_has_favorable_trait(cat, state.planner_traits)
+                    has_fav = _cat_has_favorable_trait(cat, state.trait_requirements)
                     trait_badge = "[*]" if has_fav else ""
 
                     with dpg.table_row():
@@ -1517,7 +1535,7 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
             color=risk_color,
         )
 
-        if state.planner_traits:
+        if state.trait_requirements:
             stimulation = 50.0
             for rc in state.room_configs:
                 if rc.room_type.value == "breeding":
@@ -1542,9 +1560,9 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
                 )
                 dpg.add_table_column(label="Source", width_stretch=True)
 
-                for trait in state.planner_traits:
+                for trait_req in state.trait_requirements:
                     prob_result = calculate_trait_probability(
-                        trait, pair.cat_a, pair.cat_b, stimulation
+                        trait_req, pair.cat_a, pair.cat_b, stimulation
                     )
 
                     if prob_result.probability >= 0.5:
@@ -1555,8 +1573,8 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
                         color = COLOR_DANGER
 
                     with dpg.table_row():
-                        dpg.add_text(trait.key)
-                        dpg.add_text(trait.category)
+                        dpg.add_text(trait_req.trait.get_display_name(state.game_data))
+                        dpg.add_text(trait_req.trait.category)
                         dpg.add_text(
                             f"{prob_result.probability * 100:.1f}%", color=color
                         )
@@ -1570,7 +1588,7 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
                 )
                 * 5.0
             )
-            total = len(state.planner_traits)
+            total = len(state.trait_requirements)
             if ev >= 1:
                 dpg.add_text(
                     f"[* EV: {ev:.2f} from {hits}/{total} traits]",
@@ -1689,10 +1707,10 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             default_open=True,
         ):
             for ab in cat.active_abilities or []:
-                trait = create_trait("active_ability", ab)
+                trait = create_trait(TraitCategory.ACTIVE_ABILITY, ab)
                 name = trait.get_display_name(state.game_data)
                 desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.planner_traits)
+                is_fav = trait in (req.trait for req in state.trait_requirements)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{name}", color=color)
@@ -1704,10 +1722,10 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             default_open=True,
         ):
             for ab in cat.passive_abilities or []:
-                trait = create_trait("passive_ability", ab)
+                trait = create_trait(TraitCategory.PASSIVE_ABILITY, ab)
                 name = trait.get_display_name(state.game_data)
                 desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.planner_traits)
+                is_fav = trait in (req.trait for req in state.trait_requirements)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{name}", color=color)
@@ -1718,7 +1736,7 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             label=f"Disorders ({len(cat.disorders or [])})", default_open=True
         ):
             for dis in cat.disorders or []:
-                trait = create_trait("disorder", dis)
+                trait = create_trait(TraitCategory.DISORDER, dis)
                 name = trait.get_display_name(state.game_data)
                 desc = trait.get_description(state.game_data)
                 color = COLOR_DANGER
@@ -1730,10 +1748,10 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             body_parts: dict[str, int] = asdict(cat.body_parts)
             for part_name, part_id in body_parts.items():
                 body_part_key = f"{part_name.title()}{part_id}"
-                trait = create_trait("body_part", body_part_key)
+                trait = create_trait(TraitCategory.BODY_PART, body_part_key)
                 name = trait.get_display_name(state.game_data)
                 desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.planner_traits)
+                is_fav = trait in (req.trait for req in state.trait_requirements)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{name}", color=color)
@@ -1745,10 +1763,10 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             default_open=True,
         ):
             for ab in cat.passive_abilities or []:
-                trait = create_trait("passive_ability", ab)
+                trait = create_trait(TraitCategory.PASSIVE_ABILITY, ab)
                 name = trait.get_display_name(state.game_data)
                 desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.planner_traits)
+                is_fav = trait in (req.trait for req in state.trait_requirements)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{name}", color=color)
@@ -1759,7 +1777,7 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             label=f"Disorders ({len(cat.disorders or [])})", default_open=True
         ):
             for dis in cat.disorders or []:
-                trait = create_trait("disorder", dis)
+                trait = create_trait(TraitCategory.DISORDER, dis)
                 name = trait.get_display_name(state.game_data)
                 desc = trait.get_description(state.game_data)
                 color = COLOR_DANGER
@@ -1771,10 +1789,10 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
             body_parts: dict[str, int] = asdict(cat.body_parts)
             for part_name, part_id in body_parts.items():
                 body_part_key = f"{part_name.title()}{part_id}"
-                trait = create_trait("body_part", body_part_key)
+                trait = create_trait(TraitCategory.BODY_PART, body_part_key)
                 name = trait.get_display_name(state.game_data)
                 desc = trait.get_description(state.game_data)
-                is_fav = trait in (req.trait for req in state.planner_traits)
+                is_fav = trait in (req.trait for req in state.trait_requirements)
                 color = COLOR_SUCCESS if is_fav else (200, 200, 200, 255)
                 prefix = "[*] " if is_fav else "  "
                 dpg.add_text(f"{prefix}{name}", color=color)
@@ -1872,7 +1890,7 @@ def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
                 prefer_high_charisma=state.prefer_high_charisma,
                 maximize_throughput=state.maximize_throughput,
             ),
-            planner_traits=state.planner_traits,
+            trait_requirements=state.trait_requirements,
             gay_flags=state.gay_flags,
         )
 
@@ -1915,13 +1933,13 @@ def on_sandbox_changed(sender: int, app_data: str, user_data: Any) -> None:
                     color=(255, 100, 100, 255),
                 )
 
-        if state.planner_traits:
+        if state.trait_requirements:
             combined_traits = cat_a.all_normalized_traits | cat_b.all_normalized_traits
 
             hits = sum(
-                1 for pt in state.planner_traits if pt.trait.key in combined_traits
+                1 for pt in state.trait_requirements if pt.trait.key in combined_traits
             )
-            total = len(state.planner_traits)
+            total = len(state.trait_requirements)
 
             if hits > 0:
                 dpg.add_text(

@@ -9,7 +9,6 @@ from pathlib import Path
 
 from mewgenics_parser import Cat
 from mewgenics_parser.gpak import GameData
-from mewgenics_parser.trait_dictionary import normalize_trait_name
 from mewgenics_parser.traits import Trait, create_trait, extract_traits_from_cat
 from mewgenics_room_optimizer import (
     OptimizationResult,
@@ -22,13 +21,6 @@ from mewgenics_scorer import TraitRequirement
 
 
 CONFIG_DIR = Path.home() / ".mewgenics_room_optimizer"
-
-
-def normalize_trait_key(trait_key: str) -> str:
-    """Normalize trait key to base form for consistent matching."""
-    return normalize_trait_name(trait_key)
-
-
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 
@@ -116,7 +108,7 @@ def room_configs_to_dict(configs: list[RoomConfig]) -> list[dict]:
     ]
 
 
-def planner_traits_from_dict(data: list[dict]) -> list[TraitRequirement]:
+def trait_requirements_from_dict(data: list[dict]) -> list[TraitRequirement]:
     """Convert dictionary list to TraitRequirement objects with normalized keys."""
     return [
         TraitRequirement(
@@ -127,7 +119,9 @@ def planner_traits_from_dict(data: list[dict]) -> list[TraitRequirement]:
     ]
 
 
-def migrate_planner_traits(traits: list[TraitRequirement]) -> list[TraitRequirement]:
+def migrate_trait_requirements(
+    traits: list[TraitRequirement],
+) -> list[TraitRequirement]:
     """Migrate traits to normalized form and deduplicate.
 
     If a user had both 'sturdy' and 'sturdy2', this will merge them
@@ -155,7 +149,7 @@ def migrate_planner_traits(traits: list[TraitRequirement]) -> list[TraitRequirem
     return list(seen.values())
 
 
-def planner_traits_to_dict(traits: list[TraitRequirement]) -> list[dict]:
+def trait_requirements_to_dict(traits: list[TraitRequirement]) -> list[dict]:
     """Convert TraitRequirement objects to dictionary list."""
     return [
         {
@@ -188,7 +182,7 @@ class AppState:
     prefer_high_charisma: bool = True
     maximize_throughput: bool = False
 
-    planner_traits: list[TraitRequirement] = field(default_factory=list)
+    trait_requirements: list[TraitRequirement] = field(default_factory=list)
     gay_flags: dict[int, bool] = field(default_factory=dict)
 
     sim_cat_a_key: int | None = None
@@ -231,8 +225,8 @@ class AppState:
 
         return cls(
             room_configs=room_configs,
-            planner_traits=migrate_planner_traits(
-                planner_traits_from_dict(config.get("planner_traits", []))
+            trait_requirements=migrate_trait_requirements(
+                trait_requirements_from_dict(config.get("trait_requirements", []))
             ),
             last_save_path=config.get("last_save_path"),
             min_stats=config.get("min_stats", 0),
@@ -250,7 +244,7 @@ class AppState:
         """Convert state to configuration dictionary for saving."""
         return {
             "rooms": room_configs_to_dict(self.room_configs),
-            "planner_traits": planner_traits_to_dict(self.planner_traits),
+            "trait_requirements": trait_requirements_to_dict(self.trait_requirements),
             "last_save_path": self.last_save_path,
             "min_stats": self.min_stats,
             "max_risk": self.max_risk

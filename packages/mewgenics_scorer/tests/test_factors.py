@@ -1,17 +1,17 @@
 """Tests for mewgenics_scorer factors module."""
 
-from unittest.mock import MagicMock
-
 import pytest
+from mewgenics_parser import TraitCategory, create_trait, Cat
+from mewgenics_parser.cat import Stats, CatStatus, CatBodyParts, CatGender
 
 from mewgenics_scorer.factors import (
     DEFAULT_STIMULATION,
     PairFactors,
     _better_chance,
-    _default_01,
-    _spell_inheritance_chance,
-    _passive_inheritance_chance,
     _class_favoring_chance,
+    _default_01,
+    _passive_inheritance_chance,
+    _spell_inheritance_chance,
     aggression_factor,
     calculate_pair_factors,
     calculate_trait_probability,
@@ -21,7 +21,6 @@ from mewgenics_scorer.factors import (
     trait_coverage,
 )
 from mewgenics_scorer.types import TraitRequirement
-from mewgenics_parser.traits import create_trait, TraitCategory
 
 
 def make_mock_cat(
@@ -33,40 +32,43 @@ def make_mock_cat(
     passives: list | None = None,
     abilities: list | None = None,
     disorders: list | None = None,
-    lovers=None,
-    haters=None,
-    parent_a=None,
-    parent_b=None,
+    lovers: list[Cat] | None = None,
+    haters: list[Cat] | None = None,
+    parent_a: Cat | None = None,
+    parent_b: Cat | None = None,
 ):
-    cat = MagicMock()
-    cat.db_key = db_key
-    cat.gender = gender
-    cat.stat_base = stat_base or [5, 5, 5, 5, 5, 5, 5]
-    cat.aggression = aggression
-    cat.libido = libido
-    cat.passive_abilities = passives or []
-    cat.active_abilities = abilities or []
-    cat.disorders = disorders or []
-    cat.lovers = lovers or []
-    cat.haters = haters or []
-    cat.parent_a = parent_a
-    cat.parent_b = parent_b
-
-    # Add inheritable_ properties (normalized, lowercase, SkillShare excluded)
-    from mewgenics_parser.trait_dictionary import (
-        normalize_trait_name,
-        SKILLSHARE_BASE_ID,
+    return Cat(
+        db_key=db_key,
+        name=f"Cat{db_key}",
+        status=CatStatus.IN_HOUSE,
+        gender=CatGender(gender),
+        stat_base=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
+        stat_total=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
+        aggression=aggression,
+        libido=libido,
+        passive_abilities=passives or [],
+        active_abilities=abilities or [],
+        disorders=disorders or [],
+        lovers=lovers or [],
+        haters=haters or [],
+        parent_a=parent_a,
+        parent_b=parent_b,
+        room="Test Room",
+        age=5,
+        coi=0.0,
+        body_parts=CatBodyParts(
+            head=0,
+            body=0,
+            tail=0,
+            legs=0,
+            arms=0,
+            texture=0,
+            eyes=0,
+            mouth=0,
+            ears=0,
+            eyebrows=0,
+        ),
     )
-
-    cat.inheritable_abilities = [normalize_trait_name(a) for a in (abilities or [])]
-
-    cat.inheritable_passives = [
-        normalize_trait_name(p)
-        for p in (passives or [])
-        if normalize_trait_name(p) != SKILLSHARE_BASE_ID
-    ]
-
-    return cat
 
 
 class TestBetterChance:

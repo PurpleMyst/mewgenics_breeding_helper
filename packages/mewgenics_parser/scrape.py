@@ -82,7 +82,6 @@ def scrape_collarless() -> tuple[set[str], set[str]]:
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    basic_attacks = set()
     abilities = set()
     passives = set()
 

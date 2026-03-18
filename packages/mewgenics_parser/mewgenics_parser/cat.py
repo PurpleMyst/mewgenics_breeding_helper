@@ -5,16 +5,15 @@ from __future__ import annotations
 import math
 import struct
 import warnings
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from enum import StrEnum
-from types import SimpleNamespace
 from typing import NamedTuple, TypeGuard
 
 import lz4.block
 
 from .binary import BinaryReader
-from .constants import _IDENT_RE, _JUNK_STRINGS, ROOM_DISPLAY, STAT_NAMES
-from .trait_dictionary import SKILLSHARE_BASE_ID, is_disorder, normalize_trait_name
+from .constants import _IDENT_RE, _JUNK_STRINGS, ROOM_DISPLAY
+from .trait_dictionary import SKILLSHARE_BASE_ID, is_disorder, normalize_ability_key
 
 
 class Stats(NamedTuple):
@@ -427,7 +426,7 @@ class Cat:
                 r.seek(found)
 
             active_abilities = [a for a in [r.str() for _ in range(6)] if _valid_str(a)]
-            equipment = [s for s in [r.str() for _ in range(4)] if _valid_str(s)]
+            _equipment = [s for s in [r.str() for _ in range(4)] if _valid_str(s)]
 
             all_passives: list[str] = []
             first = r.str()
@@ -513,7 +512,7 @@ class Cat:
     @property
     def inheritable_abilities(self) -> list[str]:
         """Returns normalized abilities for inheritance math."""
-        return [normalize_trait_name(a) for a in self.active_abilities]
+        return [normalize_ability_key(a) for a in self.active_abilities]
 
     @property
     def inheritable_passives(self) -> list[str]:
@@ -521,7 +520,7 @@ class Cat:
         return [
             n
             for p in self.passive_abilities
-            if (n := normalize_trait_name(p)) != SKILLSHARE_BASE_ID
+            if (n := normalize_ability_key(p)) != SKILLSHARE_BASE_ID
         ]
 
     @property
@@ -536,8 +535,8 @@ class Cat:
     def all_normalized_traits(self) -> set[str]:
         """Returns a unified set of all normalized abilities, passives, disorders, and body part keys for this cat."""
         traits: set[str] = set()
-        traits.update(normalize_trait_name(t) for t in self.active_abilities)
-        traits.update(normalize_trait_name(t) for t in self.passive_abilities)
-        traits.update(normalize_trait_name(t) for t in self.disorders)
+        traits.update(normalize_ability_key(t) for t in self.active_abilities)
+        traits.update(normalize_ability_key(t) for t in self.passive_abilities)
+        traits.update(normalize_ability_key(t) for t in self.disorders)
         traits.update(self.body_part_keys)
         return traits

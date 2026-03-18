@@ -1,12 +1,12 @@
 """Domain model for Mewgenics traits."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, override
 
 from .cat import Cat
 from .gpak import GameData
-from .trait_dictionary import normalize_trait_name
+from .trait_dictionary import normalize_ability_key
 
 
 class TraitCategory(StrEnum):
@@ -14,7 +14,6 @@ class TraitCategory(StrEnum):
     PASSIVE_ABILITY = "passive_ability"
     BODY_PART = "body_part"
     DISORDER = "disorder"
-    MUTATION = "mutation"
 
 
 class Trait(Protocol):
@@ -52,7 +51,6 @@ class ActiveAbilityTrait(Trait):
     """Trait representing an active ability."""
 
     _key: str
-    _category: TraitCategory = field(default=TraitCategory.ACTIVE_ABILITY)
 
     @property
     @override
@@ -62,7 +60,7 @@ class ActiveAbilityTrait(Trait):
     @property
     @override
     def category(self) -> TraitCategory:
-        return self._category
+        return TraitCategory.ACTIVE_ABILITY
 
     @override
     def get_display_name(self, game_data: GameData) -> str:
@@ -82,9 +80,7 @@ class ActiveAbilityTrait(Trait):
 
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
-        return any(
-            normalize_trait_name(a) == self._key for a in (cat.active_abilities or [])
-        )
+        return any(normalize_ability_key(a) == self._key for a in cat.active_abilities)
 
 
 @dataclass(slots=True)
@@ -92,7 +88,6 @@ class PassiveAbilityTrait(Trait):
     """Trait representing a passive ability."""
 
     _key: str
-    _category: TraitCategory = field(default=TraitCategory.PASSIVE_ABILITY)
 
     @property
     @override
@@ -102,7 +97,7 @@ class PassiveAbilityTrait(Trait):
     @property
     @override
     def category(self) -> TraitCategory:
-        return self._category
+        return TraitCategory.PASSIVE_ABILITY
 
     @override
     def get_display_name(self, game_data: GameData) -> str:
@@ -123,16 +118,15 @@ class PassiveAbilityTrait(Trait):
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
         return any(
-            normalize_trait_name(p) == self._key for p in cat.inheritable_passives
+            normalize_ability_key(p) == self._key for p in cat.inheritable_passives
         )
 
 
 @dataclass(slots=True)
 class BodyPartTrait(Trait):
-    """Trait representing a body part mutation."""
+    """Trait representing a body part."""
 
     _key: str
-    _category: TraitCategory = field(default=TraitCategory.BODY_PART)
 
     @property
     @override
@@ -142,7 +136,7 @@ class BodyPartTrait(Trait):
     @property
     @override
     def category(self) -> TraitCategory:
-        return self._category
+        return TraitCategory.BODY_PART
 
     @override
     def get_display_name(self, game_data: GameData) -> str:
@@ -184,7 +178,6 @@ class DisorderTrait(Trait):
     """Trait representing a disorder."""
 
     _key: str
-    _category: TraitCategory = field(default=TraitCategory.DISORDER)
 
     @property
     @override
@@ -194,7 +187,7 @@ class DisorderTrait(Trait):
     @property
     @override
     def category(self) -> TraitCategory:
-        return self._category
+        return TraitCategory.DISORDER
 
     @override
     def get_display_name(self, game_data: GameData) -> str:
@@ -212,22 +205,22 @@ class DisorderTrait(Trait):
 
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
-        return any(normalize_trait_name(d) == self._key for d in (cat.disorders or []))
+        return any(normalize_ability_key(d) == self._key for d in cat.disorders)
 
 
 def extract_traits_from_cat(cat: Cat) -> list[Trait]:
     """Extract all traits from a Cat DTO as domain objects."""
     traits: list[Trait] = []
 
-    for ability in cat.active_abilities or []:
-        normalized = normalize_trait_name(ability)
+    for ability in cat.active_abilities:
+        normalized = normalize_ability_key(ability)
         if normalized and not any(
             t.key == normalized and t.category == "ability" for t in traits
         ):
             traits.append(ActiveAbilityTrait(_key=normalized))
 
-    for passive in cat.passive_abilities or []:
-        normalized = normalize_trait_name(passive)
+    for passive in cat.passive_abilities:
+        normalized = normalize_ability_key(passive)
         if normalized and not any(
             t.key == normalized and t.category == "passive" for t in traits
         ):
@@ -237,8 +230,8 @@ def extract_traits_from_cat(cat: Cat) -> list[Trait]:
         if not any(t.key == body_part_key for t in traits):
             traits.append(BodyPartTrait(_key=body_part_key))
 
-    for disorder in cat.disorders or []:
-        normalized = normalize_trait_name(disorder)
+    for disorder in cat.disorders:
+        normalized = normalize_ability_key(disorder)
         if normalized and not any(
             t.key == normalized and t.category == TraitCategory.DISORDER for t in traits
         ):
@@ -249,18 +242,15 @@ def extract_traits_from_cat(cat: Cat) -> list[Trait]:
 
 def create_trait(category: TraitCategory, key: str) -> Trait:
     """Factory function to create a Trait from category and key."""
-    normalized_key = normalize_trait_name(key)
 
     match category:
         case TraitCategory.ACTIVE_ABILITY:
-            return ActiveAbilityTrait(_key=normalized_key)
+            return ActiveAbilityTrait(_key=normalize_ability_key(key))
         case TraitCategory.PASSIVE_ABILITY:
-            return PassiveAbilityTrait(_key=normalized_key)
+            return PassiveAbilityTrait(_key=normalize_ability_key(key))
         case TraitCategory.BODY_PART:
             return BodyPartTrait(_key=key)
-        case TraitCategory.MUTATION:
-            return BodyPartTrait(_key=key)
         case TraitCategory.DISORDER:
-            return DisorderTrait(_key=normalized_key)
+            return DisorderTrait(_key=key)
         case _:
             raise ValueError(f"Unknown trait category: {category}")

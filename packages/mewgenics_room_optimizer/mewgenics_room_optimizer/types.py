@@ -55,7 +55,7 @@ class OptimizationParams:
     max_risk: float = 0.2
     avoid_lovers: bool = True
     stimulation: float = 50.0
-    planner_traits: list[TraitRequirement] = field(default_factory=list)
+    trait_requirements: list[TraitRequirement] = field(default_factory=list)
     gay_flags: dict[int, bool] = field(default_factory=dict)
     scoring_prefs: ScoringPreferences | None = None
     sa_temperature: float = 100.0

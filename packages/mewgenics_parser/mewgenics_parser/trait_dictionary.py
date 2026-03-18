@@ -1,10 +1,9 @@
 """Static trait dictionaries for breeding probability calculations."""
 
-from .gpak import GameData
+import re
 
 __all__ = [
-    "normalize_trait_name",
-    "is_class_spell",
+    "is_class_active",
     "is_class_passive",
     "is_disorder",
     "has_skillshare_plus",
@@ -343,29 +342,26 @@ SKILLSHARE_BASE_ID = "SkillShare"
 SKILLSHARE_PLUS_ID = SKILLSHARE_BASE_ID + "2"
 
 
-def normalize_trait_name(trait_id: str) -> str:
-    """Strips upgrade identifiers (e.g., trailing '2') to return the base trait."""
-    tid = trait_id.strip()
-    if tid.endswith("2"):
-        return tid[:-1]
-    return tid
+def normalize_ability_key(ability_key: str) -> str:
+    """Strips upgrade identifiers (e.g., trailing '2') to return the base ability."""
+    return re.sub(r"\d*$", "", ability_key.strip())
 
 
-def is_class_spell(spell_id: str) -> bool:
-    """Returns True if spell is class-specific (NOT generic/collarless)."""
-    return normalize_trait_name(spell_id) not in _COLLARLESS_SPELLS
+def is_class_active(spell_id: str) -> bool:
+    """Returns True if active ability is class-specific (NOT generic/collarless)."""
+    return normalize_ability_key(spell_id) not in _COLLARLESS_SPELLS
 
 
 def is_class_passive(passive_id: str) -> bool:
-    """Returns True if passive is class-specific."""
-    return normalize_trait_name(
+    """Returns True if passive ability is class-specific."""
+    return normalize_ability_key(
         passive_id
     ) not in _COLLARLESS_PASSIVES and not is_disorder(passive_id)
 
 
 def is_disorder(passive_id: str) -> bool:
     """Returns True if passive is a birth defect (NOT inheritable via passive mechanics)."""
-    return normalize_trait_name(passive_id) in _DISORDERS
+    return normalize_ability_key(passive_id) in _DISORDERS
 
 
 def has_skillshare_plus(cat) -> bool:

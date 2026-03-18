@@ -1,13 +1,13 @@
 """GPAK file parsing utilities."""
+
 from mewgenics_parser.constants import STAT_NAMES
 
 import csv
 import io
-import re
 import struct
 import zipfile
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import DefaultDict, Self
 
 from .utils import (
@@ -85,7 +85,9 @@ def _parse_mutation_gon(
                 continue
             name_val = _clean_game_text(
                 _resolve_game_string(
-                    mutation_info.pop("name", f"{category.title()} Mutation {mutation_id}"),
+                    mutation_info.pop(
+                        "name", f"{category.title()} Mutation {mutation_id}"
+                    ),
                     game_strings,
                 )
             )
@@ -105,7 +107,9 @@ def _parse_mutation_gon(
             if stat_descriptions and not desc_val:
                 desc_val = ", ".join(stat_descriptions)
 
-            category_text[mutation_id] = NameAndDescription(name=name_val, description=desc_val)
+            category_text[mutation_id] = NameAndDescription(
+                name=name_val, description=desc_val
+            )
         result[category] = defaultdict(lambda: NameAndDescription(), category_text)
     return result
 
@@ -153,9 +157,7 @@ class GameData:
         mutation_text: dict[str, DefaultDict[int, NameAndDescription]] = {}
         for fname, content in gon_contents.items():
             if fname.startswith("data/mutations/") and fname.endswith(".gon"):
-                mutation_text.update(_parse_mutation_gon(
-                    content, game_strings
-                ))
+                mutation_text.update(_parse_mutation_gon(content, game_strings))
 
         # HACK: Arms do not exist as a separate category in the GON files, but mutations that would
         # be categorized as arms are instead categorized under legs. To avoid

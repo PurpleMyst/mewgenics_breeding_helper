@@ -1,14 +1,11 @@
 """Tests for GPAK parsing functions."""
 
-import io
-
 from inline_snapshot import snapshot
 
 from mewgenics_parser.gpak import (
     _clean_game_text,
     _resolve_game_string,
     _parse_gon_abilities,
-    _load_game_strings,
 )
 
 from mewgenics_parser.utils import NameAndDescription

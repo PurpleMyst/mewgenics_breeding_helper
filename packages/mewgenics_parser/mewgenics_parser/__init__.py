@@ -1,7 +1,7 @@
 from .save import parse_save, find_save_files, SaveData
 from .cat import Cat
 from .gpak import GameData
-from .trait_dictionary import normalize_trait_name
+from .traits import Trait, TraitCategory, create_trait
 
 __all__ = [
     "parse_save",
@@ -10,6 +10,9 @@ __all__ = [
     "Cat",
     "GameData",
     "normalize_trait_name",
+    "Trait",
+    "TraitCategory",
+    "create_trait",
 ]
 
 

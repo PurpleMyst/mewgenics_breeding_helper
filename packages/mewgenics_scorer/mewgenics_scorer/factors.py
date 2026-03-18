@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from mewgenics_parser import Cat
 from mewgenics_parser.trait_dictionary import (
-    is_class_spell,
+    is_class_active,
     is_class_passive,
     has_skillshare_plus,
 )
@@ -134,8 +134,8 @@ def _calc_ability_inheritance(
     favor_chance = _class_favoring_chance(stimulation)
 
     # 1. Determine class spell presence
-    parent_a_class = any(is_class_spell(s) for s in parent_a_spells)
-    parent_b_class = any(is_class_spell(s) for s in parent_b_spells)
+    parent_a_class = any(is_class_active(s) for s in parent_a_spells)
+    parent_b_class = any(is_class_active(s) for s in parent_b_spells)
 
     # 2. Calculate parent selection probability (based on class spells only)
     if parent_a_class and not parent_b_class:
@@ -380,7 +380,7 @@ def calculate_pair_factors(
     ancestor_contribs: dict[int, dict[int, AncestorData]],
     stimulation: float = DEFAULT_STIMULATION,
     avoid_lovers: bool = True,
-    planner_traits: list[TraitRequirement] | None = None,
+    trait_requirements: list[TraitRequirement] | None = None,
 ) -> PairFactors:
     """Calculate all factors for a breeding pair."""
     ca = ancestor_contribs.get(a.db_key, {})
@@ -391,7 +391,7 @@ def calculate_pair_factors(
 
     trait_probs = [
         calculate_trait_probability(trait, a, b, stimulation)
-        for trait in (planner_traits or [])
+        for trait in (trait_requirements or [])
     ]
 
     return PairFactors(

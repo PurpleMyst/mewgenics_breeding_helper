@@ -14,6 +14,7 @@ class ScoringPreferences:
     prefer_high_charisma: bool = False
     maximize_throughput: bool = False
 
+
 @dataclass(slots=True)
 class TraitRequirement:
     """A trait to score pair coverage for, with an associated weight."""

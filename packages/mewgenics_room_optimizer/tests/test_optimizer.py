@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from mewgenics_parser import create_trait, TraitCategory
 from mewgenics_scorer import TraitRequirement
 
 from mewgenics_room_optimizer import (
@@ -140,12 +141,9 @@ class TestGayPairsExclusion:
         cat2 = make_mock_cat(2, "male")
         cat3 = make_mock_cat(3, "female")
 
-        cats_by_id = {1: cat1, 2: cat2, 3: cat3}
-
         params = OptimizationParams(
             gay_flags={1: True, 2: False, 3: False},
         )
-        cache = PairCache()
 
         result_male_gay_female_straight = score_pair(cat1, cat3, {}, params)
         assert result_male_gay_female_straight is None
@@ -228,7 +226,9 @@ class TestOptimizePipeline:
         cats_by_id = {c.db_key: c for c in cats}
 
         params = OptimizationParams(
-            planner_traits=[TraitRequirement("mutation", "Horns", 5.0)]
+            trait_requirements=[
+                TraitRequirement(create_trait(TraitCategory.BODY_PART, "Horns340"), 5.0)
+            ]
         )
 
         result = _build_results_from_state_dict(
