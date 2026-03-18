@@ -14,7 +14,7 @@ from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
 from .state import AppState
-from .helpers import get_pair_summary_data
+from .helpers import get_favorable_trait_names, get_pair_summary_data
 
 LOCATION_COL_WIDTH = 125
 
@@ -112,9 +112,10 @@ def render_cat_table_rows(
         stat_values = cat.stat_total
         total = sum(stat_values)
 
-        has_fav = _cat_has_favorable_trait(cat, state.trait_requirements)
-        trait_badge = "[*]" if has_fav else ""
-        badge_color = COLOR_SUCCESS if has_fav else COLOR_MUTED
+        favorable_names = get_favorable_trait_names(
+            cat, state.trait_requirements, state.game_data
+        )
+        trait_display = ", ".join(favorable_names)
 
         callback = row_callback or on_cat_selected
         user_data = (cat, state)
@@ -141,7 +142,9 @@ def render_cat_table_rows(
             for sv in stat_values:
                 dpg.add_text(str(sv))
             dpg.add_text(str(total))
-            dpg.add_text(trait_badge, color=badge_color)
+            dpg.add_text(
+                trait_display, color=COLOR_SUCCESS if favorable_names else COLOR_MUTED
+            )
 
 
 def substring_match(query: str, choices: list[str]) -> list[str]:
@@ -1492,7 +1495,22 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
     summary = get_pair_summary_data(pair, state)
 
     with dpg.group(parent=container):
-        dpg.add_text(f"Pair: {summary.names_display}", tag="pair_names")
+        name_a = pair.cat_a.name or "Unnamed"
+        name_b = pair.cat_b.name or "Unnamed"
+
+        with dpg.group(parent=container, horizontal=True):
+            dpg.add_button(
+                label=name_a,
+                callback=on_cat_selected,
+                user_data=(pair.cat_a, state),
+            )
+            dpg.add_text(" + ")
+            dpg.add_button(
+                label=name_b,
+                callback=on_cat_selected,
+                user_data=(pair.cat_b, state),
+            )
+
         dpg.add_text(
             f"Quality: {summary.quality:.1f} | Disorder: {summary.disorder_pct:.0f}% | Part Defect: {summary.part_defect_pct:.0f}% | Combined: {summary.combined_pct:.0f}%",
             color=summary.risk_color,
@@ -1541,7 +1559,12 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
                         dpg.add_text(
                             f"{prob_result.probability * 100:.1f}%", color=color
                         )
-                        dpg.add_text(prob_result.parent_source)
+                        source_color = (
+                            COLOR_MUTED
+                            if prob_result.parent_source == "Neither"
+                            else COLOR_DEFAULT_TEXT
+                        )
+                        dpg.add_text(prob_result.parent_source, color=source_color)
 
             hits = sum(1 for p in pair.factors.trait_probabilities if p.probability > 0)
             ev = (

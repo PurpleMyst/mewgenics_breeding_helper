@@ -57,6 +57,20 @@ class PairFactors:
     trait_probabilities: list[TraitInheritanceProbability]
 
     @property
+    def combined_disorder_chance(self) -> float:
+        """Combined novel + inherited disorder chance."""
+        return 1.0 - (1.0 - self.novel_disorder_chance) * (
+            1.0 - self.inherited_disorder_chance
+        )
+
+    @property
+    def combined_part_defect_chance(self) -> float:
+        """Combined novel + inherited part defect chance."""
+        return 1.0 - (1.0 - self.novel_part_defect_chance) * (
+            1.0 - self.inherited_part_defect_chance
+        )
+
+    @property
     def combined_malady_chance(self) -> float:
         """Probability of any birth malady (novel OR inherited, disorder OR part defect)."""
         # Disorder union: P(A or B) = 1 - (1-A)(1-B)

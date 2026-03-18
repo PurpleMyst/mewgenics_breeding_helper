@@ -2,11 +2,28 @@
 
 from dataclasses import dataclass
 
+from mewgenics_parser import GameData
 from mewgenics_room_optimizer import ScoredPair
+from mewgenics_room_optimizer.types import TraitRequirement
 from mewgenics_room_optimizer_ui.state import AppState
 
 COLOR_SUCCESS = (100, 255, 100, 255)
 COLOR_DANGER = (255, 100, 100, 255)
+COLOR_MUTED = (150, 150, 150, 255)
+
+
+def get_favorable_trait_names(
+    cat, trait_requirements: list[TraitRequirement], game_data: GameData
+) -> list[str]:
+    """Get list of favorable trait display names possessed by cat.
+
+    Uses domain method trait.get_display_name() for proper names.
+    """
+    return [
+        req.trait.get_display_name(game_data)
+        for req in trait_requirements
+        if req.trait.is_possessed_by(cat)
+    ]
 
 
 @dataclass
@@ -33,8 +50,8 @@ def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
     name_b = pair.cat_b.name or "Unnamed"
     names_display = f"{name_a} + {name_b}"
 
-    disorder = pair.factors.novel_disorder_chance * 100
-    part_defect = pair.factors.novel_part_defect_chance * 100
+    disorder = pair.factors.combined_disorder_chance * 100
+    part_defect = pair.factors.combined_part_defect_chance * 100
     combined = pair.factors.combined_malady_chance * 100
     risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
 
