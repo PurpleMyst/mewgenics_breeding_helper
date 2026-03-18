@@ -264,7 +264,6 @@ def build_room_config_section(state: AppState) -> None:
             room_types = ["breeding", "fighting", "general", "none"]
             for room in state.room_configs:
                 with dpg.table_row(parent="room_config_table"):
-                    dpg.add_text(room.key, tag=f"room_key_{room.key}")
                     dpg.add_text(room.display_name, tag=f"room_name_{room.key}")
                     dpg.add_combo(
                         room_types,
