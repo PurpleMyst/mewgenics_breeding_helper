@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import struct
-import warnings
+# import warnings
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import NamedTuple, TypeGuard
@@ -253,10 +253,10 @@ class Cat:
                     new_value = body_slots[i]
                     if new_value == 0:
                         continue
-                    if value != 0 and new_value != value:
-                        warnings.warn(
-                            f"Conflicting values for {part} for cat {db_key}: {value} vs {new_value}"
-                        )
+                    # if value != 0 and new_value != value:
+                    #     warnings.warn(
+                    #         f"Conflicting values for {part} for cat {db_key}: {value} vs {new_value}"
+                    #     )
                     value = new_value
             body_part_values[part] = value
         body_parts = CatBodyParts(

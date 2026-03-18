@@ -83,7 +83,7 @@ def _parse_mutation_gon(
                 mutation_id = int(mutation_id_str)
             except ValueError:
                 continue
-            name_val = _clean_game_text(
+            name = _clean_game_text(
                 _resolve_game_string(
                     mutation_info.pop(
                         "name", f"{category.title()} Mutation {mutation_id}"
@@ -91,7 +91,7 @@ def _parse_mutation_gon(
                     game_strings,
                 )
             )
-            desc_val = _clean_game_text(
+            desc = _clean_game_text(
                 _resolve_game_string(mutation_info.pop("desc", ""), game_strings)
             )
 
@@ -104,11 +104,13 @@ def _parse_mutation_gon(
                 stat_change = mutation_info.get(stat_name.lower())
                 if isinstance(stat_change, int):
                     stat_descriptions.append(f"{stat_change:+} {stat_name}")
-            if stat_descriptions and not desc_val:
-                desc_val = ", ".join(stat_descriptions)
+            if stat_descriptions and not desc:
+                desc = ", ".join(stat_descriptions)
+            if category.casefold() not in name.casefold():
+                name = f"{name} ({category.title()})"
 
             category_text[mutation_id] = NameAndDescription(
-                name=name_val, description=desc_val
+                name=name, description=desc
             )
         result[category] = defaultdict(lambda: NameAndDescription(), category_text)
     return result
