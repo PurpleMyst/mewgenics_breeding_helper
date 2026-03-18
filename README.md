@@ -227,4 +227,5 @@ just fix
 ## Credits
 
 - Original idea and reference: [MewgenicsBreedingManager](https://github.com/frankieg33/mewgenics_breeding_manager) by frankieg33
+- Favicon is an emoji from Twemoji, licensed under CC-BY 4.0 and obtained from [favicon.io](https://favicon.io/emoji-favicons/cat)
 - Developed with assistance from AI tools

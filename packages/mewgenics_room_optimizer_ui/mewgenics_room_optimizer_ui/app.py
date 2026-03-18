@@ -1,4 +1,5 @@
 """Entry point for room optimizer UI."""
+from pathlib import Path
 
 import argparse
 
@@ -44,7 +45,8 @@ def main():
 
     build_ui(state)
 
-    dpg.create_viewport(title="Room Optimizer", width=1000, height=700)
+    icon_path = str(Path(__file__).parent / "favicon.ico")
+    dpg.create_viewport(title="Room Optimizer", width=1000, height=700, small_icon=icon_path, large_icon=icon_path)
     dpg.setup_dearpygui()
     dpg.set_primary_window("main_window", True)
     dpg.show_viewport()
