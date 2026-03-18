@@ -393,6 +393,9 @@ def optimize_sa(
     cats_by_id = {c.db_key: c for c in sa_cats}
     pair_cache = PairCache()
 
+    # Build original state from save file (current room assignments)
+    original_state = {c.db_key: c.room or "" for c in cats}
+
     num_workers = max(1, multiprocessing.cpu_count() - 1)
     initial_states = [
         _generate_random_valid_state(sa_cats, sa_room_configs, seed=i)
@@ -401,6 +404,7 @@ def optimize_sa(
 
     best_overall_state = None
     best_overall_score = -float("inf")
+    MOVE_PENALTY_WEIGHT = 0.5
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = [
@@ -420,8 +424,20 @@ def optimize_sa(
         for future in concurrent.futures.as_completed(futures):
             try:
                 final_state, final_score = future.result()
-                if final_score > best_overall_score:
-                    best_overall_score = final_score
+
+                # Calculate how many cats moved from original save state
+                cats_moved = sum(
+                    1
+                    for cat_id, r in final_state.items()
+                    if r != original_state.get(cat_id)
+                    if r
+                )
+
+                # Apply movement penalty to prefer solutions with less disruption
+                adjusted_score = final_score - (cats_moved * MOVE_PENALTY_WEIGHT)
+
+                if adjusted_score > best_overall_score:
+                    best_overall_score = adjusted_score
                     best_overall_state = final_state
             except Exception:
                 pass
