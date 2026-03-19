@@ -2,6 +2,9 @@
 
 [![Python 3.14+](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/badge/uv-package_manager-orange)](https://github.com/astral-sh/uv)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub
+Issues](https://img.shields.io/github/issues/PurpleMyst/mewgenics_breeding_helper)](https://github.com/PurpleMyst/mewgenics_breeding_helper/issues)
 
 **Disclaimer: This project was developed with assistance from AI tools (OpenCode, Claude). Review all code before use.**
 
