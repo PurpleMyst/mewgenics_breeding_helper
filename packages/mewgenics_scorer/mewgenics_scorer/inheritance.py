@@ -326,7 +326,7 @@ def _calc_passive_inheritance(
         )
 
     if not parent_a_has and not parent_b_has:
-        return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
+        return TraitInheritanceProbability(trait, 0.0, "Neither", 0.0, 0.0)
 
     inherit_chance = _passive_inheritance_chance(stimulation)
     favor_chance = _class_favoring_chance(stimulation)
@@ -389,7 +389,7 @@ def _calc_body_part_inheritance(
     parent_b_has = body_trait.is_possessed_by(parent_b)
 
     if not parent_a_has and not parent_b_has:
-        return TraitInheritanceProbability(trait, 0.0, "none", 0.0, 0.0)
+        return TraitInheritanceProbability(trait, 0.0, "Neither", 0.0, 0.0)
 
     # 80% chance to inherit parts (vs 20% reroll)
     inherit_all_chance = 0.8
