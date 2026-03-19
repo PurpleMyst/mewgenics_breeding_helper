@@ -82,7 +82,7 @@ uv run ty check packages/mewgenics_parser/mewgenics_parser/cat.py
 ## Code Style Guidelines
 
 ### Type Hints
-- Use Python 3.14+ type syntax (e.g., `list[Cat]`, `dict[str, int]`)
+- Use Python 3\.13+ type syntax (e.g., `list[Cat]`, `dict[str, int]`)
 - Use union types: `str | None` is preferred over Optional[str]
 - `from __future__ import annotations` is only for files ported from MewgenicsBreedingManager
 - New code should use standard type hints
@@ -212,6 +212,6 @@ Mutations are treated as specific part variants (e.g., a mutated arm).
 ## Important Notes
 
 1. **Do not modify MewgenicsBreedingManager submodule** - it's a reference for understanding the game data format
-2. **Python 3.14+ required for all packages and root** - check `.python-version` for details
+2. **Python 3\.13+ required for all packages and root** - check `.python-version` for details
 3. **Use uv for all package management** - don't use pip directly
 4. **Use uv run for all tools** - ruff, ty, pytest, etc.
