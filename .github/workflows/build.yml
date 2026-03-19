@@ -1,0 +1,51 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true          # needed for your .png LFS files
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true # caches the uv download cache between runs
+
+      - name: Install dependencies
+        run: uv sync --all-packages
+
+      - name: Build executable
+        run: uv run pyinstaller MewgenicsBreedingHelper.spec --noconfirm
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MewgenicsBreedingHelper-${{ github.sha }}
+          path: dist/MewgenicsBreedingHelper/
+          retention-days: 7   # keep dev builds for a week
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        run: |
+          # Zip the onedir output into a single file for the release asset
+          Compress-Archive `
+            -Path dist\MewgenicsBreedingHelper\* `
+            -DestinationPath dist\MewgenicsBreedingHelper.zip
+
+      - name: Attach zip to GitHub release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/MewgenicsBreedingHelper.zip
