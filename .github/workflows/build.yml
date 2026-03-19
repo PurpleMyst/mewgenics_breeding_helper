@@ -11,17 +11,20 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          lfs: true          # needed for your .png LFS files
+          lfs: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: true # caches the uv download cache between runs
+          enable-cache: true
+          python-version: "3.13"
 
       - name: Install dependencies
         run: uv sync --all-packages
@@ -33,19 +36,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MewgenicsBreedingHelper-${{ github.sha }}
-          path: dist/MewgenicsBreedingHelper/
-          retention-days: 7   # keep dev builds for a week
+          path: dist/MewgenicsBreedingHelper.exe
+          retention-days: 7
 
-      - name: Upload to release
-        if: github.event_name == 'release'
-        run: |
-          # Zip the onedir output into a single file for the release asset
-          Compress-Archive `
-            -Path dist\MewgenicsBreedingHelper\* `
-            -DestinationPath dist\MewgenicsBreedingHelper.zip
-
-      - name: Attach zip to GitHub release
+      - name: Attach exe to GitHub release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/MewgenicsBreedingHelper.zip
+          files: dist/MewgenicsBreedingHelper.exe
