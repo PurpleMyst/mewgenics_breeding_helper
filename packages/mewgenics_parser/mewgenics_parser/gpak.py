@@ -216,6 +216,14 @@ class GameData:
             return gon_contents
 
     @classmethod
+    def empty(cls) -> Self:
+        return cls(
+            ability_text=defaultdict(lambda: NameAndDescription()),
+            body_part_text=defaultdict(lambda: defaultdict(lambda: NameAndDescription())),
+            game_strings={},
+        )
+
+    @classmethod
     def extract_and_dump(cls, gpak_path: str, output_path: str) -> None:
         """Create a zip file containing all GON and CSV files extracted from the GPAK."""
         gon_contents = cls.read_gon_contents(gpak_path)

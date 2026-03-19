@@ -1,24 +1,22 @@
 """Application state for room optimizer UI."""
 
-from typing import Self
-
 import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 from mewgenics_parser import Cat
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import Trait, create_trait, extract_traits_from_cat
 from mewgenics_room_optimizer import (
+    DEFAULT_ROOM_CONFIGS,
     OptimizationResult,
     RoomConfig,
     RoomType,
-    DEFAULT_ROOM_CONFIGS,
 )
 from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer import TraitRequirement
-
 
 CONFIG_DIR = Path.home() / ".mewgenics_room_optimizer"
 CONFIG_FILE = CONFIG_DIR / "config.json"
@@ -165,7 +163,11 @@ class AppState:
     selected_result_room_key: str | None = None
     selected_cat_db_key: int | None = None
     last_save_path: str | None = None
-    game_data: GameData = field(default_factory=lambda: GameData.from_gpak(_find_gpak_path()))
+    game_data: GameData = field(
+        default_factory=lambda: GameData.from_gpak(p)
+        if (p := _find_gpak_path())
+        else GameData.empty()
+    )
 
     min_stats: int = 0
     max_risk: float = 0.2  # Probability (0.0-1.0), displayed as percentage in UI
