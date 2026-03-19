@@ -1,13 +1,18 @@
 """Entry point for room optimizer UI."""
 
-from pathlib import Path
-
 import argparse
+import multiprocessing
+import sys
+from pathlib import Path
+from typing import Any
 
-import dearpygui.dearpygui as dpg
-
-from mewgenics_room_optimizer_ui.state import AppState
-from mewgenics_room_optimizer_ui.ui import build_ui
+# Restore standard Windows DLL search path before loading DearPyGui.
+# PyInstaller's bootloader calls SetDllDirectoryW(_internal) which
+# replaces the standard search path, preventing system DLLs like
+# d3d11.dll and dxgi.dll from being found in System32.
+if sys.platform == "win32":
+    import ctypes
+    ctypes.windll.kernel32.SetDllDirectoryW(None)
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,7 +24,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_startup_save(filepath: str, state: AppState) -> bool:
+def load_startup_save(filepath: str, state: Any) -> bool:
     """Load a save file at startup."""
     from mewgenics_parser import parse_save
 
@@ -35,6 +40,12 @@ def load_startup_save(filepath: str, state: AppState) -> bool:
 
 def main() -> None:
     """Main entry point."""
+
+    import dearpygui.dearpygui as dpg
+
+    from mewgenics_room_optimizer_ui.ui import build_ui
+    from mewgenics_room_optimizer_ui.state import AppState
+
     args = parse_args()
 
     dpg.create_context()
@@ -46,7 +57,8 @@ def main() -> None:
 
     build_ui(state)
 
-    icon_path = str(Path(__file__).parent / "favicon.ico")
+    bundle_dir = getattr(sys, "_MEIPASS", Path(__file__).parent)
+    icon_path = str(Path(bundle_dir) / "favicon.ico")
     dpg.create_viewport(
         title="Room Optimizer",
         width=1000,
@@ -64,4 +76,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()  # For PyInstaller on Windows
     main()

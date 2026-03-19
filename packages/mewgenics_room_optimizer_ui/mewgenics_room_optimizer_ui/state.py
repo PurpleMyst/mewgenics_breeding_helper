@@ -38,10 +38,6 @@ def _find_gpak_path() -> str:
     return ""
 
 
-# Load game data once at module import
-_GAME_DATA = GameData.from_gpak(_find_gpak_path())
-
-
 def _ensure_config_dir() -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -169,7 +165,7 @@ class AppState:
     selected_result_room_key: str | None = None
     selected_cat_db_key: int | None = None
     last_save_path: str | None = None
-    game_data: GameData = field(default_factory=lambda: _GAME_DATA)
+    game_data: GameData = field(default_factory=lambda: GameData.from_gpak(_find_gpak_path()))
 
     min_stats: int = 0
     max_risk: float = 0.2  # Probability (0.0-1.0), displayed as percentage in UI

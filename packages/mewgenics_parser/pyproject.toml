@@ -2,7 +2,7 @@
 name = "mewgenics_parser"
 version = "0.1.0"
 description = "Package for parsing Mewgenics save files and related data."
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "lz4>=4.4.5",
 ]
