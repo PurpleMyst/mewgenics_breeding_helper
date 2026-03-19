@@ -176,7 +176,7 @@ def build_ui(state: AppState) -> None:
             dpg.mvKey_Return, callback=on_global_enter, user_data=state
         )
 
-    with dpg.window(tag="main_window", label="Room Optimizer", width=1200, height=700):
+    with dpg.window(tag="main_window", label="Breeding Helper", width=1200, height=700):
         build_menu_bar(state)
         build_toolbar(state)
 

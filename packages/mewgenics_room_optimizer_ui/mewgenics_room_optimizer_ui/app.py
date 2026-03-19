@@ -17,7 +17,7 @@ if sys.platform == "win32":
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Mewgenics Room Optimizer")
+    parser = argparse.ArgumentParser(description="Mewgenics Breeding Helper")
     parser.add_argument(
         "save_file", nargs="?", help="Path to .sav file to load on startup"
     )
@@ -60,7 +60,7 @@ def main() -> None:
     bundle_dir = getattr(sys, "_MEIPASS", Path(__file__).parent)
     icon_path = str(Path(bundle_dir) / "favicon.ico")
     dpg.create_viewport(
-        title="Room Optimizer",
+        title="Breeding Helper",
         width=1000,
         height=700,
         small_icon=icon_path,
