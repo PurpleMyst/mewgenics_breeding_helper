@@ -1,27 +1,33 @@
 """Tests for mewgenics_scorer factors module."""
 
 import pytest
-from inline_snapshot import snapshot
 from mewgenics_parser import Cat, TraitCategory, create_trait
 from mewgenics_parser.cat import CatBodyParts, CatGender, CatStatus, Stats
-
-from mewgenics_scorer.factors import *
-from mewgenics_scorer.factors import _aggression_factor, _libido_factor, _stat_variance
-from mewgenics_scorer.inheritance import *
+from mewgenics_parser.traits import (
+    BodyPartTrait,
+    cat_has_defect_in_slot,
+    cat_has_mutation_in_slot,
+)
+from mewgenics_scorer.factors import (
+    PairFactors,
+    _aggression_factor,
+    _libido_factor,
+    _stat_variance,
+    calculate_pair_factors,
+)
 from mewgenics_scorer.inheritance import (
     _better_chance,
     _class_favoring_chance,
     _passive_inheritance_chance,
     _spell_inheritance_chance,
-    cat_has_defect_in_slot,
-    cat_has_mutation_in_slot,
+    calculate_trait_probability,
+    expected_stats,
     inherited_disorder_chance,
     inherited_part_defect_chance,
     novel_disorder_chance,
     novel_part_defect_chance,
 )
 from mewgenics_scorer.types import TraitRequirement
-from mewgenics_parser.traits import BodyPartTrait
 
 
 def _default_body_parts() -> CatBodyParts:
