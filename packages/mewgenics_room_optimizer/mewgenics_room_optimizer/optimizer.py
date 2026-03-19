@@ -9,6 +9,7 @@ from mewgenics_parser import Cat
 from mewgenics_scorer import (
     AncestorData,
     ScoringPreferences,
+    TraitRequirement,
     calculate_pair_factors,
     calculate_pair_quality,
     can_breed,
@@ -60,6 +61,16 @@ def can_pair_gay(cat_a: Cat, cat_b: Cat, gay_cats_by_id: set[int]) -> bool:
 def _cat_stats_sum(cat: Cat) -> int:
     """Calculate total base stats for a cat."""
     return sum(cat.stat_base)
+
+
+def _calculate_trait_weight_sum(
+    cat: Cat,
+    trait_requirements: list[TraitRequirement],
+) -> float:
+    """Calculate sum of weights of favorable traits possessed by a cat."""
+    if not trait_requirements:
+        return 0.0
+    return sum(tr.weight for tr in trait_requirements if tr.trait.is_possessed_by(cat))
 
 
 def _filter_cats(cats: list[Cat], min_stats: int) -> list[Cat]:
@@ -499,29 +510,28 @@ def _build_results_from_state_dict(
                 room_pairs[room.key].append(scored)
 
     # --- POST-PROCESSING CLEANUP ---
-    # Pack remaining cats into Fighting and General rooms deterministically
     unassigned = [c for c in sa_cats if c.db_key not in assigned_cats]
     general_rooms = [r for r in room_configs if r.room_type == RoomType.GENERAL]
     fighting_rooms = [r for r in room_configs if r.room_type == RoomType.FIGHTING]
 
-    # Trait carriers to General rooms first
-    trait_cats = [
-        c
-        for c in unassigned
-        if any(t.trait.is_possessed_by(c) for t in params.trait_requirements)
-    ]
-    for cat in trait_cats:
-        for room in general_rooms:
-            if _can_fit_single(room, len(rooms_content[room.key])):
-                rooms_content[room.key].append(cat)
-                assigned_cats.add(cat.db_key)
-                break
+    # Sort descending by (trait_weight_sum, stat_sum) - higher value = more desirable
+    unassigned.sort(
+        key=lambda c: (
+            _calculate_trait_weight_sum(c, params.trait_requirements),
+            sum(c.stat_base),
+        ),
+        reverse=True,
+    )
 
-    # Remaining high-stat cats to Fighting, then General
-    remaining = [c for c in unassigned if c.db_key not in assigned_cats]
-    remaining.sort(key=lambda c: sum(c.stat_base), reverse=True)
-    for cat in remaining:
-        for room in fighting_rooms + general_rooms:
+    for cat in unassigned:
+        trait_weight = _calculate_trait_weight_sum(cat, params.trait_requirements)
+        rooms_to_try = (
+            (general_rooms + fighting_rooms)
+            if trait_weight > 0
+            else (fighting_rooms + general_rooms)
+        )
+
+        for room in rooms_to_try:
             if _can_fit_single(room, len(rooms_content[room.key])):
                 rooms_content[room.key].append(cat)
                 assigned_cats.add(cat.db_key)
