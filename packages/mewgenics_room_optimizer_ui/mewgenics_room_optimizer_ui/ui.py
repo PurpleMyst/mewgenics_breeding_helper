@@ -1,16 +1,13 @@
 """DearPyGui UI components for room optimizer."""
 
 import traceback
-from collections.abc import Callable
 from typing import Any
 
 import dearpygui.dearpygui as dpg
-from mewgenics_parser import Cat, TraitCategory
-from mewgenics_parser.traits import extract_traits_from_cat
+from mewgenics_parser import TraitCategory
 from mewgenics_room_optimizer import OptimizationResult, RoomAssignment, RoomType
-from mewgenics_scorer import ScoringPreferences, TraitRequirement
+from mewgenics_scorer import ScoringPreferences
 
-from .themes import build_themes
 from .colors import (
     COLOR_DANGER,
     COLOR_EY_TEAL,
@@ -19,99 +16,19 @@ from .colors import (
     COLOR_SUCCESS,
     COLOR_WARNING,
 )
-from .components.inspector.base import build_inspector_section, clear_inspector
-from .components.inspector.cat import (
-    on_all_cats_cat_selected,
-    on_cat_selected,
+from .components.cats_table import (
+    add_cat_table_cols,
+    build_all_cats_tab,
+    render_cat_table_rows,
+    update_all_cats_table,
 )
+from .components.inspector.base import build_inspector_section, clear_inspector
+from .components.inspector.cat import on_cat_selected
 from .components.inspector.pair import on_pair_selected
-from .components.traits import init_traits_lists, on_add_trait, build_traits_section
-from .helpers import get_favorable_trait_names, get_pair_summary_data, trait_substring_match
+from .components.traits import build_traits_section, init_traits_lists, on_add_trait
+from .helpers import LOCATION_COL_WIDTH, get_assigned_room_key, get_pair_summary_data
 from .state import AppState
-
-LOCATION_COL_WIDTH = 125
-
-
-def render_cat_table_rows(
-    cats: list[Cat],
-    state: AppState,
-    parent_table_tag: str,
-    show_location: bool = True,
-    is_ey_check: bool = False,
-    eternal_youth_cats: list[Cat] | None = None,
-    name_callback: Callable | None = None,
-    row_callback: Callable | None = None,
-    row_tag_prefix: str = "row",
-) -> None:
-    """Universal renderer for cat table rows to enforce consistent UI."""
-
-    for cat in cats:
-        if is_ey_check and eternal_youth_cats:
-            is_ey = cat in eternal_youth_cats
-        else:
-            is_ey = cat.has_eternal_youth()
-
-        cat_name = name_callback(cat) if name_callback else (cat.name or "Unnamed")
-
-        sex_display = (
-            cat.gender.value if hasattr(cat.gender, "value") else str(cat.gender)
-        )
-        age = cat.age if cat.age is not None else 0
-        age = min(age, 100)
-        age_display = f"{age} [EY]" if is_ey else str(age)
-
-        assigned_room = _get_assigned_room_key(cat.db_key, state.results)
-        current_room = cat.room
-        if assigned_room is None:
-            loc_color = COLOR_WARNING
-        elif current_room == assigned_room:
-            loc_color = COLOR_SUCCESS
-        else:
-            loc_color = COLOR_DANGER
-
-        stat_values = cat.stat_total
-        total = sum(stat_values)
-
-        favorable_names = get_favorable_trait_names(
-            cat, state.trait_requirements, state.game_data
-        )
-        trait_display = ", ".join(favorable_names)
-
-        callback = row_callback or on_cat_selected
-        user_data = (cat, state)
-        tag = f"{row_tag_prefix}_{parent_table_tag}_{cat.db_key}"
-
-        with dpg.table_row(parent=parent_table_tag):
-            dpg.add_selectable(
-                label=cat_name,
-                span_columns=True,
-                callback=callback,
-                user_data=user_data,
-                tag=tag,
-            )
-
-            dpg.add_text(str(sex_display))
-            dpg.add_text(age_display)
-
-            if show_location:
-                display_room = (
-                    current_room if current_room is not None else "Unassigned"
-                )
-                dpg.add_text(cat.room_display or display_room, color=loc_color)
-
-            for sv in stat_values:
-                dpg.add_text(str(sv))
-            dpg.add_text(str(total))
-            dpg.add_text(
-                trait_display, color=COLOR_SUCCESS if favorable_names else COLOR_MUTED
-            )
-
-
-def substring_match(query: str, choices: list[str]) -> list[str]:
-    """Return items containing query as substring (case-insensitive)."""
-    if not query:
-        return choices
-    return [c for c in choices if query.casefold() in c.casefold()]
+from .themes import build_themes
 
 
 def build_ui(state: AppState) -> None:
@@ -386,102 +303,6 @@ def on_param_changed(sender: int, app_data: Any, user_data: AppState) -> None:
     user_data.save()
 
 
-def on_cat_name_filter(sender: int, app_data: str, user_data: AppState) -> None:
-    """Filter All Cats table by name with fuzzy matching."""
-    filter_text = app_data or ""
-    update_all_cats_table(
-        user_data, filter_text, dpg.get_value("cat_trait_filter") or ""
-    )
-
-
-def on_cat_trait_filter(sender: int, app_data: str, user_data: AppState) -> None:
-    """Filter All Cats table by trait with fuzzy matching."""
-    filter_text = app_data or ""
-    update_all_cats_table(
-        user_data, dpg.get_value("cat_name_filter") or "", filter_text
-    )
-
-
-def on_toggle_show_all_cats(sender: int, app_data: bool, user_data: AppState) -> None:
-    """Toggle showing non-In-House cats."""
-    update_all_cats_table(
-        user_data,
-        dpg.get_value("cat_name_filter") or "",
-        dpg.get_value("cat_trait_filter") or "",
-    )
-
-
-def _cat_has_favorable_trait(
-    cat: Cat, trait_requirements: list[TraitRequirement]
-) -> bool:
-    """Check if cat has any favorable trait from planner."""
-    return any(req.trait.is_possessed_by(cat) for req in trait_requirements)
-
-
-def _get_assigned_room_key(
-    cat_db_key: int, results: OptimizationResult | None
-) -> str | None:
-    """Get the room key a cat is assigned to in optimization results."""
-    if not results:
-        return None
-    for room in results.rooms:
-        if any(c.db_key == cat_db_key for c in room.cats):
-            return room.room.key
-    return None
-
-
-def update_all_cats_table(
-    state: AppState, name_filter: str = "", trait_filter: str = ""
-) -> None:
-    """Update the All Cats table with filtered cats."""
-    table = "all_cats_table"
-    placeholder = "all_cats_placeholder"
-
-    if not dpg.does_item_exist(table):
-        return
-
-    children = dpg.get_item_children(table)
-    if children and 1 in children:
-        for row in children[1]:  # type: ignore[iterable]
-            dpg.delete_item(row)
-
-    show_all = dpg.get_value("show_all_cats")
-    cats = state.cats if show_all else state.alive_cats
-
-    name_filtered = substring_match(name_filter, [c.name or "" for c in cats])
-    name_filtered_set = set(name_filtered)
-
-    filtered_cats = [c for c in cats if (c.name or "") in name_filtered_set]
-
-    if trait_filter:
-        trait_filtered = []
-        for cat in filtered_cats:
-            traits = extract_traits_from_cat(cat)
-            if trait_substring_match(trait_filter, traits, state.game_data):
-                trait_filtered.append(cat)
-        filtered_cats = trait_filtered
-
-    if not filtered_cats:
-        dpg.show_item(placeholder)
-        return
-
-    dpg.hide_item(placeholder)
-
-    def all_cats_row_callback(
-        sender: int, app_data: bool, user_data: tuple[Cat, AppState]
-    ) -> None:
-        cat, state = user_data
-        on_all_cats_cat_selected(sender, app_data, (cat.db_key, state))
-
-    render_cat_table_rows(
-        cats=filtered_cats,
-        state=state,
-        parent_table_tag=table,
-        row_callback=all_cats_row_callback,
-        row_tag_prefix="all_cats_row",
-    )
-
-
 def build_results_tab(state: AppState) -> None:
     """Build the results tab with room summary and details."""
     with dpg.collapsing_header(label="Results", default_open=True):
@@ -506,64 +327,6 @@ def build_results_tab(state: AppState) -> None:
             dpg.add_text(
                 "Select a room from results to see details", tag="details_placeholder"
             )
-
-
-def build_all_cats_tab(state: AppState) -> None:
-    """Build the All Cats tab with searchable cat table."""
-    with dpg.collapsing_header(label="All Cats", default_open=True):
-        with dpg.child_window(height=350, border=True, tag="all_cats_section"):
-            with dpg.group(horizontal=True):
-                dpg.add_input_text(
-                    tag="cat_name_filter",
-                    hint="Filter by name...",
-                    width=150,
-                    callback=on_cat_name_filter,
-                    user_data=state,
-                )
-                dpg.add_input_text(
-                    tag="cat_trait_filter",
-                    hint="Filter by trait...",
-                    width=150,
-                    callback=on_cat_trait_filter,
-                    user_data=state,
-                )
-                dpg.add_checkbox(
-                    tag="show_all_cats",
-                    label="Show non-In-House",
-                    default_value=False,
-                    callback=on_toggle_show_all_cats,
-                    user_data=state,
-                )
-
-            with dpg.table(
-                tag="all_cats_table",
-                header_row=True,
-                borders_innerH=True,
-                row_background=True,
-                height=280,
-            ):
-                dpg.add_table_column(label="Name", width_fixed=True)
-                dpg.add_table_column(label="Sex", width_fixed=True)
-                dpg.add_table_column(label="Age", width_fixed=True)
-                dpg.add_table_column(
-                    label="Location",
-                    width_fixed=True,
-                    init_width_or_weight=LOCATION_COL_WIDTH,
-                )
-                dpg.add_table_column(label="STR", width_fixed=True)
-                dpg.add_table_column(label="DEX", width_fixed=True)
-                dpg.add_table_column(label="CON", width_fixed=True)
-                dpg.add_table_column(label="INT", width_fixed=True)
-                dpg.add_table_column(label="SPD", width_fixed=True)
-                dpg.add_table_column(label="CHA", width_fixed=True)
-                dpg.add_table_column(label="LCK", width_fixed=True)
-                dpg.add_table_column(label="Sum", width_fixed=True)
-                dpg.add_table_column(label="Traits", width_stretch=True)
-
-            dpg.add_text("Load a save to see cats", tag="all_cats_placeholder")
-
-    if state.cats:
-        update_all_cats_table(state)
 
 
 def on_global_enter(sender: int, app_data: Any, user_data: AppState) -> None:
@@ -992,38 +755,11 @@ def build_details_tabs(selected_room: RoomAssignment, state: AppState) -> None:
                 borders_innerH=True,
                 row_background=True,
             ):
-                dpg.add_table_column(label="Name", width_fixed=True)
-                dpg.add_table_column(label="Sex", width_fixed=True)
-                dpg.add_table_column(label="Age", width_fixed=True)
-                dpg.add_table_column(
-                    label="Location",
-                    width_fixed=True,
-                    init_width_or_weight=LOCATION_COL_WIDTH,
-                )
-                dpg.add_table_column(label="STR", width_fixed=True)
-                dpg.add_table_column(label="DEX", width_fixed=True)
-                dpg.add_table_column(label="CON", width_fixed=True)
-                dpg.add_table_column(label="INT", width_fixed=True)
-                dpg.add_table_column(label="SPD", width_fixed=True)
-                dpg.add_table_column(label="CHA", width_fixed=True)
-                dpg.add_table_column(label="LCK", width_fixed=True)
-                dpg.add_table_column(label="Sum", width_fixed=True)
-                dpg.add_table_column(label="Traits", width_fixed=True)
-
-                def details_name_callback(cat: Cat) -> str:
-                    is_ey = cat in selected_room.eternal_youth_cats
-                    cat_name = cat.name or "Unnamed"
-                    if is_ey:
-                        return f"{cat_name} [EY]"
-                    return cat_name
-
+                add_cat_table_cols()
                 render_cat_table_rows(
                     cats=all_cats,
                     state=state,
                     parent_table_tag="cats_detail_table",
-                    is_ey_check=True,
-                    eternal_youth_cats=list(selected_room.eternal_youth_cats),
-                    name_callback=details_name_callback,
                     row_callback=on_cat_selected,
                     row_tag_prefix="cat_row",
                 )
@@ -1040,7 +776,7 @@ def build_details_tabs(selected_room: RoomAssignment, state: AppState) -> None:
             for cat in state.alive_cats:
                 # Check if the cat is actually living in this room right now
                 if cat.room == selected_room.room.key:
-                    assigned_room = _get_assigned_room_key(cat.db_key, state.results)
+                    assigned_room = get_assigned_room_key(cat.db_key, state.results)
 
                     # If the optimizer put them in a different room, flag them as misplaced
                     if (

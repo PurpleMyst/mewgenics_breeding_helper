@@ -133,30 +133,6 @@ def on_cat_selected(
     show_cat_detail_window(cat, state)
 
 
-def on_all_cats_cat_selected(
-    sender: int, app_data: bool, user_data: tuple[int, AppState]
-) -> None:
-    """Handle cat selection in All Cats table with radio behavior."""
-    db_key, state = user_data
-
-    if state.selected_cat_db_key is not None and state.selected_cat_db_key != db_key:
-        old_item = f"all_cats_row_{state.selected_cat_db_key}"
-        if dpg.does_item_exist(old_item):
-            dpg.set_value(old_item, False)
-
-    cat = None
-    for c in state.cats:
-        if c.db_key == db_key:
-            cat = c
-            break
-
-    if not cat:
-        return
-
-    state.selected_cat_db_key = db_key
-    show_cat_detail_window(cat, state)
-
-
 def on_toggle_gay(sender: int, app_data: bool, user_data: tuple[int, AppState]) -> None:
     """Set gay flag for a cat based on checkbox state."""
     db_key, state = user_data

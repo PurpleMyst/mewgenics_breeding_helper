@@ -4,13 +4,14 @@ from dataclasses import dataclass
 
 from mewgenics_parser import GameData
 from mewgenics_parser.traits import Trait
-from mewgenics_room_optimizer import ScoredPair
+from mewgenics_room_optimizer import ScoredPair, OptimizationResult
 from mewgenics_room_optimizer.types import TraitRequirement
+
 from mewgenics_room_optimizer_ui.state import AppState
 
-COLOR_SUCCESS = (100, 255, 100, 255)
-COLOR_DANGER = (255, 100, 100, 255)
-COLOR_MUTED = (150, 150, 150, 255)
+from .colors import COLOR_DANGER, COLOR_SUCCESS
+
+LOCATION_COL_WIDTH = 125
 
 
 def get_favorable_trait_names(
@@ -82,6 +83,14 @@ def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
         trait_ev=trait_ev,
     )
 
+
+def plain_substring_match(query: str, choices: list[str]) -> list[str]:
+    """Return items containing query as substring (case-insensitive)."""
+    if not query:
+        return choices
+    return [c for c in choices if query.casefold() in c.casefold()]
+
+
 def trait_substring_match(
     query: str, choices: list[Trait], game_data: GameData
 ) -> list[Trait]:
@@ -94,5 +103,16 @@ def trait_substring_match(
         if query.casefold() in display.casefold():
             result.append(t)
     return result
+
+def get_assigned_room_key(
+    cat_db_key: int, results: OptimizationResult | None
+) -> str | None:
+    """Get the room key a cat is assigned to in optimization results."""
+    if not results:
+        return None
+    for room in results.rooms:
+        if any(c.db_key == cat_db_key for c in room.cats):
+            return room.room.key
+    return None
 
 
