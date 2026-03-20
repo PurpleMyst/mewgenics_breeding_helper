@@ -32,13 +32,13 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
         name_a = pair.cat_a.name or "Unnamed"
         name_b = pair.cat_b.name or "Unnamed"
 
-        with dpg.group(parent=container, horizontal=True):
+        with dpg.group(horizontal=True):
             dpg.add_button(
                 label=name_a,
                 callback=on_cat_selected,
                 user_data=(pair.cat_a, state),
             )
-            dpg.add_text(" + ")
+            dpg.add_text("+")
             dpg.add_button(
                 label=name_b,
                 callback=on_cat_selected,
