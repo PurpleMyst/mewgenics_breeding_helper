@@ -5,7 +5,6 @@ from ...tags import Tags
 from ...colors import COLOR_MUTED
 
 
-
 def clear_inspector(state: AppState) -> None:
     """Clear the inspector panel and show placeholder."""
     container = "inspector_container"
@@ -21,6 +20,7 @@ def clear_inspector(state: AppState) -> None:
     state.selected_pair = None
     state.selected_pair_index = None
 
+
 def build_inspector_section(state: AppState) -> None:
     """Build the inspector panel with tabs for cat and pair inspection."""
     with dpg.collapsing_header(label="Inspector", default_open=True):
@@ -30,7 +30,11 @@ def build_inspector_section(state: AppState) -> None:
             with dpg.tab(
                 label="Cat", parent=Tags.INSPECTOR_TAB_BAR, tag=Tags.INSPECTOR_CAT_TAB
             ):
-                dpg.add_text("Select a cat to inspect", color=COLOR_MUTED, tag=Tags.INSPECTOR_PLACEHOLDER)
+                dpg.add_text(
+                    "Select a cat to inspect",
+                    color=COLOR_MUTED,
+                    tag=Tags.INSPECTOR_PLACEHOLDER,
+                )
                 dpg.add_group(tag=Tags.INSPECTOR_CONTAINER)
 
             with dpg.tab(
@@ -39,8 +43,6 @@ def build_inspector_section(state: AppState) -> None:
                 dpg.add_text(
                     "Select a pair to view trait inheritance probabilities",
                     tag=Tags.INSPECTOR_PAIR_PLACEHOLDER,
-                    color=COLOR_MUTED
+                    color=COLOR_MUTED,
                 )
                 dpg.add_group(tag=Tags.INSPECTOR_PAIR_CONTAINER)
-
-

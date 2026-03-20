@@ -603,5 +603,3 @@ def clear_results_table() -> None:
             for row in children[1]:  # type: ignore[iterable]
                 dpg.delete_item(row)
     dpg.show_item("results_placeholder")
-
-

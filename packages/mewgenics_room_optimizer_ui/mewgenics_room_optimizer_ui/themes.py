@@ -15,5 +15,3 @@ def build_themes() -> None:
             dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (150, 50, 50, 255))
 
     dpg.bind_theme(global_theme)
-
-

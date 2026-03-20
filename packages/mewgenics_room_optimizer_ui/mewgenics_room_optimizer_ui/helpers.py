@@ -104,6 +104,7 @@ def trait_substring_match(
             result.append(t)
     return result
 
+
 def get_assigned_room_key(
     cat_db_key: int, results: OptimizationResult | None
 ) -> str | None:
@@ -114,5 +115,3 @@ def get_assigned_room_key(
         if any(c.db_key == cat_db_key for c in room.cats):
             return room.room.key
     return None
-
-

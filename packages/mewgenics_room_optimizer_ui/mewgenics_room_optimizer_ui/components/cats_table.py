@@ -86,9 +86,7 @@ def render_cat_table_rows(
             dpg.add_text(str(sex_display))
             dpg.add_text(age_display)
 
-            display_room = (
-                current_room if current_room is not None else "Unassigned"
-            )
+            display_room = current_room if current_room is not None else "Unassigned"
             dpg.add_text(cat.room_display or display_room, color=loc_color)
 
             for sv in stat_values:

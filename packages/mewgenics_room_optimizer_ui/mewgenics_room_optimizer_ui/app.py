@@ -12,6 +12,7 @@ from typing import Any
 # d3d11.dll and dxgi.dll from being found in System32.
 if sys.platform == "win32":
     import ctypes
+
     ctypes.windll.kernel32.SetDllDirectoryW(None)
 
 

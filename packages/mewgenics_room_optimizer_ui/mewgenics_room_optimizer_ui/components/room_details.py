@@ -2,12 +2,7 @@ import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat
 from mewgenics_room_optimizer import RoomAssignment
 
-from ..colors import (
-    COLOR_DANGER,
-    COLOR_MUTED,
-    COLOR_SUCCESS,
-    COLOR_WARNING,
-)
+from ..colors import COLOR_DANGER, COLOR_MUTED, COLOR_SUCCESS, COLOR_WARNING
 from ..components.cats_table import add_cat_table_cols, render_cat_table_rows
 from ..components.inspector.base import clear_inspector
 from ..components.inspector.cat import on_cat_selected
@@ -72,15 +67,21 @@ def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
                 )
                 dpg.add_text(
                     f"{summary.libido_factor:.2f}",
-                    color=COLOR_SUCCESS if summary.libido_factor >= 0.6 else COLOR_MUTED,
+                    color=COLOR_SUCCESS
+                    if summary.libido_factor >= 0.6
+                    else COLOR_MUTED,
                 )
                 dpg.add_text(
                     f"{summary.aggression_factor:.2f}",
-                    color=COLOR_SUCCESS if summary.aggression_factor <= 0.4 else COLOR_DANGER,
+                    color=COLOR_SUCCESS
+                    if summary.aggression_factor <= 0.4
+                    else COLOR_DANGER,
                 )
                 dpg.add_text(
                     f"{summary.charisma_factor:.2f}",
-                    color=COLOR_SUCCESS if summary.charisma_factor >= 0.4 else COLOR_MUTED,
+                    color=COLOR_SUCCESS
+                    if summary.charisma_factor >= 0.4
+                    else COLOR_MUTED,
                 )
                 if summary.stat_variance <= 5.0:
                     var_color = COLOR_SUCCESS
@@ -143,7 +144,10 @@ def _build_misplaced_tab(selected_room: RoomAssignment, state: AppState) -> None
         return
 
     misplaced.sort(
-        key=lambda x: (x["cat"].age if x["cat"].age is not None else 999, x["cat"].name or "")
+        key=lambda x: (
+            x["cat"].age if x["cat"].age is not None else 999,
+            x["cat"].name or "",
+        )
     )
 
     with dpg.table(
