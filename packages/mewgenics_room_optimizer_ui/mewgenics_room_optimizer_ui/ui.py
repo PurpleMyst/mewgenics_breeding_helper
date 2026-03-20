@@ -6,56 +6,30 @@ from typing import Any
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat, TraitCategory
-from mewgenics_parser.cat import CatStatus
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import Trait, create_trait, extract_traits_from_cat
-from mewgenics_room_optimizer import OptimizationResult, RoomType, RoomAssignment
-from mewgenics_room_optimizer.types import ScoredPair
+from mewgenics_room_optimizer import OptimizationResult, RoomAssignment, RoomType
 from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
-from .state import AppState
+from .themes import build_themes
+from .colors import (
+    COLOR_DANGER,
+    COLOR_EY_TEAL,
+    COLOR_HIGH_RISK_ROW,
+    COLOR_MUTED,
+    COLOR_SUCCESS,
+    COLOR_WARNING,
+)
+from .components.inspector.base import build_inspector_section, clear_inspector
+from .components.inspector.cat import (
+    on_all_cats_cat_selected,
+    on_cat_selected,
+)
+from .components.inspector.pair import on_pair_selected
 from .helpers import get_favorable_trait_names, get_pair_summary_data
+from .state import AppState
 
 LOCATION_COL_WIDTH = 125
-
-
-COLOR_SUCCESS = (100, 255, 100, 255)
-COLOR_WARNING = (255, 200, 100, 255)
-COLOR_DANGER = (255, 100, 100, 255)
-COLOR_EY_TEAL = (0, 255, 255, 255)
-COLOR_MUTED = (150, 150, 150, 255)
-COLOR_LOVER = (255, 150, 200, 255)
-COLOR_DEFAULT_TEXT = (255, 255, 255, 255)
-COLOR_AGGRESSION = (100, 200, 255, 255)
-COLOR_DISORDER_DESC = (255, 150, 150, 255)
-COLOR_HIGH_RISK_ROW = (50, 30, 30, 255)
-
-
-def _render_trait_tree_node(label: str, traits: list[Trait], state: AppState) -> None:
-    """Reusable component for rendering a collapsable list of traits in the inspector."""
-    with dpg.tree_node(label=f"{label} ({len(traits)})", default_open=True):
-        if not traits:
-            dpg.add_text("None", color=COLOR_MUTED)
-            return
-
-        for trait in traits:
-            name = trait.get_display_name(state.game_data)
-            desc = trait.get_description(state.game_data)
-            if not name and not desc:
-                print(trait)
-
-            is_fav = any(trait.key == req.trait.key for req in state.trait_requirements)
-
-            if trait.is_negative():
-                color = COLOR_DANGER
-                prefix = "  "
-            else:
-                color = COLOR_SUCCESS if is_fav else COLOR_DEFAULT_TEXT
-                prefix = "[*] " if is_fav else "  "
-
-            dpg.add_text(f"{prefix}{name}", color=color)
-            if desc:
-                dpg.add_text(f"    {desc}", color=COLOR_MUTED)
 
 
 def _format_trait_for_listbox(trait: Trait, game_data: GameData) -> str:
@@ -554,19 +528,6 @@ def on_clear_traits(sender: int, app_data: Any, user_data: AppState) -> None:
     update_traits_display(user_data)
 
 
-def on_toggle_gay(sender: int, app_data: bool, user_data: tuple[int, AppState]) -> None:
-    """Set gay flag for a cat based on checkbox state."""
-    db_key, state = user_data
-    if app_data:
-        state.gay_cats_by_id.add(db_key)
-    else:
-        state.gay_cats_by_id.discard(db_key)
-    state.save()
-    cat = next((c for c in state.cats if c.db_key == db_key), None)
-    if cat:
-        show_cat_detail_window(cat, state)
-
-
 def on_trait_weight_changed(
     sender: int, app_data: int, user_data: tuple[int, AppState]
 ) -> None:
@@ -818,44 +779,6 @@ def build_all_cats_tab(state: AppState) -> None:
 
     if state.cats:
         update_all_cats_table(state)
-
-
-def build_inspector_section(state: AppState) -> None:
-    """Build the inspector panel with tabs for cat and pair inspection."""
-    with dpg.collapsing_header(label="Inspector", default_open=True):
-        with dpg.child_window(border=True, tag="inspector_section"):
-            dpg.add_tab_bar(tag="inspector_tab_bar")
-
-            with dpg.tab(
-                label="Cat", parent="inspector_tab_bar", tag="inspector_cat_tab"
-            ):
-                dpg.add_text("Select a cat to inspect", tag="inspector_placeholder")
-                dpg.add_group(tag="inspector_container")
-
-            with dpg.tab(
-                label="Pair", parent="inspector_tab_bar", tag="inspector_pair_tab"
-            ):
-                dpg.add_text(
-                    "Select a pair to view trait inheritance probabilities",
-                    tag="inspector_pair_placeholder",
-                )
-                dpg.add_group(tag="inspector_pair_container")
-
-
-def build_themes() -> None:
-    """Build application themes."""
-    with dpg.theme() as global_theme:
-        with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (25, 25, 35, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_Text, (200, 200, 200, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_Button, (60, 120, 200, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (80, 140, 220, 255))
-
-    with dpg.theme(tag="input_error_theme"):
-        with dpg.theme_component(dpg.mvInputText):
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (150, 50, 50, 255))
-
-    dpg.bind_theme(global_theme)
 
 
 def on_global_enter(sender: int, app_data: Any, user_data: AppState) -> None:
@@ -1163,48 +1086,6 @@ def clear_details_section() -> None:
                 dpg.delete_item(child)
 
 
-def clear_inspector(state: AppState | None = None) -> None:
-    """Clear the inspector panel and show placeholder."""
-    container = "inspector_container"
-    if dpg.does_item_exist(container):
-        dpg.delete_item(container, children_only=True)
-    dpg.show_item("inspector_placeholder")
-    dpg.hide_item(container)
-
-    pair_container = "inspector_pair_container"
-    if dpg.does_item_exist(pair_container):
-        dpg.delete_item(pair_container, children_only=True)
-    dpg.show_item("inspector_pair_placeholder")
-
-    if state is not None:
-        state.selected_pair = None
-        state.selected_pair_index = None
-
-
-def on_all_cats_cat_selected(
-    sender: int, app_data: bool, user_data: tuple[int, AppState]
-) -> None:
-    """Handle cat selection in All Cats table with radio behavior."""
-    db_key, state = user_data
-
-    if state.selected_cat_db_key is not None and state.selected_cat_db_key != db_key:
-        old_item = f"all_cats_row_{state.selected_cat_db_key}"
-        if dpg.does_item_exist(old_item):
-            dpg.set_value(old_item, False)
-
-    cat = None
-    for c in state.cats:
-        if c.db_key == db_key:
-            cat = c
-            break
-
-    if not cat:
-        return
-
-    state.selected_cat_db_key = db_key
-    show_cat_detail_window(cat, state)
-
-
 def on_room_selected(
     sender: int, app_data: bool, user_data: tuple[str, AppState]
 ) -> None:
@@ -1242,28 +1123,6 @@ def on_room_selected(
 
     clear_details_section()
     build_details_tabs(selected_room, state)
-
-
-def on_pair_selected(
-    sender: int, app_data: bool, user_data: tuple[int, ScoredPair, AppState]
-) -> None:
-    """Handle pair selection with radio behavior - only one pair selected at a time."""
-    pair_index, pair, state = user_data
-
-    if state.selected_pair_index is not None:
-        old_item = f"pair_selectable_{state.selected_pair_index}"
-        if dpg.does_item_exist(old_item):
-            dpg.set_value(old_item, False)
-
-    state.selected_pair_index = pair_index
-    state.selected_pair = pair
-
-    dpg.set_value(sender, True)
-
-    if dpg.does_item_exist("inspector_tab_bar"):
-        dpg.set_value("inspector_tab_bar", "inspector_pair_tab")
-
-    show_pair_detail_window(pair, state)
 
 
 def build_details_tabs(selected_room: RoomAssignment, state: AppState) -> None:
@@ -1471,229 +1330,3 @@ def build_details_tabs(selected_room: RoomAssignment, state: AppState) -> None:
                             dpg.add_text(item["assigned_room"])
             else:
                 dpg.add_text("No misplaced cats in this room")
-
-
-def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
-    """Show pair details in the inspector panel with trait inheritance probabilities."""
-    from mewgenics_scorer import calculate_trait_probability
-
-    container = "inspector_pair_container"
-    if not dpg.does_item_exist(container):
-        return
-
-    dpg.hide_item("inspector_pair_placeholder")
-    dpg.show_item(container)
-
-    dpg.delete_item(container, children_only=True)
-
-    summary = get_pair_summary_data(pair, state)
-
-    with dpg.group(parent=container):
-        name_a = pair.cat_a.name or "Unnamed"
-        name_b = pair.cat_b.name or "Unnamed"
-
-        with dpg.group(parent=container, horizontal=True):
-            dpg.add_button(
-                label=name_a,
-                callback=on_cat_selected,
-                user_data=(pair.cat_a, state),
-            )
-            dpg.add_text(" + ")
-            dpg.add_button(
-                label=name_b,
-                callback=on_cat_selected,
-                user_data=(pair.cat_b, state),
-            )
-
-        dpg.add_text(
-            f"Quality: {summary.quality:.1f} | Disorder: {summary.disorder_pct:.0f}% | Part Defect: {summary.part_defect_pct:.0f}% | Combined: {summary.combined_pct:.0f}%",
-            color=summary.risk_color,
-        )
-
-        if state.trait_requirements:
-            stimulation = 50.0
-            for rc in state.room_configs:
-                if rc.room_type.value == "breeding":
-                    stimulation = rc.base_stim
-                    break
-
-            dpg.add_separator()
-            dpg.add_text("Trait Inheritance Probabilities:")
-
-            with dpg.table(
-                tag="pair_trait_prob_table",
-                header_row=True,
-                borders_innerH=True,
-                row_background=True,
-            ):
-                dpg.add_table_column(label="Trait", width_stretch=True)
-                dpg.add_table_column(
-                    label="Type", width_fixed=True, init_width_or_weight=80
-                )
-                dpg.add_table_column(
-                    label="Probability", width_fixed=True, init_width_or_weight=90
-                )
-                dpg.add_table_column(label="Source", width_stretch=True)
-
-                for trait_req in state.trait_requirements:
-                    prob_result = calculate_trait_probability(
-                        trait_req, pair.cat_a, pair.cat_b, stimulation
-                    )
-
-                    if prob_result.probability >= 0.5:
-                        color = COLOR_SUCCESS
-                    elif prob_result.probability >= 0.25:
-                        color = COLOR_WARNING
-                    else:
-                        color = COLOR_DANGER
-
-                    with dpg.table_row():
-                        dpg.add_text(trait_req.trait.get_display_name(state.game_data))
-                        dpg.add_text(trait_req.trait.category.display_name)
-                        dpg.add_text(
-                            f"{prob_result.probability * 100:.1f}%", color=color
-                        )
-                        source_color = (
-                            COLOR_MUTED
-                            if prob_result.parent_source == "Neither"
-                            else COLOR_DEFAULT_TEXT
-                        )
-                        dpg.add_text(prob_result.parent_source, color=source_color)
-
-            hits = sum(1 for p in pair.factors.trait_probabilities if p.probability > 0)
-            ev = (
-                sum(
-                    p.probability * p.trait.weight
-                    for p in pair.factors.trait_probabilities
-                )
-                * 5.0
-            )
-            total = len(state.trait_requirements)
-            if ev >= 1:
-                dpg.add_text(
-                    f"[* EV: {ev:.2f} from {hits}/{total} traits]",
-                    color=COLOR_SUCCESS,
-                )
-        else:
-            dpg.add_text("No favorable traits configured", color=COLOR_MUTED)
-
-
-def on_cat_selected(
-    sender: int, app_data: bool, user_data: tuple[Cat, AppState]
-) -> None:
-    """Handle cat selection - show detail window with radio behavior."""
-    cat, state = user_data
-
-    if (
-        state.selected_cat_db_key is not None
-        and state.selected_cat_db_key != cat.db_key
-    ):
-        old_item = f"cat_row_{state.selected_cat_db_key}"
-        if dpg.does_item_exist(old_item):
-            dpg.set_value(old_item, False)
-
-    state.selected_cat_db_key = cat.db_key
-
-    show_cat_detail_window(cat, state)
-
-
-def show_cat_detail_window(cat: Cat, state: AppState) -> None:
-    """Show cat details in the inspector panel."""
-    from mewgenics_parser.constants import STAT_NAMES
-
-    container = "inspector_container"
-    if not dpg.does_item_exist(container):
-        return
-
-    if dpg.does_item_exist("inspector_tab_bar"):
-        dpg.set_value("inspector_tab_bar", "inspector_cat_tab")
-
-    dpg.hide_item("inspector_placeholder")
-    dpg.show_item(container)
-
-    dpg.delete_item(container, children_only=True)
-
-    with dpg.group(parent=container):
-        room_display = cat.room or "Unknown"
-        if cat.room:
-            for rc in state.room_configs:
-                if rc.key == cat.room:
-                    room_display = rc.display_name
-                    break
-
-        with dpg.table(
-            tag="bio_table",
-            header_row=False,
-            borders_innerH=False,
-            borders_innerV=False,
-            borders_outerH=False,
-            borders_outerV=False,
-        ):
-            dpg.add_table_column(width_fixed=True)
-            dpg.add_table_column(width_fixed=True)
-            dpg.add_table_column(width_fixed=True)
-            dpg.add_table_column(width_fixed=True)
-            dpg.add_table_column(width_fixed=True)
-            dpg.add_table_column(width_fixed=True)
-            dpg.add_table_column(width_fixed=True)
-
-            with dpg.table_row():
-                lover_names = []
-                for lover in cat.lovers:
-                    lover_name = lover.name
-                    if lover.status and lover.status != CatStatus.IN_HOUSE:
-                        lover_name += f" ({lover.status})"
-                    lover_names.append(lover_name)
-                lovers_str = ", ".join(lover_names) if lover_names else "-"
-
-                hater_names = []
-                for hater in cat.haters or []:
-                    hater_name = hater.name
-                    if hater.status and hater.status != CatStatus.IN_HOUSE:
-                        hater_name += f" ({hater.status})"
-                    hater_names.append(hater_name)
-                haters_str = ", ".join(hater_names) if hater_names else "-"
-
-                dpg.add_text(f"Name: {cat.name or 'Unnamed'}")
-                dpg.add_text(f"Gender: {cat.gender}")
-                dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
-                dpg.add_text(f"Status: {cat.status}")
-                dpg.add_text(f"Room: {room_display}")
-                dpg.add_text(f"Lovers: {lovers_str}", color=COLOR_LOVER)
-                dpg.add_text(f"Haters: {haters_str}", color=COLOR_DANGER)
-
-            with dpg.table_row():
-                for i, stat in enumerate(cat.stat_base):
-                    dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
-
-        is_gay = cat.db_key in state.gay_cats_by_id
-        dpg.add_checkbox(
-            label="Same-Sex Breeding Preference",
-            default_value=is_gay,
-            callback=on_toggle_gay,
-            user_data=(cat.db_key, state),
-        )
-
-        dpg.add_separator()
-
-        all_traits = extract_traits_from_cat(cat)
-        active_traits = [
-            t for t in all_traits if t.category == TraitCategory.ACTIVE_ABILITY
-        ]
-        passive_traits = [
-            t for t in all_traits if t.category == TraitCategory.PASSIVE_ABILITY
-        ]
-        disorder_traits = [
-            t for t in all_traits if t.category == TraitCategory.DISORDER
-        ]
-        body_part_traits = [
-            t for t in all_traits if t.category == TraitCategory.BODY_PART
-        ]
-        _render_trait_tree_node("Active Abilities", active_traits, state)
-        _render_trait_tree_node("Passive Abilities", passive_traits, state)
-        _render_trait_tree_node(
-            "Disorders",
-            disorder_traits,
-            state,
-        )
-        _render_trait_tree_node("Body Parts", body_part_traits, state)

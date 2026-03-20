@@ -249,7 +249,7 @@ wheels = [
 
 [[package]]
 name = "mewgenics-breeding-helper"
-version = "0.1.0"
+version = "1.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "dearpygui" },
@@ -262,8 +262,10 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "beautifulsoup4" },
     { name = "dirty-equals" },
     { name = "pytest" },
+    { name = "requests" },
     { name = "ruff" },
     { name = "ty" },
 ]
@@ -280,15 +282,17 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "dirty-equals", specifier = ">=0.11" },
     { name = "pytest", specifier = ">=9.0.2" },
+    { name = "requests", specifier = ">=2.32.5" },
     { name = "ruff", specifier = ">=0.15.6" },
     { name = "ty", specifier = ">=0.0.23" },
 ]
 
 [[package]]
 name = "mewgenics-parser"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "packages/mewgenics_parser" }
 dependencies = [
     { name = "lz4" },
@@ -324,7 +328,7 @@ dev = [
 
 [[package]]
 name = "mewgenics-room-optimizer"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "packages/mewgenics_room_optimizer" }
 dependencies = [
     { name = "mewgenics-parser" },
@@ -358,7 +362,7 @@ dev = [{ name = "dirty-equals", specifier = ">=0.11" }]
 
 [[package]]
 name = "mewgenics-room-optimizer-ui"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "packages/mewgenics_room_optimizer_ui" }
 dependencies = [
     { name = "dearpygui" },
@@ -385,7 +389,7 @@ dev = [{ name = "pyinstaller", specifier = ">=6.19.0" }]
 
 [[package]]
 name = "mewgenics-scorer"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "packages/mewgenics_scorer" }
 dependencies = [
     { name = "mewgenics-parser" },

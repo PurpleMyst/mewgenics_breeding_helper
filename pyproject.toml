@@ -38,8 +38,10 @@ extra-paths = [
 
 [dependency-groups]
 dev = [
+    "beautifulsoup4>=4.14.3",
     "dirty-equals>=0.11",
     "pytest>=9.0.2",
+    "requests>=2.32.5",
     "ruff>=0.15.6",
     "ty>=0.0.23",
 ]
