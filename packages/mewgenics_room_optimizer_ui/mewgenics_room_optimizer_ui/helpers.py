@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from mewgenics_parser import GameData
+from mewgenics_parser.traits import Trait
 from mewgenics_room_optimizer import ScoredPair
 from mewgenics_room_optimizer.types import TraitRequirement
 from mewgenics_room_optimizer_ui.state import AppState
@@ -80,3 +81,18 @@ def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
         stat_variance=stat_variance,
         trait_ev=trait_ev,
     )
+
+def trait_substring_match(
+    query: str, choices: list[Trait], game_data: GameData
+) -> list[Trait]:
+    """Return trait items containing query as substring (case-insensitive)."""
+    if not query:
+        return choices
+    result = []
+    for t in choices:
+        display = f"{t.key} | {t.get_display_name(game_data)} | {t.get_description(game_data)}"
+        if query.casefold() in display.casefold():
+            result.append(t)
+    return result
+
+
