@@ -31,13 +31,12 @@ def _clean_game_text(text: str) -> str:
 
 def _resolve_game_string(value: str, game_strings: dict[str, str]) -> str:
     """Resolve a game string reference chain."""
+    assert "" not in game_strings, "Empty string key would cause infinite loop"
     resolved = value
     seen: set[str] = set()
     while resolved in game_strings and resolved not in seen:
         seen.add(resolved)
         nxt = game_strings[resolved].strip()
-        if not nxt:
-            break
         resolved = nxt
     return resolved
 

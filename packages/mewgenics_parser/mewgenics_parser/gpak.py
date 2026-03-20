@@ -25,41 +25,54 @@ def _parse_gon_abilities(
 
     d = _parse_gon_to_dicts(content)
     result: dict[str, NameAndDescription] = {}
-    for ability_id, data in d.items():
-        if not isinstance(data, dict):
+    for ability_id, ability_info in d.items():
+        if not isinstance(ability_info, dict):
             continue
 
         # Seems to be that templates have their data under a "meta" key, IDK man.
-        raw_name = data.get("name", data.get("meta", {}).get("name", ""))
+        raw_name = ability_info.get("name", ability_info.get("meta", {}).get("name", ""))
         name = _clean_game_text(_resolve_game_string(raw_name, game_strings))
 
-        raw_desc = data.get("desc", data.get("meta", {}).get("desc", ""))
+        raw_desc = ability_info.get("desc", ability_info.get("meta", {}).get("desc", ""))
         desc = _clean_game_text(_resolve_game_string(raw_desc, game_strings))
 
         # If both name and description are empty, try to look under variant_of or just go with sane
         # defaults.
         if not name or not desc:
-            variant_of = data.get("variant_of", "")
+            variant_of = ability_info.get("variant_of", "")
             if isinstance(variant_of, str) and variant_of in result:
                 name = name or result[variant_of].name
                 desc = desc or result[variant_of].description
 
         name = name or ability_id
 
+        # TODO: This is just lazily copy-pasted from the mutation parsing code, it should be adapted
+        # to an helper + it should be handled for upgraded abilities as well.
+        stat_descriptions = []
+        for stat_name in STAT_NAMES:
+            # XXX: ↑ The body part GON files have the stat changes directly under the mutation
+            # entry, but the ability GON files have them nested under "stats", so we need to check
+            # both places.
+            stat_change = ability_info.get("stats", {}).get(stat_name.lower())
+            if isinstance(stat_change, int):
+                stat_descriptions.append(f"{stat_change:+} {stat_name}")
+        if stat_descriptions:
+            desc += (" " if desc else "") + ", ".join(stat_descriptions)
+
         # Load upgraded versions of the ability (e.g., "Fireball2" for "Fireball+") if they exist in
         # the GON data, using the same description if not specified.
         for i in range(2, 10):
-            if str(i) in data:
+            if str(i) in ability_info:
                 result[f"{ability_id}{i}"] = NameAndDescription(
                     name=_clean_game_text(
                         _resolve_game_string(
-                            data[str(i)].get("name", f"{name}{'+' * (i - 1)}"),
+                            ability_info[str(i)].get("name", f"{name}{'+' * (i - 1)}"),
                             game_strings,
                         )
                     ),
                     description=_clean_game_text(
                         _resolve_game_string(
-                            data[str(i)].get("desc", desc), game_strings
+                            ability_info[str(i)].get("desc", desc), game_strings
                         )
                     ),
                 )
