@@ -8,24 +8,14 @@ from mewgenics_parser import TraitCategory
 from mewgenics_room_optimizer import OptimizationResult, RoomType
 from mewgenics_scorer import ScoringPreferences
 
-from .colors import (
-    COLOR_DANGER,
-    COLOR_EY_TEAL,
-    COLOR_HIGH_RISK_ROW,
-    COLOR_MUTED,
-)
-from .components.cats_table import (
-    build_all_cats_tab,
-    update_all_cats_table,
-)
+from .colors import COLOR_DANGER, COLOR_EY_TEAL, COLOR_HIGH_RISK_ROW, COLOR_MUTED
+from .components.cats_table import build_all_cats_tab, update_all_cats_table
 from .components.inspector.base import build_inspector_section, clear_inspector
+from .components.room_details import build_details_section  # called once in build_ui
+from .components.room_details import clear_details_section, on_room_selected
 from .components.traits import build_traits_section, init_traits_lists, on_add_trait
 from .state import AppState
 from .themes import build_themes
-from .components.room_details import (
-    clear_details_section,
-    on_room_selected,
-)
 
 
 def build_ui(state: AppState) -> None:
@@ -50,7 +40,9 @@ def build_ui(state: AppState) -> None:
             with dpg.child_window(border=False):
                 with dpg.tab_bar():
                     with dpg.tab(label="Results"):
-                        build_results_tab(state)
+                        build_results_section(state)
+                        build_details_section(state)
+
                     with dpg.tab(label="All Cats"):
                         build_all_cats_tab(state)
 
@@ -300,8 +292,8 @@ def on_param_changed(sender: int, app_data: Any, user_data: AppState) -> None:
     user_data.save()
 
 
-def build_results_tab(state: AppState) -> None:
-    """Build the results tab with room summary and details."""
+def build_results_section(state: AppState) -> None:
+    """Build the results table shell."""
     with dpg.collapsing_header(label="Results", default_open=True):
         with dpg.child_window(height=200, border=True, tag="results_section"):
             with dpg.table(
@@ -318,12 +310,6 @@ def build_results_tab(state: AppState) -> None:
                 dpg.add_table_column(label="Risk %")
 
             dpg.add_text("Run optimization to see results", tag="results_placeholder")
-
-    with dpg.collapsing_header(label="Room Details", default_open=True):
-        with dpg.child_window(height=200, border=True, tag="details_section"):
-            dpg.add_text(
-                "Select a room from results to see details", tag="details_placeholder"
-            )
 
 
 def on_global_enter(sender: int, app_data: Any, user_data: AppState) -> None:

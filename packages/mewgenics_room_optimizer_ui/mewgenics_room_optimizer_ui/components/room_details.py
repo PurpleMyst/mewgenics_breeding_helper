@@ -11,8 +11,21 @@ from ..helpers import LOCATION_COL_WIDTH, get_assigned_room_key, get_pair_summar
 from ..state import AppState
 
 
-def build_details_tabs(selected_room: RoomAssignment, state: AppState) -> None:
-    """Build the tabbed details view for a selected room."""
+def build_details_section(state: AppState) -> None:
+    """Called once at startup. Creates the static shell only."""
+    with dpg.collapsing_header(label="Room Details", default_open=True):
+        with dpg.child_window(height=200, border=True, tag="details_section"):
+            dpg.add_text(
+                "Select a room from results to see details",
+                tag="details_placeholder",
+            )
+
+
+def update_details_section(selected_room: RoomAssignment, state: AppState) -> None:
+    """Called on room selection. Clears and repopulates the child window content."""
+    clear_details_section()
+    dpg.hide_item("details_placeholder")
+
     dpg.add_tab_bar(parent="details_section", tag="details_tab_bar")
 
     with dpg.tab(label="Pairs", parent="details_tab_bar"):
@@ -24,6 +37,16 @@ def build_details_tabs(selected_room: RoomAssignment, state: AppState) -> None:
     with dpg.tab(label="Misplaced", parent="details_tab_bar"):
         _build_misplaced_tab(selected_room, state)
 
+
+def clear_details_section() -> None:
+    """Clear content and restore the placeholder."""
+    section = "details_section"
+    if dpg.does_item_exist(section):
+        children = dpg.get_item_children(section)
+        if children and 1 in children:
+            for child in children[1]:  # type: ignore[iterable]
+                dpg.delete_item(child)
+    dpg.show_item("details_placeholder")
 
 def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
     if not selected_room.pairs:
@@ -140,7 +163,7 @@ def _build_misplaced_tab(selected_room: RoomAssignment, state: AppState) -> None
             misplaced.append({"cat": cat, "assigned_room": assigned_display})
 
     if not misplaced:
-        dpg.add_text("No misplaced cats in this room", color=COLOR_SUCCESS)
+        dpg.add_text("No misplaced cats in this room")
         return
 
     misplaced.sort(
@@ -171,20 +194,10 @@ def _build_misplaced_tab(selected_room: RoomAssignment, state: AppState) -> None
         for item in misplaced:
             cat = item["cat"]
             with dpg.table_row():
-                dpg.add_text(cat.name)
-                dpg.add_text(str(cat.age or 0))
+                dpg.add_text(cat.name or "Unnamed")
+                dpg.add_text(str(cat.age if cat.age is not None else 0))
                 dpg.add_text(selected_room.room.display_name)
                 dpg.add_text(item["assigned_room"])
-
-
-def clear_details_section() -> None:
-    """Clear the details section."""
-    section = "details_section"
-    if dpg.does_item_exist(section):
-        children = dpg.get_item_children(section)
-        if children and 1 in children:
-            for child in children[1]:  # type: ignore[iterable]
-                dpg.delete_item(child)
 
 
 def on_room_selected(
@@ -217,5 +230,4 @@ def on_room_selected(
     if not selected_room:
         return
 
-    clear_details_section()
-    build_details_tabs(selected_room, state)
+    update_details_section(selected_room, state)
