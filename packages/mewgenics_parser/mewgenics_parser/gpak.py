@@ -248,7 +248,5 @@ class GameData:
         gon_contents = cls.read_gon_contents(gpak_path)
         with zipfile.ZipFile(output_path, "w") as zf:
             for fname, content in gon_contents.items():
-                if fname.endswith(".gon") or (
-                    fname.startswith("data/text/") and fname.endswith(".csv")
-                ):
+                if fname.endswith(".gon") or fname.endswith(".csv"):
                     zf.writestr(fname, content)
