@@ -10,10 +10,13 @@ from mewgenics_scorer.compatibility import (
 )
 
 
-def make_cat(db_key: int, gender: CatGender = CatGender.MALE, lovers=None, haters=None):
+def make_cat(
+    db_key: int, gender: CatGender = CatGender.MALE, lover_id=None, hater_id=None
+):
     return Cat(
         db_key=db_key,
         name=f"Cat_{db_key}",
+        name_tag="",
         gender=gender,
         status=CatStatus.IN_HOUSE,
         room=None,
@@ -22,7 +25,7 @@ def make_cat(db_key: int, gender: CatGender = CatGender.MALE, lovers=None, hater
         age=0,
         aggression=0.5,
         libido=0.5,
-        coi=0.0,
+        sexuality=None,
         active_abilities=[],
         passive_abilities=[],
         disorders=[],
@@ -40,8 +43,10 @@ def make_cat(db_key: int, gender: CatGender = CatGender.MALE, lovers=None, hater
         ),
         parent_a=None,
         parent_b=None,
-        lovers=list(lovers) if lovers else [],
-        haters=list(haters) if haters else [],
+        lover_id=lover_id,
+        hater_id=hater_id,
+        lover=None,
+        hater=None,
     )
 
 
@@ -69,14 +74,14 @@ class TestCanBreed:
         assert can_breed(a, b) is False
 
     def test_unknown_gender_can_breed_with_any(self):
-        a = make_cat(1, CatGender.NONBINARY)
+        a = make_cat(1, CatGender.DITTO)
         b = make_cat(2, CatGender.MALE)
         assert can_breed(a, b) is True
         assert can_breed(b, a) is True
 
     def test_unknown_gender_can_breed_with_unknown(self):
-        a = make_cat(1, CatGender.NONBINARY)
-        b = make_cat(2, CatGender.NONBINARY)
+        a = make_cat(1, CatGender.DITTO)
+        b = make_cat(2, CatGender.DITTO)
         assert can_breed(a, b) is True
 
 
@@ -90,18 +95,17 @@ class TestIsHaterConflict:
 
     def test_a_hates_b(self):
         b = make_cat(2, CatGender.FEMALE)
-        a = make_cat(1, CatGender.MALE, haters=[b])
+        a = make_cat(1, CatGender.MALE, hater_id=2)
         assert is_hater_conflict(a, b) is True
 
     def test_b_hates_a(self):
         a = make_cat(1, CatGender.MALE)
-        b = make_cat(2, CatGender.FEMALE, haters=[a])
+        b = make_cat(2, CatGender.FEMALE, hater_id=1)
         assert is_hater_conflict(a, b) is True
 
     def test_mutual_hate(self):
-        a = make_cat(1, CatGender.MALE)
-        b = make_cat(2, CatGender.FEMALE, haters=[a])
-        a = make_cat(1, CatGender.MALE, haters=[b])
+        a = make_cat(1, CatGender.MALE, hater_id=2)
+        b = make_cat(2, CatGender.FEMALE, hater_id=1)
         assert is_hater_conflict(a, b) is True
 
 
@@ -110,7 +114,7 @@ class TestIsLoverConflict:
 
     def test_avoid_lovers_disabled(self):
         a = make_cat(1, CatGender.MALE)
-        b = make_cat(2, CatGender.FEMALE, lovers=[a])
+        b = make_cat(2, CatGender.FEMALE, lover_id=1)
         assert is_lover_conflict(a, b, avoid_lovers=False) is False
 
     def test_avoid_lovers_enabled_no_relationship(self):
@@ -120,22 +124,17 @@ class TestIsLoverConflict:
 
     def test_avoid_lovers_enabled_one_sided_lover(self):
         a = make_cat(1, CatGender.MALE)
-        b = make_cat(2, CatGender.FEMALE, lovers=[a])
+        b = make_cat(2, CatGender.FEMALE, lover_id=1)
         assert is_lover_conflict(a, b, avoid_lovers=True) is False
 
     def test_avoid_lovers_enabled_mutual_lovers(self):
-        # When both cats are mutual lovers, there's no conflict (they want to breed together)
-        a = make_cat(1, CatGender.MALE)
-        b = make_cat(2, CatGender.FEMALE)
-        a.lovers.append(b)
-        b.lovers.append(a)
-        # This should be False - mutual lovers are not a conflict
+        a = make_cat(1, CatGender.MALE, lover_id=2)
+        b = make_cat(2, CatGender.FEMALE, lover_id=1)
         assert is_lover_conflict(a, b, avoid_lovers=True) is False
 
     def test_avoid_lovers_enabled_one_cheating(self):
         # When a has a lover c, but tries to breed with b (who is not that lover), it's a conflict
-        c = make_cat(3, CatGender.FEMALE)
-        a = make_cat(1, CatGender.MALE, lovers=[c])
+        a = make_cat(1, CatGender.MALE, lover_id=3)
         b = make_cat(2, CatGender.FEMALE)
         # a has lover c, but b is not c - this is a conflict
         assert is_lover_conflict(a, b, avoid_lovers=True) is True
@@ -150,13 +149,11 @@ class TestIsMutualLovers:
         assert is_mutual_lovers(a, b) is False
 
     def test_one_sided_lover(self):
-        b = make_cat(2, CatGender.FEMALE)
-        a = make_cat(1, CatGender.MALE, lovers=[b])
+        b = make_cat(2, CatGender.FEMALE, lover_id=1)
+        a = make_cat(1, CatGender.MALE)
         assert is_mutual_lovers(a, b) is False
 
     def test_mutual_lovers(self):
-        a = make_cat(1, CatGender.MALE)
-        b = make_cat(2, CatGender.FEMALE)
-        a.lovers.append(b)
-        b.lovers.append(a)
+        a = make_cat(1, CatGender.MALE, lover_id=2)
+        b = make_cat(2, CatGender.FEMALE, lover_id=1)
         assert is_mutual_lovers(a, b) is True

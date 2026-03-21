@@ -1,7 +1,6 @@
 """Integration tests for GPAK functions requiring a real GPAK file."""
 
 from inline_snapshot import snapshot
-from dirty_equals import IsInt
 
 from mewgenics_parser import parse_save
 from mewgenics_parser.cat import CatGender, CatStatus
@@ -9,6 +8,7 @@ from mewgenics_parser.gpak import GameData
 from mewgenics_parser.utils import NameAndDescription
 
 from mewgenics_parser.cat import CatBodyParts
+from mewgenics_parser.cat import Stats
 
 
 class TestParseSaveIntegration:
@@ -17,39 +17,63 @@ class TestParseSaveIntegration:
     def test_cat_from_save(self, savefile_path):
         """Test Cat.from_gpak produces correct structure."""
         save = parse_save(savefile_path)
-        cat = save.cats[0]
-        assert cat.db_key == snapshot(1)
-        assert cat.name == snapshot("Andrzej")
-        assert cat.gender == snapshot(CatGender.MALE)
+        cat = next(c for c in save.cats if "myst".casefold() in c.name.casefold())
+        assert cat.db_key == snapshot(819)
+        assert cat.name == snapshot("Myst")
+        assert cat.gender == snapshot(CatGender.FEMALE)
+        assert cat.sexuality == snapshot(0.08160075767255394)
         assert cat.status == snapshot(CatStatus.GONE)
         assert cat.room == snapshot(None)
-        assert cat.stat_base == snapshot((6, 4, 7, 5, 6, 3, 4))
-        assert cat.stat_total == snapshot((6, 4, 7, 6, 6, 3, 4))
-        assert cat.age == snapshot(IsInt())
-        assert cat.aggression == snapshot(0.47115162183106574)
-        assert cat.libido == snapshot(0.5)
-        assert cat.coi == snapshot(0.05)
-        assert cat.active_abilities == snapshot(["BasicMelee", "Spit", "Block"])
-        assert cat.passive_abilities == snapshot(["SelfAssured"])
+        assert cat.stat_base == snapshot(
+            Stats(
+                strength=7,
+                dexterity=7,
+                constitution=6,
+                intelligence=7,
+                speed=7,
+                charisma=7,
+                luck=6,
+            )
+        )
+        assert cat.stat_total == snapshot(
+            Stats(
+                strength=12,
+                dexterity=9,
+                constitution=11,
+                intelligence=8,
+                speed=10,
+                charisma=8,
+                luck=9,
+            )
+        )
+        assert cat.age == snapshot(62)
+        assert cat.aggression == snapshot(0.9648030361579043)
+        assert cat.libido == snapshot(0.6100491969838884)
+        assert cat.active_abilities == snapshot(
+            ["BasicButcherMelee", "Burp2", "Rally", "Grill", "Butcher"]
+        )
+        assert cat.passive_abilities == snapshot(["Masochist", "DukeOfFlies"])
         assert cat.disorders == snapshot([])
         assert cat.body_parts == snapshot(
             CatBodyParts(
-                texture=54,
-                body=19,
-                head=46,
-                tail=153,
-                legs=45,
-                arms=45,
-                eyes=133,
-                eyebrows=26,
-                ears=7,
-                mouth=50,
+                texture=304,
+                body=900,
+                head=900,
+                tail=900,
+                legs=900,
+                arms=900,
+                eyes=900,
+                eyebrows=900,
+                ears=900,
+                mouth=900,
             )
         )
-        assert cat.parent_a == snapshot(None)
-        assert cat.parent_b == snapshot(None)
-        assert cat.lovers == snapshot([])
-        assert cat.haters == snapshot([])
+        assert cat.parent_a is not None
+        assert cat.parent_b is not None
+        assert cat.parent_a.db_key == snapshot(700)
+        assert cat.parent_b.db_key == snapshot(781)
+        assert cat.lover_id == snapshot(821)
+        assert cat.hater_id == snapshot(766)
 
 
 class TestGpakIntegration:

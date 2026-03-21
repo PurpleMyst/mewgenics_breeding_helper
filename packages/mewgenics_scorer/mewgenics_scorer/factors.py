@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from mewgenics_parser import Cat
 
-from .ancestry import AncestorData, coi_from_contribs
+from .ancestry import KinshipManager
 from .compatibility import (
     can_breed,
     is_hater_conflict,
@@ -108,17 +108,14 @@ def _charisma_factor(a: Cat, b: Cat) -> float:
 
 
 def calculate_pair_factors(
+    kinship_manager: KinshipManager,
     a: Cat,
     b: Cat,
-    ancestor_contribs: dict[int, dict[int, AncestorData]],
     stimulation: float = DEFAULT_STIMULATION,
     avoid_lovers: bool = True,
     trait_requirements: list[TraitRequirement] | None = None,
 ) -> PairFactors:
     """Calculate all factors for a breeding pair."""
-    ca = ancestor_contribs.get(a.db_key, {})
-    cb = ancestor_contribs.get(b.db_key, {})
-    coi = coi_from_contribs(ca, cb)
 
     exp_stats = expected_stats(a, b, stimulation)
 
@@ -126,6 +123,8 @@ def calculate_pair_factors(
         calculate_trait_probability(trait, a, b, stimulation)
         for trait in (trait_requirements or [])
     ]
+
+    coi = kinship_manager.get_inbreeding_coefficient(a)
 
     return PairFactors(
         can_breed=can_breed(a, b),

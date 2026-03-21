@@ -136,7 +136,7 @@ def parse_save(path: str) -> SaveData:
 
     cats: list[Cat] = []
     for key, blob in rows:
-        cat = Cat.from_blob(blob, key, house, adv, current_day)
+        cat = Cat.from_save_data(blob, key, house, adv, current_day)
         cats.append(cat)
 
     cats_by_key: dict = {c.db_key: c for c in cats}
@@ -154,17 +154,15 @@ def parse_save(path: str) -> SaveData:
         cat.parent_a = pa
         cat.parent_b = pb
 
-        cat.lovers = []
-        for key in getattr(cat, "_lover_uids", []):
-            other = cats_by_key.get(key)
-            if other is not None and other is not cat and other not in cat.lovers:
-                cat.lovers.append(other)
+        if cat.lover_id is not None:
+            lover = cats_by_key.get(cat.lover_id)
+            if lover is not None and lover is not cat:
+                cat.lover = lover
 
-        cat.haters = []
-        for key in getattr(cat, "_hater_uids", []):
-            other = cats_by_key.get(key)
-            if other is not None and other is not cat and other not in cat.haters:
-                cat.haters.append(other)
+        if cat.hater_id is not None:
+            hater = cats_by_key.get(cat.hater_id)
+            if hater is not None and hater is not cat:
+                cat.hater = hater
 
     house_count = sum(1 for c in cats if c.status == "In House")
     adventure_count = sum(1 for c in cats if c.status == "Adventure")

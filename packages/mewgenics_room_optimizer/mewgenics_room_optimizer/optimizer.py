@@ -7,7 +7,7 @@ from typing import Callable
 
 from mewgenics_parser import Cat
 from mewgenics_scorer import (
-    AncestorData,
+    KinshipManager,
     ScoringPreferences,
     TraitRequirement,
     calculate_pair_factors,
@@ -100,7 +100,7 @@ def _generate_pairs(
 def score_pair(
     cat_a: Cat,
     cat_b: Cat,
-    ancestor_contribs: dict[int, dict[int, AncestorData]],
+    kinship_manager: KinshipManager,
     params: OptimizationParams,
     skip_risk_check: bool = False,
 ) -> ScoredPair | None:
@@ -118,9 +118,9 @@ def score_pair(
         return None
 
     factors = calculate_pair_factors(
+        kinship_manager,
         cat_a,
         cat_b,
-        ancestor_contribs,
         stimulation=params.stimulation,
         avoid_lovers=params.avoid_lovers,
         trait_requirements=params.trait_requirements,
@@ -155,7 +155,7 @@ def _evaluate_state(
     cats_by_id: dict[int, Cat],
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
-    ancestor_contribs: dict[int, dict[int, AncestorData]],
+    kinship_manager: KinshipManager,
     params: OptimizationParams,
 ) -> float:
     """Evaluate total quality for a room assignment state."""
@@ -192,7 +192,7 @@ def _evaluate_state(
                 a,
                 b,
                 true_stim,
-                lambda: score_pair(a, b, ancestor_contribs, effective_params),
+                lambda: score_pair(a, b, kinship_manager, effective_params),
             )
             if scored:
                 sum_quality += scored.quality
@@ -265,7 +265,7 @@ def _run_sa_worker(
     cats_by_id: dict[int, Cat],
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
-    ancestor_contribs: dict[int, dict[int, AncestorData]],
+    kinship_manager: KinshipManager,
     params: OptimizationParams,
     seed: int | None = None,
 ) -> tuple[dict[int, str], float]:
@@ -280,7 +280,7 @@ def _run_sa_worker(
 
     current_state = initial_state.copy()
     current_score = _evaluate_state(
-        current_state, cats_by_id, room_configs, pair_cache, ancestor_contribs, params
+        current_state, cats_by_id, room_configs, pair_cache, kinship_manager, params
     )
 
     best_state = current_state.copy()
@@ -298,7 +298,7 @@ def _run_sa_worker(
                 cats_by_id,
                 room_configs,
                 pair_cache,
-                ancestor_contribs,
+                kinship_manager,
                 params,
             )
 
@@ -359,7 +359,6 @@ def optimize_sa(
     cats: list[Cat],
     room_configs: list[RoomConfig],
     params: OptimizationParams,
-    ancestor_contribs: dict[int, dict[int, AncestorData]],
 ) -> OptimizationResult:
     """Optimize using Parallel Simulated Annealing."""
     import concurrent.futures
@@ -401,6 +400,7 @@ def optimize_sa(
         else:
             sa_room_configs.append(r)
 
+    kinship_manager = KinshipManager(cats)
     cats_by_id = {c.db_key: c for c in sa_cats}
     pair_cache = PairCache()
 
@@ -425,7 +425,7 @@ def optimize_sa(
                 cats_by_id,
                 sa_room_configs,
                 pair_cache,
-                ancestor_contribs,
+                kinship_manager,
                 params,
                 i,
             )
@@ -461,7 +461,7 @@ def optimize_sa(
         cats_by_id,
         sa_room_configs,
         pair_cache,
-        ancestor_contribs,
+        kinship_manager,
         params,
         sa_cats,
         ey_assignments,
@@ -474,7 +474,7 @@ def _build_results_from_state_dict(
     cats_by_id: dict[int, Cat],
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
-    ancestor_contribs: dict[int, dict[int, AncestorData]],
+    kinship_manager: KinshipManager,
     params: OptimizationParams,
     sa_cats: list[Cat],
     ey_assignments: dict[str, list[Cat]],
@@ -504,7 +504,7 @@ def _build_results_from_state_dict(
                 a,
                 b,
                 room.base_stim,
-                lambda: score_pair(a, b, ancestor_contribs, effective_params),
+                lambda: score_pair(a, b, kinship_manager, effective_params),
             )
             if scored:
                 room_pairs[room.key].append(scored)

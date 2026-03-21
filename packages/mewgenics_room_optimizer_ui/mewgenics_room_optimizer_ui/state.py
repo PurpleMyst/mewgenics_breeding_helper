@@ -164,9 +164,9 @@ class AppState:
     selected_cat_db_key: int | None = None
     last_save_path: str | None = None
     game_data: GameData = field(
-        default_factory=lambda: GameData.from_gpak(p)
-        if (p := _find_gpak_path())
-        else GameData.empty()
+        default_factory=lambda: (
+            GameData.from_gpak(p) if (p := _find_gpak_path()) else GameData.empty()
+        )
     )
 
     min_stats: int = 0

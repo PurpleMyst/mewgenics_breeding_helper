@@ -54,7 +54,7 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
 
             with dpg.table_row():
                 lover_names = []
-                for lover in cat.lovers:
+                for lover in filter(None, [cat.lover]):
                     lover_name = lover.name
                     if lover.status and lover.status != CatStatus.IN_HOUSE:
                         lover_name += f" ({lover.status})"
@@ -62,7 +62,7 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
                 lovers_str = ", ".join(lover_names) if lover_names else "-"
 
                 hater_names = []
-                for hater in cat.haters or []:
+                for hater in filter(None, [cat.hater]):
                     hater_name = hater.name
                     if hater.status and hater.status != CatStatus.IN_HOUSE:
                         hater_name += f" ({hater.status})"
@@ -74,8 +74,8 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
                 dpg.add_text(f"Age: {cat.age if cat.age is not None else 'Unknown'}")
                 dpg.add_text(f"Status: {cat.status}")
                 dpg.add_text(f"Room: {room_display}")
-                dpg.add_text(f"Lovers: {lovers_str}", color=COLOR_LOVER)
-                dpg.add_text(f"Haters: {haters_str}", color=COLOR_DANGER)
+                dpg.add_text(f"Lover: {lovers_str}", color=COLOR_LOVER)
+                dpg.add_text(f"Hater: {haters_str}", color=COLOR_DANGER)
 
             with dpg.table_row():
                 for i, stat in enumerate(cat.stat_base):

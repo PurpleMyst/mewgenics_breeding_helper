@@ -11,6 +11,12 @@ class BinaryReader:
         self.data = data
         self.pos = pos
 
+    def u8(self) -> int:
+        """Read unsigned 8-bit integer."""
+        v = self.data[self.pos]
+        self.pos += 1
+        return v
+
     def u32(self) -> int:
         """Read unsigned 32-bit integer (little-endian)."""
         v = struct.unpack_from("<I", self.data, self.pos)[0]
@@ -35,11 +41,13 @@ class BinaryReader:
         self.pos += 8
         return v
 
-    def str(self) -> builtins.str | None:
+    def str(self, *, print_length: bool = False) -> builtins.str | None:
         """Read length-prefixed UTF-8 string."""
         start = self.pos
         try:
             length = self.u64()
+            if print_length:
+                print(f"\t{length}")
             if length < 0 or length > 10_000:
                 self.pos = start
                 return None
@@ -69,6 +77,16 @@ class BinaryReader:
     def seek(self, n: int) -> None:
         """Seek to absolute position."""
         self.pos = n
+
+    def find(self, needle: bytes) -> None:
+        """
+        Scan forward from the current position for the first occurrence of
+        needle, advancing pos to the start of the match if found.
+        """
+        idx = self.data.find(needle, self.pos)
+        if idx == -1:
+            raise ValueError(f"Needle not found: {needle!r}")
+        self.pos = idx
 
     def remaining(self) -> int:
         """Get bytes remaining."""

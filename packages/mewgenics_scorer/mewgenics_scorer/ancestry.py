@@ -1,138 +1,127 @@
-"""Ancestry and inbreeding risk calculations."""
-
-from dataclasses import dataclass
-
-from mewgenics_parser import Cat
-
-MIN_CONTRIB = 0.0001
-MAX_DEPTH = 14
-COI_THRESHOLD = 0.25
+from mewgenics_parser.cat import Cat
 
 
-@dataclass
-class AncestorData:
-    """Tracks structural lineage data for Mewgenics-specific CoI calculations."""
-
-    cat: Cat
-    prob: float
-    min_depth: int
-
-
-def _ancestor_contributions(cat: Cat | None) -> dict[int, AncestorData]:
+class KinshipManager:
     """
-    Compute Σ(0.5^depth) and track minimum depth for each ancestor of cat.
-    Returns dict of db_key -> AncestorData.
+    Computes and stores the additive kinship matrix for a fixed population of cats.
+    Expects a complete dataset and handles topological sorting internally.
     """
-    if cat is None:
-        return {}
 
-    contribs: dict[int, AncestorData] = {}
-    stack: list[tuple[Cat, int, float]] = [(cat, 0, 1.0)]
+    def __init__(self, cats: list[Cat]):
+        self._processed_cats: list[Cat] = []
+        self._kinship_matrix: dict[int, list[float]] = {}
 
-    while stack:
-        node, depth, prob = stack.pop()
-        node_key = node.db_key
+        # Internally resolve the DAG to ensure parents are processed before children
+        sorted_cats = self._topological_sort(cats)
+        self._initialize_matrix(sorted_cats)
 
-        if node_key in contribs:
-            existing = contribs[node_key]
-            existing.prob += prob
-            existing.min_depth = min(existing.min_depth, depth)
-        else:
-            contribs[node_key] = AncestorData(node, prob, depth)
+    def _topological_sort(self, cats: list[Cat]) -> list[Cat]:
+        """
+        Sorts cats such that all parents appear before their children.
+        Includes cycle detection to prevent infinite recursion on corrupted save data.
+        """
+        visited = set()
+        visiting = set()
+        topo_order = []
 
-        if depth >= MAX_DEPTH:
-            continue
+        # Map for quick lookup of cats that are actually in the provided dataset
+        cat_map = {cat.db_key: cat for cat in cats}
 
-        half_prob = prob * 0.5
-        if half_prob < MIN_CONTRIB:
-            continue
+        def dfs(cat: Cat) -> None:
+            if cat.db_key in visited:
+                return
+            if cat.db_key in visiting:
+                raise ValueError(
+                    f"Pedigree cycle detected involving cat {cat.db_key}. Save data may be corrupted."
+                )
 
-        for parent in (node.parent_a, node.parent_b):
-            if parent is not None:
-                stack.append((parent, depth + 1, half_prob))
+            visiting.add(cat.db_key)
 
-    return contribs
+            # Recurse up the DAG if the parent exists in our dataset
+            if cat.parent_a and cat.parent_a.db_key in cat_map:
+                dfs(cat_map[cat.parent_a.db_key])
+            if cat.parent_b and cat.parent_b.db_key in cat_map:
+                dfs(cat_map[cat.parent_b.db_key])
 
+            visiting.remove(cat.db_key)
+            visited.add(cat.db_key)
+            topo_order.append(cat)
 
-def build_ancestor_contribs(cats: list[Cat]) -> dict[int, dict[int, AncestorData]]:
-    """
-    Batch compute ancestor contributions for all cats.
-    Returns dict[db_key, dict[db_key, AncestorData]].
-    """
-    ordered = sorted(
-        cats, key=lambda c: c.db_key
-    )  # Ensure parents are processed before children
-    memo: dict[int, dict[int, AncestorData]] = {}
-    result: dict[int, dict[int, AncestorData]] = {}
+        for cat in cats:
+            dfs(cat)
 
-    for cat in ordered:
-        contribs: dict[int, AncestorData] = {cat.db_key: AncestorData(cat, 1.0, 0)}
+        return topo_order
 
-        for parent in (cat.parent_a, cat.parent_b):
-            if parent is None:
-                continue
+    def _get_index(self, cat: Cat | None) -> int:
+        """Helper to find the internal matrix index of a cat."""
+        if cat is None:
+            return -1
+        try:
+            return self._processed_cats.index(cat)
+        except ValueError:
+            return -1
 
-            parent_key = parent.db_key
-            pc = memo.get(parent_key)
+    def _initialize_matrix(self, sorted_cats: list[Cat]) -> None:
+        """
+        Builds the additive kinship matrix from the topologically sorted list.
+        """
+        for cat in sorted_cats:
+            idx_mom = self._get_index(cat.parent_a)
+            idx_dad = self._get_index(cat.parent_b)
 
-            if pc is None:
-                pc = _ancestor_contributions(parent)
-                memo[parent_key] = pc
+            # 1. Determine base inbreeding (f) from parents' kinship
+            f = 0.0
+            if idx_mom != -1 and idx_dad != -1 and cat.parent_a is not None:
+                f = self._kinship_matrix[cat.parent_a.db_key][idx_dad]
 
-            for anc_key, anc_data in pc.items():
-                new_prob = anc_data.prob * 0.5
-                new_depth = anc_data.min_depth + 1
+            new_vector: list[float] = []
 
-                if new_prob < MIN_CONTRIB:
-                    continue
+            # 2. Calculate cross-kinship with all previously processed cats
+            for existing_cat in self._processed_cats:
+                k_mom = (
+                    self._kinship_matrix[existing_cat.db_key][idx_mom]
+                    if idx_mom != -1
+                    else 0.0
+                )
+                k_dad = (
+                    self._kinship_matrix[existing_cat.db_key][idx_dad]
+                    if idx_dad != -1
+                    else 0.0
+                )
 
-                if anc_key in contribs:
-                    existing = contribs[anc_key]
-                    existing.prob += new_prob
-                    existing.min_depth = min(existing.min_depth, new_depth)
-                else:
-                    contribs[anc_key] = AncestorData(anc_data.cat, new_prob, new_depth)
+                psi_x_y = 0.5 * (k_mom + k_dad)
 
-        memo[cat.db_key] = contribs
-        result[cat.db_key] = contribs
+                # Update the older cat's vector and the new cat's vector
+                self._kinship_matrix[existing_cat.db_key].append(psi_x_y)
+                new_vector.append(psi_x_y)
 
-    return result
+            # 3. Calculate self-kinship
+            psi_y_y = 0.5 * (1.0 + f)
+            new_vector.append(psi_y_y)
 
+            # 4. Commit to state
+            self._kinship_matrix[cat.db_key] = new_vector
+            self._processed_cats.append(cat)
 
-def coi_from_contribs(
-    ca: dict[int, AncestorData], cb: dict[int, AncestorData]
-) -> float:
-    """
-    Compute Mewgenics-adjusted COI from two ancestor-contribution dicts.
-    Applies the Closeness >= 5 cutoff and the (1 + fA) ancestor penalty.
-    """
-    if not ca or not cb:
-        return 0.0
+    def get_inbreeding_coefficient(self, cat: Cat) -> float:
+        """
+        Retrieves the exact inbreeding coefficient (f) for a cat in the dataset.
+        """
+        idx = self._get_index(cat)
+        if idx == -1:
+            return 0.0
 
-    if len(ca) > len(cb):
-        ca, cb = cb, ca
+        self_kinship = self._kinship_matrix[cat.db_key][idx]
+        return (2.0 * self_kinship) - 1.0
 
-    coi = 0.0
-    for anc_id, data_a in ca.items():
-        data_b = cb.get(anc_id)
-        if data_b is not None:
-            d_a = data_a.min_depth
-            d_b = data_b.min_depth
+    def calculate_hypothetical_inbreeding(self, parent_a: Cat, parent_b: Cat) -> float:
+        """
+        Calculates the predicted inbreeding coefficient for an offspring of two cats.
+        """
+        idx_a = self._get_index(parent_a)
+        idx_b = self._get_index(parent_b)
 
-            # Mewgenics logic: Condense sibling relations from 2 lines to 1
-            if d_a == 0 or d_b == 0:
-                closeness = d_a + d_b
-            else:
-                closeness = d_a + d_b - 1
+        if idx_a == -1 or idx_b == -1:
+            return 0.0
 
-            # Circuit breaker: Closeness of 5 or higher drops CoI to 0
-            if closeness >= 5:
-                continue
-
-            # Fetch ancestor's CoI (fA). Default to 0.0 if not yet assigned.
-            f_a = getattr(data_a.cat, "coi", 0.0)
-
-            # Base probability overlap * Wright's 0.5 * Mewgenics Ancestor Multiplier
-            coi += 0.5 * (data_a.prob * data_b.prob) * (1.0 + f_a)
-
-    return coi
+        return self._kinship_matrix[parent_a.db_key][idx_b]

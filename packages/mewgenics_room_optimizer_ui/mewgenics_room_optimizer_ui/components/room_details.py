@@ -48,6 +48,7 @@ def clear_details_section() -> None:
                 dpg.delete_item(child)
     dpg.show_item("details_placeholder")
 
+
 def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
     if not selected_room.pairs:
         dpg.add_text("No breeding pairs in this room")

@@ -480,7 +480,6 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     """Run the optimization."""
     from mewgenics_room_optimizer import optimize_sa
     from mewgenics_room_optimizer.types import OptimizationParams
-    from mewgenics_scorer import build_ancestor_contribs
 
     if not user_data.cats:
         return
@@ -525,10 +524,7 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
         sa_neighbors_per_temp=sa_neighbors,
     )
 
-    ancestor_contribs = build_ancestor_contribs(user_data.cats)
-    results = optimize_sa(
-        user_data.cats, user_data.room_configs, params, ancestor_contribs
-    )
+    results = optimize_sa(user_data.cats, user_data.room_configs, params)
     user_data.results = results
 
     dpg.set_value("status_text", "Optimization Complete")

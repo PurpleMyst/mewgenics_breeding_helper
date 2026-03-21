@@ -16,23 +16,28 @@ def can_breed(a: Cat, b: Cat) -> bool:
 
 def is_hater_conflict(a: Cat, b: Cat) -> bool:
     """Check if cats hate each other."""
-    return b in a.haters or a in b.haters
+    return a.hater_id == b.db_key or b.hater_id == a.db_key
 
 
 def is_lover_conflict(a: Cat, b: Cat, avoid_lovers: bool = True) -> bool:
     """Check if pairing would break existing lover bonds. Excludes 'Gone' cats."""
     if not avoid_lovers:
         return False
-    # Filter out "Gone" cats - they shouldn't count as lover conflicts
-    a_lovers = {c.db_key for c in a.lovers if c and c.status != "Gone"}
-    b_loves = {c.db_key for c in b.lovers if c and c.status != "Gone"}
-    a_has_lover = bool(a_lovers)
-    b_has_lover = bool(b_loves)
-    return (a_has_lover and b.db_key not in a_lovers) or (
-        b_has_lover and a.db_key not in b_loves
+
+    def _has_active_lover(cat: Cat) -> bool:
+        lover = cat.lover
+        if lover is not None:
+            return lover.status != "Gone"
+        return cat.lover_id is not None
+
+    a_has_lover = _has_active_lover(a)
+    b_has_lover = _has_active_lover(b)
+
+    return (a_has_lover and b.db_key != a.lover_id) or (
+        b_has_lover and a.db_key != b.lover_id
     )
 
 
 def is_mutual_lovers(a: Cat, b: Cat) -> bool:
     """Check if both cats love each other."""
-    return b in a.lovers and a in b.lovers
+    return a.lover_id == b.db_key and b.lover_id == a.db_key

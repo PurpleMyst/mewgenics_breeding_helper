@@ -8,6 +8,7 @@ from mewgenics_parser.traits import (
     cat_has_defect_in_slot,
     cat_has_mutation_in_slot,
 )
+from mewgenics_scorer.ancestry import KinshipManager
 from mewgenics_scorer.factors import (
     PairFactors,
     _aggression_factor,
@@ -54,8 +55,6 @@ def make_cat(
     passives: list | None = None,
     abilities: list | None = None,
     disorders: list | None = None,
-    lovers: list[Cat] | None = None,
-    haters: list[Cat] | None = None,
     parent_a: Cat | None = None,
     parent_b: Cat | None = None,
     body_parts: CatBodyParts | None = None,
@@ -63,23 +62,26 @@ def make_cat(
     return Cat(
         db_key=db_key,
         name=f"Cat{db_key}",
+        name_tag="",
         status=CatStatus.IN_HOUSE,
         gender=gender,
         stat_base=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
         stat_total=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
         aggression=aggression,
         libido=libido,
+        sexuality=None,
         passive_abilities=passives or [],
         active_abilities=abilities or [],
         disorders=disorders or [],
-        lovers=lovers or [],
-        haters=haters or [],
         parent_a=parent_a,
         parent_b=parent_b,
         room="Test Room",
         age=5,
-        coi=0.0,
         body_parts=body_parts or _default_body_parts(),
+        lover_id=None,
+        hater_id=None,
+        lover=None,
+        hater=None,
     )
 
 
@@ -165,9 +167,9 @@ class TestCalculatePairFactors:
     def test_basic_calculation(self):
         a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
         b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        contribs = {1: {}, 2: {}}
+        km = KinshipManager([a, b])
 
-        result = calculate_pair_factors(a, b, contribs)
+        result = calculate_pair_factors(km, a, b)
 
         assert isinstance(result, PairFactors)
         assert result.can_breed is True
@@ -178,9 +180,9 @@ class TestCalculatePairFactors:
     def test_unrelated_cats_no_risk(self):
         a = make_cat(1, CatGender.MALE)
         b = make_cat(2, CatGender.FEMALE)
-        contribs = {1: {}, 2: {}}
+        km = KinshipManager([a, b])
 
-        result = calculate_pair_factors(a, b, contribs)
+        result = calculate_pair_factors(km, a, b)
 
         # Unrelated cats have CoI = 0.0, so:
         # - disorder chance = 2% (base)
@@ -191,9 +193,9 @@ class TestCalculatePairFactors:
     def test_total_expected_stats(self):
         a = make_cat(1, CatGender.MALE, stat_base=[10, 0, 0, 0, 0, 0, 0])
         b = make_cat(2, CatGender.FEMALE, stat_base=[0, 10, 0, 0, 0, 0, 0])
-        contribs = {1: {}, 2: {}}
+        km = KinshipManager([a, b])
 
-        result = calculate_pair_factors(a, b, contribs)
+        result = calculate_pair_factors(km, a, b)
 
         # Should be 7 values that sum to something based on better_chance
         assert len(result.expected_stats) == 7

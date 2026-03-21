@@ -13,6 +13,7 @@ from mewgenics_room_optimizer import (
     can_pair_gay,
     optimize_sa,
 )
+from mewgenics_scorer import KinshipManager
 from mewgenics_room_optimizer.optimizer import (
     PairCache,
     _build_results_from_state_dict,
@@ -37,9 +38,6 @@ def make_cat(
     age: int | None = 0,
     aggression: float = 0.0,
     libido: float = 0.5,
-    coi: float | None = 0.0,
-    lovers: list[Cat] | None = None,
-    haters: list[Cat] | None = None,
     parent_a: Cat | None = None,
     parent_b: Cat | None = None,
     disorders: list[str] | None = None,
@@ -48,6 +46,7 @@ def make_cat(
     return Cat(
         db_key=db_key,
         name=f"Cat_{db_key}",
+        name_tag="",
         gender=gender,
         status=status,
         room=room,
@@ -56,7 +55,7 @@ def make_cat(
         age=age,
         aggression=aggression,
         libido=libido,
-        coi=coi,
+        sexuality=None,
         active_abilities=active_abilities or [],
         passive_abilities=passive_abilities or [],
         disorders=disorders or [],
@@ -74,8 +73,10 @@ def make_cat(
         ),
         parent_a=parent_a,
         parent_b=parent_b,
-        lovers=lovers or [],
-        haters=haters or [],
+        lover_id=None,
+        hater_id=None,
+        lover=None,
+        hater=None,
     )
 
 
@@ -99,7 +100,7 @@ class TestUtilities:
     def test_can_pair_gay(self):
         gay_cats_by_id = {1, 3}  # Cats 1 and 3 are gay
         cat1, cat2, cat3 = make_cat(1), make_cat(2), make_cat(3)
-        cat_spider = make_cat(4, gender=CatGender.NONBINARY)
+        cat_spider = make_cat(4, gender=CatGender.DITTO)
 
         # Standard straight pair (no gay cats)
         assert can_pair_gay(make_cat(9), make_cat(10), gay_cats_by_id) is True
@@ -115,7 +116,7 @@ class TestUtilities:
             make_cat(1, CatGender.MALE),
             make_cat(2, CatGender.FEMALE),
             make_cat(3, CatGender.FEMALE),
-            make_cat(4, CatGender.NONBINARY),
+            make_cat(4, CatGender.DITTO),
         ]
         pairs = _generate_pairs(cats)
 
@@ -145,7 +146,7 @@ class TestEternalYouthPlacement:
             gay_cats_by_id=set(),
         )
 
-        result = optimize_sa(cats, basic_rooms, params, {})
+        result = optimize_sa(cats, basic_rooms, params)
 
         ey_cat = next(c for c in cats if c.has_eternal_youth())
         ey_room = next(r for r in result.rooms if ey_cat in r.eternal_youth_cats)
@@ -165,11 +166,12 @@ class TestGayPairsExclusion:
         params = OptimizationParams(
             gay_cats_by_id={1},
         )
+        km = KinshipManager([cat1, cat2, cat3])
 
-        result_male_gay_female_straight = score_pair(cat1, cat3, {}, params)
+        result_male_gay_female_straight = score_pair(cat1, cat3, km, params)
         assert result_male_gay_female_straight is None
 
-        result_male_straight_female_straight = score_pair(cat2, cat3, {}, params)
+        result_male_straight_female_straight = score_pair(cat2, cat3, km, params)
         assert result_male_straight_female_straight is not None
 
 
@@ -221,8 +223,9 @@ class TestSAEvaluator:
         state = {1: "b1", 2: "b1", 3: "b1"}
         params = OptimizationParams(stimulation=50.0)
         cache = PairCache()
+        km = KinshipManager(list(cats.values()))
 
-        _score = _evaluate_state(state, cats, [room], cache, {}, params)
+        _score = _evaluate_state(state, cats, [room], cache, km, params)
 
         # Should have at least one pair scored
         assert mock_score_pair.called
@@ -276,13 +279,14 @@ class TestSAEvaluator:
         }
 
         params = OptimizationParams()
+        km = KinshipManager(cats)
 
         result = _build_results_from_state_dict(
             state,
             cats_by_id,
             room_configs,
             PairCache(),
-            {},
+            km,
             params,
             sa_cats=cats,
             ey_assignments={},
@@ -302,7 +306,7 @@ class TestSAEvaluator:
 
     def test_empty_optimize_sa(self):
         """Test that optimize_sa handles empty inputs gracefully."""
-        result = optimize_sa([], [], OptimizationParams(), {})
+        result = optimize_sa([], [], OptimizationParams())
         assert result.rooms == []
         assert result.excluded_cats == []
         assert result.stats.total_cats == 0
@@ -331,7 +335,7 @@ class TestThroughputMaximization:
             sa_neighbors_per_temp=2,
             scoring_prefs=ScoringPreferences(maximize_throughput=True),
         )
-        result = optimize_sa(cats, basic_rooms, params, {})
+        result = optimize_sa(cats, basic_rooms, params)
 
         # Should produce valid results
         assert result is not None

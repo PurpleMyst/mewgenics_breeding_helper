@@ -12,11 +12,7 @@ from .factors import (
     inherited_disorder_chance,
     inherited_part_defect_chance,
 )
-from .ancestry import (
-    AncestorData,
-    build_ancestor_contribs,
-    coi_from_contribs,
-)
+from .ancestry import KinshipManager
 from .compatibility import (
     can_breed,
     is_hater_conflict,
@@ -36,9 +32,7 @@ __all__ = [
     "novel_part_defect_chance",
     "inherited_disorder_chance",
     "inherited_part_defect_chance",
-    "build_ancestor_contribs",
-    "coi_from_contribs",
-    "AncestorData",
+    "KinshipManager",
     "can_breed",
     "is_hater_conflict",
     "is_lover_conflict",
