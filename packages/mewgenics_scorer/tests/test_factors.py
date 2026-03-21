@@ -78,8 +78,6 @@ def make_cat(
         room="Test Room",
         age=5,
         body_parts=body_parts or _default_body_parts(),
-        lover_id=None,
-        hater_id=None,
         lover=None,
         hater=None,
     )

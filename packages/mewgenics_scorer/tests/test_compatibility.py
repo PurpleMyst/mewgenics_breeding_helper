@@ -43,10 +43,8 @@ def make_cat(
         ),
         parent_a=None,
         parent_b=None,
-        lover_id=lover_id,
-        hater_id=hater_id,
-        lover=None,
-        hater=None,
+        lover=lover_id,
+        hater=hater_id,
     )
 
 

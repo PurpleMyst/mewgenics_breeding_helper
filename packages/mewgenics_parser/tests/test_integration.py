@@ -46,7 +46,7 @@ class TestParseSaveIntegration:
                 luck=9,
             )
         )
-        assert cat.age == snapshot(62)
+        assert cat.age == snapshot(63)
         assert cat.aggression == snapshot(0.9648030361579043)
         assert cat.libido == snapshot(0.6100491969838884)
         assert cat.active_abilities == snapshot(

@@ -154,13 +154,13 @@ def parse_save(path: str) -> SaveData:
         cat.parent_a = pa
         cat.parent_b = pb
 
-        if cat.lover_id is not None:
-            lover = cats_by_key.get(cat.lover_id)
+        if isinstance(cat.lover, int):
+            lover = cats_by_key.get(cat.lover)
             if lover is not None and lover is not cat:
                 cat.lover = lover
 
-        if cat.hater_id is not None:
-            hater = cats_by_key.get(cat.hater_id)
+        if isinstance(cat.hater, int):
+            hater = cats_by_key.get(cat.hater)
             if hater is not None and hater is not cat:
                 cat.hater = hater
 

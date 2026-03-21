@@ -26,9 +26,11 @@ def is_lover_conflict(a: Cat, b: Cat, avoid_lovers: bool = True) -> bool:
 
     def _has_active_lover(cat: Cat) -> bool:
         lover = cat.lover
-        if lover is not None:
+        if lover is None:
+            return False
+        if isinstance(lover, Cat):
             return lover.status != "Gone"
-        return cat.lover_id is not None
+        return True
 
     a_has_lover = _has_active_lover(a)
     b_has_lover = _has_active_lover(b)

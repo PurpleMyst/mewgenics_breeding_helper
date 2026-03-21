@@ -72,8 +72,6 @@ def make_cat(
         ),
         parent_a=parent_a,
         parent_b=parent_b,
-        lover_id=None,
-        hater_id=None,
         lover=None,
         hater=None,
     )

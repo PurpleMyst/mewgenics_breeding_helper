@@ -1,7 +1,7 @@
 """Cat data model for Mewgenics Breeding Manager."""
 
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import NamedTuple, Self, TypeGuard
 
@@ -122,23 +122,17 @@ class Cat:
     body_parts: CatBodyParts
     """Structured body part identifiers extracted from specific body slot indices in the blob."""
 
-    parent_a: Self | None
+    parent_a: Self | None = field(default=None, repr=False)
     """Direct parent cat A, assigned after parsing based on database id references. None if unknown or not found."""
 
-    parent_b: Self | None
+    parent_b: Self | None = field(default=None, repr=False)
     """Direct parent cat B, assigned after parsing based on database id references. None if unknown or not found."""
 
-    lover_id: int | None
-    """Database id of the cat's lover relationship, extracted from the blob. None if no lover or invalid UID."""
+    lover: Self | int | None = field(default=None, repr=False)
+    """Lover as either a Cat object (after resolution) or int (before resolution). None if no lover."""
 
-    hater_id: int | None
-    """Database id of the cat's hater relationship, extracted from the blob. None if no hater or invalid UID."""
-
-    lover: Self | None
-    """Direct lover cat, assigned after parsing based on lover_id reference. None if unknown or not found."""
-
-    hater: Self | None
-    """Direct hater cat, assigned after parsing based on hater_id reference. None if unknown or not found."""
+    hater: Self | int | None = field(default=None, repr=False)
+    """Hater as either a Cat object (after resolution) or int (before resolution). None if no hater."""
 
     @classmethod
     def from_save_data(
@@ -361,10 +355,8 @@ class Cat:
             body_parts=body_parts,
             parent_a=None,
             parent_b=None,
-            lover_id=lover_id,
-            hater_id=hater_id,
-            lover=None,
-            hater=None,
+            lover=lover_id,
+            hater=hater_id,
         )
 
     @property
@@ -372,6 +364,24 @@ class Cat:
         if (s := ROOM_DISPLAY.get(self.room or "")) is not None:
             return s
         return "N/A"
+
+    @property
+    def lover_id(self) -> int | None:
+        """Return lover as int db_key, regardless of whether lover is int or Cat."""
+        if self.lover is None:
+            return None
+        if isinstance(self.lover, Cat):
+            return self.lover.db_key
+        return self.lover
+
+    @property
+    def hater_id(self) -> int | None:
+        """Return hater as int db_key, regardless of whether hater is int or Cat."""
+        if self.hater is None:
+            return None
+        if isinstance(self.hater, Cat):
+            return self.hater.db_key
+        return self.hater
 
     @property
     def inheritable_abilities(self) -> list[str]:
