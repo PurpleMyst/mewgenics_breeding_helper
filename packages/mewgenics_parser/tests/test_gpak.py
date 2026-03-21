@@ -78,7 +78,7 @@ class TestResolveGameString:
         """Handle empty string as target."""
         game_strings = {"KEY": ""}
         result = _resolve_game_string("KEY", game_strings)
-        assert result == snapshot("KEY")
+        assert result == snapshot("")
 
     def test_circular_reference(self):
         """Protect against circular references."""
