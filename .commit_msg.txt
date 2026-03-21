@@ -1,4 +1,0 @@
-fix: guard details_placeholder operations with existence check
-
-Prevent errors when clearing details section if the placeholder
-item hasn't been created yet (e.g., on first run or tab switch).
