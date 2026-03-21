@@ -10,7 +10,6 @@ from mewgenics_room_optimizer import (
     OptimizationParams,
     RoomConfig,
     RoomType,
-    can_pair_gay,
     optimize_sa,
 )
 from mewgenics_scorer import KinshipManager
@@ -97,20 +96,6 @@ class TestUtilities:
         cat = make_cat(1, stat_base=(1, 2, 3, 4, 5, 6, 7))
         assert _cat_stats_sum(cat) == 28
 
-    def test_can_pair_gay(self):
-        gay_cats_by_id = {1, 3}  # Cats 1 and 3 are gay
-        cat1, cat2, cat3 = make_cat(1), make_cat(2), make_cat(3)
-        cat_spider = make_cat(4, gender=CatGender.DITTO)
-
-        # Standard straight pair (no gay cats)
-        assert can_pair_gay(make_cat(9), make_cat(10), gay_cats_by_id) is True
-        # One gay cat, one straight (conflict)
-        assert can_pair_gay(cat1, cat2, gay_cats_by_id) is False
-        # Two gay cats (not allowed since there's no spider)
-        assert can_pair_gay(cat1, cat3, gay_cats_by_id) is False
-        # Gay cat with spidercat (always allowed)
-        assert can_pair_gay(cat1, cat_spider, gay_cats_by_id) is True
-
     def test_generate_pairs(self):
         cats = [
             make_cat(1, CatGender.MALE),
@@ -143,7 +128,6 @@ class TestEternalYouthPlacement:
         params = OptimizationParams(
             sa_temperature=1.0,
             sa_neighbors_per_temp=2,
-            gay_cats_by_id=set(),
         )
 
         result = optimize_sa(cats, basic_rooms, params)
@@ -152,27 +136,6 @@ class TestEternalYouthPlacement:
         ey_room = next(r for r in result.rooms if ey_cat in r.eternal_youth_cats)
 
         assert ey_room.room.key == "breed1"
-
-
-class TestGayPairsExclusion:
-    def test_can_pair_gay_filters_pairs_in_evaluation(self):
-        """Gay pairs should return None from score_pair, excluding them from breeding."""
-        from mewgenics_room_optimizer.optimizer import score_pair
-
-        cat1 = make_cat(1, CatGender.MALE)
-        cat2 = make_cat(2, CatGender.MALE)
-        cat3 = make_cat(3, CatGender.FEMALE)
-
-        params = OptimizationParams(
-            gay_cats_by_id={1},
-        )
-        km = KinshipManager([cat1, cat2, cat3])
-
-        result_male_gay_female_straight = score_pair(cat1, cat3, km, params)
-        assert result_male_gay_female_straight is None
-
-        result_male_straight_female_straight = score_pair(cat2, cat3, km, params)
-        assert result_male_straight_female_straight is not None
 
 
 class TestConstraints:

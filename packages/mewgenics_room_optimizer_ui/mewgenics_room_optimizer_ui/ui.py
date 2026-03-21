@@ -518,7 +518,6 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
         avoid_lovers=avoid_lovers,
         scoring_prefs=scoring_prefs,
         trait_requirements=user_data.trait_requirements,
-        gay_cats_by_id=user_data.gay_cats_by_id,
         sa_temperature=sa_temp,
         sa_cooling_rate=sa_cooling,
         sa_neighbors_per_temp=sa_neighbors,

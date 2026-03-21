@@ -81,13 +81,10 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
                 for i, stat in enumerate(cat.stat_base):
                     dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
 
-        is_gay = cat.db_key in state.gay_cats_by_id
-        dpg.add_checkbox(
-            label="Same-Sex Breeding Preference",
-            default_value=is_gay,
-            callback=on_toggle_gay,
-            user_data=(cat.db_key, state),
-        )
+        sexuality = cat.sexuality
+        if sexuality is not None:
+            sexuality_pct = int(sexuality * 100)
+            dpg.add_text(f"Sexuality: {sexuality_pct}% same-sex preference")
 
         dpg.add_separator()
 
@@ -131,19 +128,6 @@ def on_cat_selected(
     state.selected_cat_db_key = cat.db_key
 
     show_cat_detail_window(cat, state)
-
-
-def on_toggle_gay(sender: int, app_data: bool, user_data: tuple[int, AppState]) -> None:
-    """Set gay flag for a cat based on checkbox state."""
-    db_key, state = user_data
-    if app_data:
-        state.gay_cats_by_id.add(db_key)
-    else:
-        state.gay_cats_by_id.discard(db_key)
-    state.save()
-    cat = next((c for c in state.cats if c.db_key == db_key), None)
-    if cat:
-        show_cat_detail_window(cat, state)
 
 
 def _render_trait_tree_node(label: str, traits: list[Trait], state: AppState) -> None:

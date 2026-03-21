@@ -50,14 +50,6 @@ class PairCache:
         self._cache.clear()
 
 
-def can_pair_gay(cat_a: Cat, cat_b: Cat, gay_cats_by_id: set[int]) -> bool:
-    """Check if gay cats can breed based on gender restrictions."""
-    is_a_gay = cat_a.db_key in gay_cats_by_id
-    is_b_gay = cat_b.db_key in gay_cats_by_id
-
-    return (not (is_a_gay or is_b_gay)) or "?" in {cat_a.gender, cat_b.gender}
-
-
 def _cat_stats_sum(cat: Cat) -> int:
     """Calculate total base stats for a cat."""
     return sum(cat.stat_base)
@@ -114,9 +106,6 @@ def score_pair(
     if is_lover_conflict(cat_a, cat_b, params.avoid_lovers):
         return None
 
-    if not can_pair_gay(cat_a, cat_b, params.gay_cats_by_id):
-        return None
-
     factors = calculate_pair_factors(
         kinship_manager,
         cat_a,
@@ -131,6 +120,11 @@ def score_pair(
 
     scoring_prefs = params.scoring_prefs or ScoringPreferences()
     quality = calculate_pair_quality(factors, scoring_prefs)
+
+    sex_a = cat_a.sexuality or 0.0
+    sex_b = cat_b.sexuality or 0.0
+    breeding_prob = (1 - sex_a) * (1 - sex_b)
+    quality = quality * breeding_prob
 
     return ScoredPair(
         cat_a=cat_a,

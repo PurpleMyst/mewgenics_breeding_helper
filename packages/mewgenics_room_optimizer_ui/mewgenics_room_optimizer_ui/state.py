@@ -179,7 +179,6 @@ class AppState:
     maximize_throughput: bool = False
 
     trait_requirements: list[TraitRequirement] = field(default_factory=list)
-    gay_cats_by_id: set[int] = field(default_factory=set)
 
     sim_cat_a_key: int | None = None
     sim_cat_b_key: int | None = None
@@ -232,7 +231,6 @@ class AppState:
             prefer_high_libido=config.get("prefer_high_libido", True),
             prefer_high_charisma=config.get("prefer_high_charisma", True),
             maximize_throughput=config.get("maximize_throughput", False),
-            gay_cats_by_id=set(config.get("gay_cats_by_id", [])),
         )
 
     def to_config(self) -> dict:
@@ -250,7 +248,6 @@ class AppState:
             "prefer_high_libido": self.prefer_high_libido,
             "prefer_high_charisma": self.prefer_high_charisma,
             "maximize_throughput": self.maximize_throughput,
-            "gay_cats_by_id": list(self.gay_cats_by_id),
         }
 
     def save(self) -> None:

@@ -1,0 +1,8 @@
+refactor: replace gay_flags with sexuality-based breeding probability
+
+- Remove gay_cats_by_id set from OptimizationParams and AppState
+- Remove can_pair_gay function (pair generation already excludes same-sex pairs)
+- Add sexuality-based breeding probability to pair scoring:
+  P(breed) = (1 - sexuality_a) × (1 - sexuality_b)
+- Replace UI checkbox with read-only sexuality display showing % preference
+- Update tests to remove gay_flags references
