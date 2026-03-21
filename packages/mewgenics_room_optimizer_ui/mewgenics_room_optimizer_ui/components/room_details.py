@@ -24,7 +24,8 @@ def build_details_section(state: AppState) -> None:
 def update_details_section(selected_room: RoomAssignment, state: AppState) -> None:
     """Called on room selection. Clears and repopulates the child window content."""
     clear_details_section()
-    dpg.hide_item("details_placeholder")
+    if dpg.does_item_exist("details_placeholder"):
+        dpg.hide_item("details_placeholder")
 
     dpg.add_tab_bar(parent="details_section", tag="details_tab_bar")
 
@@ -46,7 +47,8 @@ def clear_details_section() -> None:
         if children and 1 in children:
             for child in children[1]:  # type: ignore[iterable]
                 dpg.delete_item(child)
-    dpg.show_item("details_placeholder")
+    if dpg.does_item_exist("details_placeholder"):
+        dpg.show_item("details_placeholder")
 
 
 def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
