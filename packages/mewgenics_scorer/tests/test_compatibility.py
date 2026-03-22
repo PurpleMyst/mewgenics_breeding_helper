@@ -1,7 +1,7 @@
 """Tests for mewgenics_scorer compatibility module."""
 
 from mewgenics_parser import Cat
-from mewgenics_parser.cat import CatGender, CatStatus, CatBodyParts, Stats
+from mewgenics_parser.cat import CatBodySlot, CatGender, CatStatus, Stats
 from mewgenics_scorer.compatibility import (
     can_breed,
     is_hater_conflict,
@@ -29,18 +29,23 @@ def make_cat(
         active_abilities=[],
         passive_abilities=[],
         disorders=[],
-        body_parts=CatBodyParts(
-            texture=0,
-            body=0,
-            head=0,
-            tail=0,
-            legs=0,
-            arms=0,
-            eyes=0,
-            eyebrows=0,
-            ears=0,
-            mouth=0,
-        ),
+        body_parts={
+            CatBodySlot.TEXTURE: 0,
+            CatBodySlot.BODY: 0,
+            CatBodySlot.HEAD: 0,
+            CatBodySlot.TAIL: 0,
+            CatBodySlot.LEFT_LEG: 0,
+            CatBodySlot.RIGHT_LEG: 0,
+            CatBodySlot.LEFT_ARM: 0,
+            CatBodySlot.RIGHT_ARM: 0,
+            CatBodySlot.LEFT_EYE: 0,
+            CatBodySlot.RIGHT_EYE: 0,
+            CatBodySlot.LEFT_EYEBROW: 0,
+            CatBodySlot.RIGHT_EYEBROW: 0,
+            CatBodySlot.LEFT_EAR: 0,
+            CatBodySlot.RIGHT_EAR: 0,
+            CatBodySlot.MOUTH: 0,
+        },
         parent_a=None,
         parent_b=None,
         lover=lover_id,

@@ -1,10 +1,10 @@
 """Domain model for Mewgenics traits."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol, override
 
-from .cat import Cat
+from .cat import Cat, CatBodyPartCategory, CatBodySlot
 from .gpak import GameData
 from .trait_dictionary import normalize_ability_key
 
@@ -163,6 +163,7 @@ class BodyPartTrait(Trait):
         return TraitCategory.BODY_PART
 
     def _split_key(self) -> tuple[str, int]:
+        """Parse trait key into category name and part_id."""
         import re
 
         match = re.fullmatch(r"(\D+)(\d+)", self._key)
@@ -189,14 +190,24 @@ class BodyPartTrait(Trait):
 
     @override
     def get_display_name(self, game_data: GameData) -> str:
-        category, part_id = self._split_key()
-        name_desc = game_data.body_part_text[category][part_id]
+        category_str, part_id = self._split_key()
+        # Fallback for legacy "Arms" trait keys mapping to LEGS
+        if category_str.lower() == "arms":
+            cat_enum = CatBodyPartCategory.LEGS
+        else:
+            cat_enum = CatBodyPartCategory(category_str.lower())
+        name_desc = game_data.body_part_text[cat_enum][part_id]
         return name_desc.name or self._key
 
     @override
     def get_description(self, game_data: GameData) -> str:
-        category, part_id = self._split_key()
-        name_desc = game_data.body_part_text[category][part_id]
+        category_str, part_id = self._split_key()
+        # Fallback for legacy "Arms" trait keys mapping to LEGS
+        if category_str.lower() == "arms":
+            cat_enum = CatBodyPartCategory.LEGS
+        else:
+            cat_enum = CatBodyPartCategory(category_str.lower())
+        name_desc = game_data.body_part_text[cat_enum][part_id]
         return name_desc.description
 
     @override
@@ -205,44 +216,70 @@ class BodyPartTrait(Trait):
 
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
+        """Check if the cat has this body part trait in ANY slot of the category."""
         category, part_id = self._split_key()
-        return asdict(cat.body_parts).get(category) == part_id
+        cat_enum = CatBodyPartCategory(category)
+        return cat_has_mutation_in_category(cat, cat_enum) and self.is_mutation()
 
-    def get_slot(self) -> str:
-        """Return the body part slot name (e.g., 'ears', 'head')."""
-        category, _ = self._split_key()
-        return category
+    @property
+    def body_part_category(self) -> CatBodyPartCategory:
+        """Return the body part category (e.g., ears, tail) for this trait."""
+        category_str, _ = self._split_key()
+        # Fallback for legacy "Arms" trait keys mapping to LEGS
+        if category_str.lower() == "arms":
+            return CatBodyPartCategory.LEGS
+        return CatBodyPartCategory(category_str.lower())
 
-    def get_part_id(self) -> int:
+    @property
+    def part_id(self) -> int:
         """Return the part ID number."""
         _, part_id = self._split_key()
         return part_id
 
 
-def cat_has_mutation_in_slot(cat: Cat, slot: str) -> bool:
+def cat_has_mutation_in_slot(cat: Cat, slot: CatBodySlot) -> bool:
     """Check if a cat has a mutation in a given slot.
 
     Returns True only for mutations (part_id >= 300).
     Does NOT return True for negative birth defects.
     """
-    part_id = getattr(cat.body_parts, slot, None)
+    part_id = cat.body_parts.get(slot)
     if part_id is None:
         return False
     temp_trait = BodyPartTrait(_key=f"{slot}{part_id}")
     return temp_trait.is_mutation()
 
 
-def cat_has_defect_in_slot(cat: Cat, slot: str) -> bool:
+def cat_has_defect_in_slot(cat: Cat, slot: CatBodySlot) -> bool:
     """Check if a cat has a negative body part in a given slot.
 
     Uses is_negative() - returns True for birth defects.
     Mutations that aren't negative return False.
     """
-    part_id = getattr(cat.body_parts, slot, None)
+    part_id = cat.body_parts.get(slot)
     if part_id is None:
         return False
     temp_trait = BodyPartTrait(_key=f"{slot}{part_id}")
     return temp_trait.is_negative()
+
+
+def get_slots_for_category(category: CatBodyPartCategory) -> list[CatBodySlot]:
+    """Get all slots belonging to a category (e.g., [LEFT_EAR, RIGHT_EAR] for EARS)."""
+    return [slot for slot in CatBodySlot if slot.category == category]
+
+
+def cat_has_mutation_in_category(cat: Cat, category: CatBodyPartCategory) -> bool:
+    """Check if cat has a mutation (part_id >= 300) in ANY slot of a category."""
+    return any(
+        cat_has_mutation_in_slot(cat, slot) for slot in get_slots_for_category(category)
+    )
+
+
+def cat_has_defect_in_category(cat: Cat, category: CatBodyPartCategory) -> bool:
+    """Check if cat has a birth defect (negative part_id) in ANY slot of a category."""
+    return any(
+        cat_has_defect_in_slot(cat, slot) for slot in get_slots_for_category(category)
+    )
 
 
 @dataclass(slots=True)
@@ -294,8 +331,8 @@ def extract_traits_from_cat(cat: Cat) -> list[Trait]:
     for passive in cat.passive_abilities:
         traits.append(create_trait(TraitCategory.PASSIVE_ABILITY, passive))
 
-    for category, part_id in asdict(cat.body_parts).items():
-        key = f"{category.title()}{part_id}"
+    for slot, part_id in cat.body_parts.items():
+        key = f"{slot.category.name.title()}{part_id}"
         traits.append(create_trait(TraitCategory.BODY_PART, key))
 
     for disorder in cat.disorders:

@@ -1,6 +1,6 @@
 """GPAK file parsing utilities."""
 
-from mewgenics_parser.constants import STAT_NAMES
+from mewgenics_parser.cat import CatBodyPartCategory
 
 import csv
 import io
@@ -9,6 +9,8 @@ import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import DefaultDict, Self
+
+from mewgenics_parser.constants import STAT_NAMES
 
 from .utils import (
     NameAndDescription,
@@ -87,11 +89,12 @@ def _parse_gon_abilities(
 
 def _parse_mutation_gon(
     content: str, game_strings: dict[str, str]
-) -> dict[str, DefaultDict[int, NameAndDescription]]:
+) -> dict[CatBodyPartCategory, DefaultDict[int, NameAndDescription]]:
     """Parse a mutation GON file into {mutation_id: NameAndDescription}."""
     gon_data = _parse_gon_to_dicts(content)
     result = {}
     for category, mutations in gon_data.items():
+        category = CatBodyPartCategory(category)
         category_text: dict[int, NameAndDescription] = {}
         for mutation_id_str, mutation_info in mutations.items():
             if not isinstance(mutation_info, dict):
@@ -150,8 +153,8 @@ class GameData:
     ability_text: DefaultDict[str, NameAndDescription]
     """Mapping of ability ID (e.g., "Fireball") to its name and description."""
 
-    body_part_text: DefaultDict[str, DefaultDict[int, NameAndDescription]]
-    """Mapping of body part category (e.g., "arm") to mapping of mutation ID to name and description."""
+    body_part_text: dict[CatBodyPartCategory, DefaultDict[int, NameAndDescription]]
+    """Mapping of body part category (e.g., "leg") to mapping of mutation ID to name and description."""
 
     game_strings: dict[str, str]
     """Mapping of game string ID to its text content, loaded from CSV files in the GPAK."""
@@ -171,26 +174,19 @@ class GameData:
             ):
                 ability_descriptions.update(_parse_gon_abilities(content, game_strings))
 
-        mutation_text: dict[str, DefaultDict[int, NameAndDescription]] = {}
+        body_part_text: dict[
+            CatBodyPartCategory, DefaultDict[int, NameAndDescription]
+        ] = {}
         for fname, content in gon_contents.items():
             if fname.startswith("data/mutations/") and fname.endswith(".gon"):
-                mutation_text.update(_parse_mutation_gon(content, game_strings))
-
-        # HACK: Arms do not exist as a separate category in the GON files, but mutations that would
-        # be categorized as arms are instead categorized under legs. To avoid
-        # confusion, we can just copy the leg mutations to arms as well.
-        if "arms" not in mutation_text and "legs" in mutation_text:
-            mutation_text["arms"] = mutation_text["legs"]
+                body_part_text.update(_parse_mutation_gon(content, game_strings))
 
         return cls(
             ability_text=defaultdict(
                 lambda: NameAndDescription(),
                 ability_descriptions,
             ),
-            body_part_text=defaultdict(
-                lambda: defaultdict(lambda: NameAndDescription()),
-                mutation_text,
-            ),
+            body_part_text=body_part_text,
             game_strings=game_strings,
         )
 
@@ -236,9 +232,10 @@ class GameData:
     def empty(cls) -> Self:
         return cls(
             ability_text=defaultdict(lambda: NameAndDescription()),
-            body_part_text=defaultdict(
-                lambda: defaultdict(lambda: NameAndDescription())
-            ),
+            body_part_text={
+                k: defaultdict(lambda: NameAndDescription())
+                for k in CatBodyPartCategory
+            },
             game_strings={},
         )
 

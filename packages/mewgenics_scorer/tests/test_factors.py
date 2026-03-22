@@ -2,7 +2,7 @@
 
 import pytest
 from mewgenics_parser import Cat, TraitCategory, create_trait
-from mewgenics_parser.cat import CatBodyParts, CatGender, CatStatus, Stats
+from mewgenics_parser.cat import CatBodySlot, CatGender, CatStatus, Stats
 from mewgenics_parser.traits import (
     BodyPartTrait,
     cat_has_defect_in_slot,
@@ -31,19 +31,24 @@ from mewgenics_scorer.inheritance import (
 from mewgenics_scorer.types import TraitRequirement
 
 
-def _default_body_parts() -> CatBodyParts:
-    return CatBodyParts(
-        texture=0,
-        body=0,
-        head=0,
-        tail=0,
-        legs=0,
-        arms=0,
-        eyes=0,
-        eyebrows=0,
-        ears=0,
-        mouth=0,
-    )
+def _default_body_parts() -> dict[CatBodySlot, int]:
+    return {
+        CatBodySlot.TEXTURE: 0,
+        CatBodySlot.BODY: 0,
+        CatBodySlot.HEAD: 0,
+        CatBodySlot.TAIL: 0,
+        CatBodySlot.LEFT_LEG: 0,
+        CatBodySlot.RIGHT_LEG: 0,
+        CatBodySlot.LEFT_ARM: 0,
+        CatBodySlot.RIGHT_ARM: 0,
+        CatBodySlot.LEFT_EYE: 0,
+        CatBodySlot.RIGHT_EYE: 0,
+        CatBodySlot.LEFT_EYEBROW: 0,
+        CatBodySlot.RIGHT_EYEBROW: 0,
+        CatBodySlot.LEFT_EAR: 0,
+        CatBodySlot.RIGHT_EAR: 0,
+        CatBodySlot.MOUTH: 0,
+    }
 
 
 def make_cat(
@@ -57,7 +62,7 @@ def make_cat(
     disorders: list | None = None,
     parent_a: Cat | None = None,
     parent_b: Cat | None = None,
-    body_parts: CatBodyParts | None = None,
+    body_parts: dict[CatBodySlot, int] | None = None,
 ):
     return Cat(
         db_key=db_key,
@@ -454,22 +459,48 @@ class TestInheritedPartDefectChance:
     def test_one_parent_has_defect(self):
         a = make_cat(
             1,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=700,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 700,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
         b = make_cat(2)
         result = inherited_part_defect_chance(a, b, 0.0)
-        assert result == pytest.approx(0.4)
+        # 98% inherit * symmetrization(50% favor) = 0.98 * 0.25 = 0.245
+        assert result == pytest.approx(0.245)
+
+    def test_multi_category_defect_accumulation(self):
+        """Test OR probability accumulation when defects exist in multiple categories."""
+        a = make_cat(
+            1,
+            body_parts={
+                **_default_body_parts(),
+                CatBodySlot.LEFT_EAR: 700,  # Paired slot defect
+                CatBodySlot.TAIL: 700,  # Unpaired slot defect
+            },
+        )
+        b = make_cat(2)
+
+        result = inherited_part_defect_chance(a, b, 0.0)
+
+        # Ear defect prob: 0.98 * 0.25 = 0.245
+        # Tail defect prob: 0.98 * 0.5 = 0.49
+        # Combined OR prob: 1.0 - ((1 - 0.245) * (1 - 0.49))
+        # = 1.0 - (0.755 * 0.51) = 1.0 - 0.38505 = 0.61495
+        assert result == pytest.approx(0.61495)
 
 
 class TestMutationFavoring:
@@ -478,113 +509,200 @@ class TestMutationFavoring:
     def test_mom_has_mutation_slot_dad_not(self):
         mother = make_cat(
             1,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=300,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 300,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
         father = make_cat(
             2,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=0,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 0,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
         trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
-        assert result.probability == pytest.approx(0.4)
+        # 98% inherit * symmetrization(50% favor) = 0.98 * 0.25 = 0.245
+        assert result.probability == pytest.approx(0.245)
 
     def test_both_parents_different_mutations_same_slot(self):
         mother = make_cat(
             1,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=300,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 300,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
         father = make_cat(
             2,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=320,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 320,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
         trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
-        assert result.probability == pytest.approx(0.4)
+        # 98% inherit * symmetrization(50% favor) = 0.98 * 0.25 = 0.245
+        assert result.probability == pytest.approx(0.245)
 
     def test_mutation_favoring_at_high_stimulation(self):
         mother = make_cat(
             1,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=300,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 300,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
         father = make_cat(
             2,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=0,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 0,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
         trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
 
         result = calculate_trait_probability(trait, mother, father, 50.0)
 
-        assert result.probability == pytest.approx(0.48)
+        # 98% inherit * symmetrization(60% favor) = 0.98 * 0.3 = 0.294
+        assert result.probability == pytest.approx(0.294)
+
+    def test_unpaired_category_inheritance(self):
+        """Test inheritance for a non-paired slot (TAIL).
+        Should bypass symmetrization entirely."""
+        mother = make_cat(
+            1,
+            body_parts={**_default_body_parts(), CatBodySlot.TAIL: 300},
+        )
+        father = make_cat(2)
+        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Tail300"))
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # 98% inherit * 50% favor (no symmetrization division) = 0.49
+        assert result.probability == pytest.approx(0.49)
+
+    def test_parent_has_full_symmetry(self):
+        """Test when a parent has the mutation in BOTH left and right slots."""
+        mother = make_cat(
+            1,
+            body_parts={
+                **_default_body_parts(),
+                CatBodySlot.LEFT_EAR: 300,
+                CatBodySlot.RIGHT_EAR: 300,
+            },
+        )
+        father = make_cat(2)
+        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # prob_left = 0.5, prob_right = 0.5
+        # symmetrization = 0.5 * (0.5 + 0.5) = 0.5
+        # 98% inherit * 0.5 = 0.49
+        assert result.probability == pytest.approx(0.49)
+
+    def test_cross_symmetrical_parents(self):
+        """Mom has mutation on Left, Dad has SAME mutation on Right."""
+        mother = make_cat(
+            1,
+            body_parts={**_default_body_parts(), CatBodySlot.LEFT_EAR: 300},
+        )
+        father = make_cat(
+            2,
+            body_parts={**_default_body_parts(), CatBodySlot.RIGHT_EAR: 300},
+        )
+        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        # prob_left = 0.5 (from Mom), prob_right = 0.5 (from Dad)
+        # symmetrization = 0.5 * (0.5 + 0.5) = 0.5
+        # Final = 0.98 * 0.5 = 0.49
+        assert result.probability == pytest.approx(0.49)
 
 
 class TestDisorderTraitProbability:
@@ -622,82 +740,104 @@ class TestBodyPartTraitHelpers:
     """Tests for BodyPartTrait helper functions."""
 
     def test_get_slot(self):
+        from mewgenics_parser.cat import CatBodyPartCategory
+
         trait = BodyPartTrait(_key="Ears300")
-        assert trait.get_slot() == "ears"
+        assert trait.body_part_category == CatBodyPartCategory.EARS
 
     def test_get_part_id(self):
         trait = BodyPartTrait(_key="Ears300")
-        assert trait.get_part_id() == 300
+        assert trait.part_id == 300
 
     def test_cat_has_mutation_in_slot_true(self):
         cat = make_cat(
             1,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=300,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 300,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
-        assert cat_has_mutation_in_slot(cat, "ears") is True
+        assert cat_has_mutation_in_slot(cat, CatBodySlot.LEFT_EAR) is True
 
     def test_cat_has_mutation_in_slot_true_for_defect(self):
         # Birth defects (700+) ARE mutations per the game
         cat = make_cat(
             1,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=700,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 700,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
-        assert cat_has_mutation_in_slot(cat, "ears") is True
+        assert cat_has_mutation_in_slot(cat, CatBodySlot.LEFT_EAR) is True
 
     def test_cat_has_defect_in_slot_true(self):
         cat = make_cat(
             1,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=700,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 700,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
-        assert cat_has_defect_in_slot(cat, "ears") is True
+        assert cat_has_defect_in_slot(cat, CatBodySlot.LEFT_EAR) is True
 
     def test_cat_has_defect_in_slot_false_for_mutation(self):
         cat = make_cat(
             1,
-            body_parts=CatBodyParts(
-                texture=0,
-                body=0,
-                head=0,
-                tail=0,
-                legs=0,
-                arms=0,
-                eyes=0,
-                eyebrows=0,
-                ears=300,
-                mouth=0,
-            ),
+            body_parts={
+                CatBodySlot.TEXTURE: 0,
+                CatBodySlot.BODY: 0,
+                CatBodySlot.HEAD: 0,
+                CatBodySlot.TAIL: 0,
+                CatBodySlot.LEFT_LEG: 0,
+                CatBodySlot.RIGHT_LEG: 0,
+                CatBodySlot.LEFT_ARM: 0,
+                CatBodySlot.RIGHT_ARM: 0,
+                CatBodySlot.LEFT_EYE: 0,
+                CatBodySlot.RIGHT_EYE: 0,
+                CatBodySlot.LEFT_EYEBROW: 0,
+                CatBodySlot.RIGHT_EYEBROW: 0,
+                CatBodySlot.LEFT_EAR: 300,
+                CatBodySlot.RIGHT_EAR: 0,
+                CatBodySlot.MOUTH: 0,
+            },
         )
-        assert cat_has_defect_in_slot(cat, "ears") is False
+        assert cat_has_defect_in_slot(cat, CatBodySlot.LEFT_EAR) is False

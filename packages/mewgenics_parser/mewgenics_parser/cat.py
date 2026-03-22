@@ -2,7 +2,7 @@
 
 import struct
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import StrEnum, auto
 from typing import NamedTuple, Self, TypeGuard
 
 import lz4.block
@@ -42,32 +42,90 @@ def _valid_str(s: str | None) -> TypeGuard[str]:
 
 
 class CatBodyPartCategory(StrEnum):
-    TEXTURE = "texture"
-    BODY = "body"
-    HEAD = "head"
-    TAIL = "tail"
-    LEGS = "legs"
-    ARMS = "arms"
-    EYES = "eyes"
-    EYEBROWS = "eyebrows"
-    EARS = "ears"
-    MOUTH = "mouth"
+    TEXTURE = auto()
+    BODY = auto()
+    HEAD = auto()
+    TAIL = auto()
+    LEGS = auto()
+    EYES = auto()
+    EYEBROWS = auto()
+    EARS = auto()
+    MOUTH = auto()
 
 
-@dataclass(slots=True, frozen=True)
-class CatBodyParts:
-    """Structured representation of a cat's body part identifiers."""
+class CatBodySlot(StrEnum):
+    TEXTURE = auto()
+    BODY = auto()
+    HEAD = auto()
+    TAIL = auto()
 
-    texture: int
-    body: int
-    head: int
-    tail: int
-    legs: int
-    arms: int
-    eyes: int
-    eyebrows: int
-    ears: int
-    mouth: int
+    LEFT_LEG = auto()
+    RIGHT_LEG = auto()
+
+    LEFT_ARM = auto()
+    RIGHT_ARM = auto()
+
+    LEFT_EYE = auto()
+    RIGHT_EYE = auto()
+
+    LEFT_EYEBROW = auto()
+    RIGHT_EYEBROW = auto()
+
+    LEFT_EAR = auto()
+    RIGHT_EAR = auto()
+
+    MOUTH = auto()
+
+    @property
+    def category(self) -> CatBodyPartCategory:
+        match self:
+            case CatBodySlot.TEXTURE:
+                return CatBodyPartCategory.TEXTURE
+            case CatBodySlot.BODY:
+                return CatBodyPartCategory.BODY
+            case CatBodySlot.HEAD:
+                return CatBodyPartCategory.HEAD
+            case CatBodySlot.TAIL:
+                return CatBodyPartCategory.TAIL
+            case CatBodySlot.LEFT_LEG | CatBodySlot.RIGHT_LEG:
+                return CatBodyPartCategory.LEGS
+            case CatBodySlot.LEFT_ARM | CatBodySlot.RIGHT_ARM:
+                return CatBodyPartCategory.LEGS
+            case CatBodySlot.LEFT_EYE | CatBodySlot.RIGHT_EYE:
+                return CatBodyPartCategory.EYES
+            case CatBodySlot.LEFT_EYEBROW | CatBodySlot.RIGHT_EYEBROW:
+                return CatBodyPartCategory.EYEBROWS
+            case CatBodySlot.LEFT_EAR | CatBodySlot.RIGHT_EAR:
+                return CatBodyPartCategory.EARS
+            case CatBodySlot.MOUTH:
+                return CatBodyPartCategory.MOUTH
+
+    @property
+    def counterpart(self) -> "CatBodySlot | None":
+        """Return the counterpart slot for this body part, if it exists (e.g. left vs right)."""
+        match self:
+            case CatBodySlot.LEFT_LEG:
+                return CatBodySlot.RIGHT_LEG
+            case CatBodySlot.RIGHT_LEG:
+                return CatBodySlot.LEFT_LEG
+            case CatBodySlot.LEFT_ARM:
+                return CatBodySlot.RIGHT_ARM
+            case CatBodySlot.RIGHT_ARM:
+                return CatBodySlot.LEFT_ARM
+            case CatBodySlot.LEFT_EYE:
+                return CatBodySlot.RIGHT_EYE
+            case CatBodySlot.RIGHT_EYE:
+                return CatBodySlot.LEFT_EYE
+            case CatBodySlot.LEFT_EYEBROW:
+                return CatBodySlot.RIGHT_EYEBROW
+            case CatBodySlot.RIGHT_EYEBROW:
+                return CatBodySlot.LEFT_EYEBROW
+            case CatBodySlot.LEFT_EAR:
+                return CatBodySlot.RIGHT_EAR
+            case CatBodySlot.RIGHT_EAR:
+                return CatBodySlot.LEFT_EAR
+            case _:
+                return None
 
 
 @dataclass(slots=True)
@@ -119,7 +177,7 @@ class Cat:
     disorders: list[str]
     """List of disorder keys extracted from the blob's ability run, normalized to exclude junk entries."""
 
-    body_parts: CatBodyParts
+    body_parts: dict[CatBodySlot, int]
     """Structured body part identifiers extracted from specific body slot indices in the blob."""
 
     parent_a: Self | None = field(default=None, repr=False)
@@ -209,43 +267,34 @@ class Cat:
         # last non-zero value across each part's indices.
         body_slots = [r.u32() for _ in range(72)]
         body_part_indices = {
-            "texture": [0],
-            "body": [3],
-            "head": [8],
-            "tail": [13],
-            "legs": [18, 23],
-            "arms": [28, 33],
-            "eyes": [38, 43],
-            "eyebrows": [48, 53],
-            "ears": [58, 63],
-            "mouth": [68],
+            CatBodySlot.TEXTURE: 0,
+            CatBodySlot.BODY: 3,
+            CatBodySlot.HEAD: 8,
+            CatBodySlot.TAIL: 13,
+            CatBodySlot.LEFT_LEG: 18,
+            CatBodySlot.RIGHT_LEG: 23,
+            CatBodySlot.LEFT_ARM: 28,
+            CatBodySlot.RIGHT_ARM: 33,
+            CatBodySlot.LEFT_EYE: 38,
+            CatBodySlot.RIGHT_EYE: 43,
+            CatBodySlot.LEFT_EYEBROW: 48,
+            CatBodySlot.RIGHT_EYEBROW: 53,
+            CatBodySlot.LEFT_EAR: 58,
+            CatBodySlot.RIGHT_EAR: 63,
+            CatBodySlot.MOUTH: 68,
         }
-        body_part_values = {}
-        for part, indices in body_part_indices.items():
-            value = 0
-            for i in indices:
-                if i < len(body_slots):
-                    new_value = body_slots[i]
-                    # -2 is legitimately stored as 0xFFFFFFFE in this unsigned field.
-                    # Further investigation needed to determine if all slots are
-                    # actually signed; patching only this known case for now.
-                    if new_value == ((-2) & ((1 << 32) - 1)):
-                        new_value = -2
-                    if new_value != 0:
-                        value = new_value
-            body_part_values[part] = value
-        body_parts = CatBodyParts(
-            texture=body_part_values.get("texture", 0),
-            body=body_part_values.get("body", 0),
-            head=body_part_values.get("head", 0),
-            tail=body_part_values.get("tail", 0),
-            legs=body_part_values.get("legs", 0),
-            arms=body_part_values.get("arms", 0),
-            eyes=body_part_values.get("eyes", 0),
-            eyebrows=body_part_values.get("eyebrows", 0),
-            ears=body_part_values.get("ears", 0),
-            mouth=body_part_values.get("mouth", 0),
-        )
+        body_parts = {}
+        for part, i in body_part_indices.items():
+            part_id = body_slots[i]
+            # -2 is legitimately stored as 0xFFFFFFFE in this unsigned field.
+            # Further investigation needed to determine if all slots are
+            # actually signed; patching only this known case for now.
+            if part_id == ((-2) & ((1 << 32) - 1)):
+                part_id = -2
+            assert part_id != 0, (
+                f"Expected non-zero body part ID for {part.name} at slot {i} for cat {cat_key}"
+            )
+            body_parts[part] = part_id
 
         r.skip(12)  # unknown
 
