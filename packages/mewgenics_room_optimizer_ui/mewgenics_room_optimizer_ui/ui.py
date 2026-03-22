@@ -181,7 +181,6 @@ def build_params_section(state: AppState) -> None:
                     default_value=20.0,
                     min_value=1.0,
                     max_value=100.0,
-                    step=1.0,
                     width=200,
                 )
                 with dpg.tooltip(dpg.last_item()):
@@ -195,7 +194,6 @@ def build_params_section(state: AppState) -> None:
                     default_value=0.5,
                     min_value=0.0,
                     max_value=5.0,
-                    step=0.1,
                     width=200,
                 )
                 with dpg.tooltip(dpg.last_item()):
