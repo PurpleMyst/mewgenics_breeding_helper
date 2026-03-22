@@ -5,9 +5,8 @@ run:
     uv run room-optimizer
 
 # Run all tests.
-[windows]
-test-all:
-    fd tests | % { uv run pytest $_ }
+test:
+    uv run pytest
 
 # Run the type checker.
 ty:

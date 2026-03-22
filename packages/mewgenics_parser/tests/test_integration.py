@@ -4,11 +4,10 @@ from inline_snapshot import snapshot
 from dirty_equals import IsInt
 
 from mewgenics_parser import parse_save
-from mewgenics_parser.cat import CatGender, CatStatus
+from mewgenics_parser.cat import CatBodyPartCategory, CatGender, CatStatus, CatBodySlot
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.utils import NameAndDescription
 
-from mewgenics_parser.cat import CatBodyParts
 from mewgenics_parser.cat import Stats
 
 
@@ -57,18 +56,23 @@ class TestParseSaveIntegration:
         assert cat.passive_abilities == snapshot(["Masochist", "DukeOfFlies"])
         assert cat.disorders == snapshot([])
         assert cat.body_parts == snapshot(
-            CatBodyParts(
-                texture=304,
-                body=900,
-                head=900,
-                tail=900,
-                legs=900,
-                arms=900,
-                eyes=900,
-                eyebrows=900,
-                ears=900,
-                mouth=900,
-            )
+            {
+                CatBodySlot.TEXTURE: 304,
+                CatBodySlot.BODY: 900,
+                CatBodySlot.HEAD: 900,
+                CatBodySlot.TAIL: 900,
+                CatBodySlot.LEFT_LEG: 900,
+                CatBodySlot.RIGHT_LEG: 900,
+                CatBodySlot.LEFT_ARM: 900,
+                CatBodySlot.RIGHT_ARM: 900,
+                CatBodySlot.LEFT_EYE: 900,
+                CatBodySlot.RIGHT_EYE: 900,
+                CatBodySlot.LEFT_EYEBROW: 900,
+                CatBodySlot.RIGHT_EYEBROW: 900,
+                CatBodySlot.LEFT_EAR: 900,
+                CatBodySlot.RIGHT_EAR: 900,
+                CatBodySlot.MOUTH: 900,
+            }
         )
         assert cat.parent_a is not None
         assert cat.parent_b is not None
@@ -124,16 +128,15 @@ class TestGpakIntegration:
         result = gd.body_part_text
         assert list(result.keys()) == snapshot(
             [
-                "body",
-                "ears",
-                "eyebrows",
-                "eyes",
-                "head",
-                "legs",
-                "mouth",
-                "tail",
-                "texture",
-                "arms",
+                CatBodyPartCategory.BODY,
+                CatBodyPartCategory.EARS,
+                CatBodyPartCategory.EYEBROWS,
+                CatBodyPartCategory.EYES,
+                CatBodyPartCategory.HEAD,
+                CatBodyPartCategory.LEGS,
+                CatBodyPartCategory.MOUTH,
+                CatBodyPartCategory.TAIL,
+                CatBodyPartCategory.TEXTURE,
             ]
         )
 
@@ -142,16 +145,16 @@ class TestGpakIntegration:
         gd = GameData.from_gpak(gpak_path)
         result = gd.body_part_text
 
-        assert result["eyes"][303] == snapshot(
+        assert result[CatBodyPartCategory.EYES][303] == snapshot(
             NameAndDescription(name="Gem Eyes", description="+1 INT, +1 CHA")
         )
-        assert result["eyes"][306] == snapshot(
+        assert result[CatBodyPartCategory.EYES][306] == snapshot(
             NameAndDescription(
                 name="Confusing Eyes",
                 description="Your basic attack has a 10% chance to inflict Confusion 3.",
             )
         )
-        assert result["eyes"][706] == snapshot(
+        assert result[CatBodyPartCategory.EYES][706] == snapshot(
             NameAndDescription(
                 name="Crossed Eyes", description="Start each battle with Confusion 2."
             )
