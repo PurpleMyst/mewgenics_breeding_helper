@@ -89,7 +89,7 @@ def main() -> None:
     dpg.setup_dearpygui()
     dpg.set_primary_window("main_window", True)
 
-    dpg.set_frame_callback(1, callback=lambda: on_render_frame(state))
+    dpg.set_frame_callback(frame=0, callback=lambda: on_render_frame(state))
 
     dpg.show_viewport()
 
