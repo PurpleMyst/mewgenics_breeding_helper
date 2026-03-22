@@ -20,3 +20,7 @@ lint:
 # Run the linter with auto-fix.
 fix:
     uv run ruff check packages --fix
+
+# Format the code.
+format:
+    uv run ruff format packages
