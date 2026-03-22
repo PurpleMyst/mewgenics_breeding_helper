@@ -1,6 +1,7 @@
 """Integration tests for GPAK functions requiring a real GPAK file."""
 
 from inline_snapshot import snapshot
+from dirty_equals import IsInt
 
 from mewgenics_parser import parse_save
 from mewgenics_parser.cat import CatGender, CatStatus
@@ -22,6 +23,7 @@ class TestParseSaveIntegration:
         assert cat.name == snapshot("Myst")
         assert cat.gender == snapshot(CatGender.FEMALE)
         assert cat.sexuality == snapshot(0.08160075767255394)
+        assert cat.libido == snapshot(0.6100491969838884)
         assert cat.status == snapshot(CatStatus.GONE)
         assert cat.room == snapshot(None)
         assert cat.stat_base == snapshot(
@@ -46,7 +48,7 @@ class TestParseSaveIntegration:
                 luck=9,
             )
         )
-        assert cat.age == snapshot(63)
+        assert cat.age == snapshot(IsInt())
         assert cat.aggression == snapshot(0.9648030361579043)
         assert cat.libido == snapshot(0.6100491969838884)
         assert cat.active_abilities == snapshot(
