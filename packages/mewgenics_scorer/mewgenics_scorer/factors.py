@@ -7,7 +7,6 @@ from mewgenics_parser import Cat
 from .ancestry import KinshipManager
 from .compatibility import (
     can_breed,
-    is_hater_conflict,
     is_mutual_lovers,
 )
 from .inheritance import (
@@ -126,7 +125,7 @@ def calculate_pair_factors(
 
     return PairFactors(
         can_breed=can_breed(a, b),
-        hater_conflict=is_hater_conflict(a, b),
+        hater_conflict=False,
         lover_conflict=False,
         mutual_lovers=is_mutual_lovers(a, b),
         novel_disorder_chance=novel_disorder_chance(coi),

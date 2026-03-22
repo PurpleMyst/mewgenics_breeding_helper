@@ -13,7 +13,6 @@ from mewgenics_scorer import (
     calculate_pair_factors,
     calculate_pair_quality,
     can_breed,
-    is_hater_conflict,
 )
 
 from .types import (
@@ -119,6 +118,35 @@ def _filter_lover_exclusivity(
     return filtered
 
 
+def _filter_hater_conflicts(
+    pairs: list[tuple[Cat, Cat]],
+    room_cats: list[Cat],
+) -> list[tuple[Cat, Cat]]:
+    """Filter pairs that have hater conflicts within the room.
+
+    Rule: If cat A hates cat B and both are in this room, they can't breed.
+    Cats with haters in different rooms can breed with anyone here.
+    """
+    room_cat_ids = {c.db_key for c in room_cats}
+    hater_lookup: dict[int, set[int]] = {c.db_key: set() for c in room_cats}
+
+    for c in room_cats:
+        if c.hater is not None and c.hater.db_key in room_cat_ids:
+            hater_lookup[c.db_key].add(c.hater.db_key)
+
+    filtered = []
+    for a, b in pairs:
+        a_hates_b = b.db_key in hater_lookup.get(a.db_key, set())
+        b_hates_a = a.db_key in hater_lookup.get(b.db_key, set())
+
+        if a_hates_b or b_hates_a:
+            continue
+
+        filtered.append((a, b))
+
+    return filtered
+
+
 def score_pair(
     cat_a: Cat,
     cat_b: Cat,
@@ -127,9 +155,6 @@ def score_pair(
 ) -> ScoredPair | None:
     """Score a pair, returning None if they can't be paired."""
     if not can_breed(cat_a, cat_b):
-        return None
-
-    if is_hater_conflict(cat_a, cat_b):
         return None
 
     factors = calculate_pair_factors(
@@ -204,6 +229,7 @@ def _evaluate_state(
         true_stim = room.base_stim
         pairs = _generate_pairs(cats_in_room)
         pairs = _filter_lover_exclusivity(pairs, cats_in_room)
+        pairs = _filter_hater_conflicts(pairs, cats_in_room)
 
         sum_quality = 0.0
         valid_pairs = 0
