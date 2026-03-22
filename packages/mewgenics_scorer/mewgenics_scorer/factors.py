@@ -8,7 +8,6 @@ from .ancestry import KinshipManager
 from .compatibility import (
     can_breed,
     is_hater_conflict,
-    is_lover_conflict,
     is_mutual_lovers,
 )
 from .inheritance import (
@@ -112,7 +111,6 @@ def calculate_pair_factors(
     a: Cat,
     b: Cat,
     stimulation: float = DEFAULT_STIMULATION,
-    avoid_lovers: bool = True,
     trait_requirements: list[TraitRequirement] | None = None,
 ) -> PairFactors:
     """Calculate all factors for a breeding pair."""
@@ -129,7 +127,7 @@ def calculate_pair_factors(
     return PairFactors(
         can_breed=can_breed(a, b),
         hater_conflict=is_hater_conflict(a, b),
-        lover_conflict=is_lover_conflict(a, b, avoid_lovers),
+        lover_conflict=False,
         mutual_lovers=is_mutual_lovers(a, b),
         novel_disorder_chance=novel_disorder_chance(coi),
         novel_part_defect_chance=novel_part_defect_chance(coi),

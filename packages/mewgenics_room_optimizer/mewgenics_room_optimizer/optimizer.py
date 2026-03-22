@@ -14,7 +14,6 @@ from mewgenics_scorer import (
     calculate_pair_quality,
     can_breed,
     is_hater_conflict,
-    is_lover_conflict,
 )
 
 from .types import (
@@ -89,6 +88,37 @@ def _generate_pairs(
     return pairs
 
 
+def _filter_lover_exclusivity(
+    pairs: list[tuple[Cat, Cat]],
+    room_cats: list[Cat],
+) -> list[tuple[Cat, Cat]]:
+    """Filter pairs that violate per-room lover exclusivity.
+
+    Rule: If a cat's lover is in this room, they can only breed with that lover.
+    Cats with lovers in different rooms can breed with anyone here.
+    """
+    room_cat_ids = {c.db_key for c in room_cats}
+    lover_lookup: dict[int, int | None] = {
+        c.db_key: c.lover_id
+        for c in room_cats
+        if c.lover is not None and c.lover.db_key in room_cat_ids
+    }
+
+    filtered = []
+    for a, b in pairs:
+        a_lover = lover_lookup.get(a.db_key)
+        b_lover = lover_lookup.get(b.db_key)
+
+        if a_lover is not None and b.db_key != a_lover:
+            continue
+        if b_lover is not None and a.db_key != b_lover:
+            continue
+
+        filtered.append((a, b))
+
+    return filtered
+
+
 def score_pair(
     cat_a: Cat,
     cat_b: Cat,
@@ -102,15 +132,11 @@ def score_pair(
     if is_hater_conflict(cat_a, cat_b):
         return None
 
-    if is_lover_conflict(cat_a, cat_b, params.avoid_lovers):
-        return None
-
     factors = calculate_pair_factors(
         kinship_manager,
         cat_a,
         cat_b,
         stimulation=params.stimulation,
-        avoid_lovers=params.avoid_lovers,
         trait_requirements=params.trait_requirements,
     )
 
@@ -177,6 +203,7 @@ def _evaluate_state(
 
         true_stim = room.base_stim
         pairs = _generate_pairs(cats_in_room)
+        pairs = _filter_lover_exclusivity(pairs, cats_in_room)
 
         sum_quality = 0.0
         valid_pairs = 0

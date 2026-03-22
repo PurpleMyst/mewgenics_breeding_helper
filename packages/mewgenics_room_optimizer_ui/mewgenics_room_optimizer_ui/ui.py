@@ -527,7 +527,6 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     params = OptimizationParams(
         min_stats=min_stats,
         max_risk=max_risk,
-        avoid_lovers=True,
         scoring_prefs=scoring_prefs,
         trait_requirements=user_data.trait_requirements,
         sa_temperature=sa_temp,

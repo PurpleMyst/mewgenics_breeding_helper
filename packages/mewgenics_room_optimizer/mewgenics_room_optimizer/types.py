@@ -59,7 +59,6 @@ class OptimizationParams:
 
     min_stats: int = 0
     max_risk: float = 0.2
-    avoid_lovers: bool = True
     stimulation: float = 50.0
     trait_requirements: list[TraitRequirement] = field(default_factory=list)
     scoring_prefs: ScoringPreferences | None = None

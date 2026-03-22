@@ -172,7 +172,6 @@ class AppState:
     min_stats: int = 0
     max_risk: float = 0.2  # Probability (0.0-1.0), displayed as percentage in UI
     minimize_variance: bool = True
-    avoid_lovers: bool = True
     prefer_low_aggression: bool = True
     prefer_high_libido: bool = True
     prefer_high_charisma: bool = True
@@ -226,7 +225,6 @@ class AppState:
             min_stats=config.get("min_stats", 0),
             max_risk=cls._convert_max_risk(config.get("max_risk", 0.2)),
             minimize_variance=config.get("minimize_variance", True),
-            avoid_lovers=config.get("avoid_lovers", True),
             prefer_low_aggression=config.get("prefer_low_aggression", True),
             prefer_high_libido=config.get("prefer_high_libido", True),
             prefer_high_charisma=config.get("prefer_high_charisma", True),
@@ -243,7 +241,6 @@ class AppState:
             "max_risk": self.max_risk
             * 100,  # Convert probability to percentage for backwards compatibility
             "minimize_variance": self.minimize_variance,
-            "avoid_lovers": self.avoid_lovers,
             "prefer_low_aggression": self.prefer_low_aggression,
             "prefer_high_libido": self.prefer_high_libido,
             "prefer_high_charisma": self.prefer_high_charisma,
