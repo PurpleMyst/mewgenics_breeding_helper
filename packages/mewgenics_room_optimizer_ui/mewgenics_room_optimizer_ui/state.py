@@ -1,29 +1,36 @@
 """Application state for room optimizer UI."""
 
-import json
-import os
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Self
+import platformdirs
+from typing import Any, Self
+
+from pydantic import BaseModel, Field, field_validator
 
 from mewgenics_parser import Cat
 from mewgenics_parser.gpak import GameData
-from mewgenics_parser.traits import Trait, create_trait, extract_traits_from_cat
+from mewgenics_parser.traits import (
+    Trait,
+    TraitCategory,
+    create_trait,
+    extract_traits_from_cat,
+)
 from mewgenics_room_optimizer import (
     DEFAULT_ROOM_CONFIGS,
     OptimizationResult,
     RoomConfig,
-    RoomType,
 )
 from mewgenics_room_optimizer.types import ScoredPair
-from mewgenics_scorer import TraitRequirement
+from mewgenics_scorer import ScoringPreferences, TraitRequirement
 
-CONFIG_DIR = Path.home() / ".mewgenics_room_optimizer"
+CONFIG_DIR = platformdirs.user_config_path(
+    "mewgenics_breeding_helper", appauthor="PurpleMyst"
+)
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 
 def _find_gpak_path() -> str:
     """Find resources.gpak from common paths."""
+    import os
+
     candidates = [
         "resources.gpak",
         os.path.join(os.getcwd(), "resources.gpak"),
@@ -36,148 +43,67 @@ def _find_gpak_path() -> str:
     return ""
 
 
-def _ensure_config_dir() -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+class ConfigModel(BaseModel):
+    version: int = 1
+    rooms: list[RoomConfig] = Field(default_factory=lambda: list(DEFAULT_ROOM_CONFIGS))
+    trait_requirements: list[TraitRequirement] = Field(default_factory=list)
+    last_save_path: str | None = None
+    min_stats: int = 0
+    max_risk: float = 20.0
+    scoring_prefs: ScoringPreferences = Field(default_factory=ScoringPreferences)
+
+    @field_validator("trait_requirements", mode="before")
+    @classmethod
+    def parse_trait_requirements(cls, v: list[Any]) -> list[Any]:
+        if not isinstance(v, list):
+            return v
+        parsed = []
+        for t in v:
+            if isinstance(t, dict):
+                trait = create_trait(TraitCategory(t["category"]), t["key"])
+                parsed.append(
+                    TraitRequirement(trait=trait, weight=t.get("weight", 5.0))
+                )
+            else:
+                parsed.append(t)
+        return parsed
+
+    @classmethod
+    def load(cls) -> Self:
+        """Load configuration from disk or return defaults."""
+        if CONFIG_FILE.exists():
+            try:
+                return cls.model_validate_json(CONFIG_FILE.read_text())
+            except (ValueError, OSError):
+                pass
+        return cls()
+
+    def save(self) -> None:
+        """Save configuration to disk."""
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        CONFIG_FILE.write_text(self.model_dump_json(indent=2))
 
 
-def _load_default_config() -> dict:
-    return {
-        "rooms": [
-            {
-                "key": r.key,
-                "display_name": r.display_name,
-                "room_type": r.room_type.value,
-                "max_cats": r.max_cats,
-            }
-            for r in DEFAULT_ROOM_CONFIGS
-        ],
-        "last_save_path": None,
-    }
-
-
-def load_config() -> dict:
-    """Load configuration from disk or return defaults."""
-    _ensure_config_dir()
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE) as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return _load_default_config()
-    return _load_default_config()
-
-
-def save_config(config: dict) -> None:
-    """Save configuration to disk."""
-    _ensure_config_dir()
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=2)
-
-
-def room_configs_from_dict(data: list[dict]) -> list[RoomConfig]:
-    """Convert dictionary list to RoomConfig objects."""
-    return [
-        RoomConfig(
-            key=r["key"],
-            room_type=RoomType(r["room_type"]),
-            max_cats=r.get("max_cats"),
-            base_stim=r.get("base_stim", 50.0),
-        )
-        for r in data
-    ]
-
-
-def room_configs_to_dict(configs: list[RoomConfig]) -> list[dict]:
-    """Convert RoomConfig objects to dictionary list."""
-    return [
-        {
-            "key": r.key,
-            "room_type": r.room_type.value,
-            "max_cats": r.max_cats,
-            "base_stim": r.base_stim,
-        }
-        for r in configs
-    ]
-
-
-def trait_requirements_from_dict(data: list[dict]) -> list[TraitRequirement]:
-    """Convert dictionary list to TraitRequirement objects with normalized keys."""
-    return [
-        TraitRequirement(
-            trait=create_trait(t["category"], t["key"]),
-            weight=t.get("weight", 5.0),
-        )
-        for t in data
-    ]
-
-
-def migrate_trait_requirements(
-    traits: list[TraitRequirement],
-) -> list[TraitRequirement]:
-    """Migrate traits to normalized form and deduplicate.
-
-    If a user had both 'sturdy' and 'sturdy2', this will merge them
-    into a single normalized entry.
-    """
-    seen: dict[tuple[str, str], TraitRequirement] = {}
-
-    for t in traits:
-        trait_key = t.trait.key
-        category = t.trait.category
-        key = (category, trait_key)
-
-        if key not in seen:
-            seen[key] = TraitRequirement(
-                trait=create_trait(category, trait_key),
-                weight=t.weight,
-            )
-        else:
-            existing = seen[key]
-            seen[key] = TraitRequirement(
-                trait=create_trait(category, trait_key),
-                weight=max(existing.weight, t.weight),
-            )
-
-    return list(seen.values())
-
-
-def trait_requirements_to_dict(traits: list[TraitRequirement]) -> list[dict]:
-    """Convert TraitRequirement objects to dictionary list."""
-    return [
-        {
-            "category": t.trait.category,
-            "key": t.trait.key,
-            "weight": t.weight,
-        }
-        for t in traits
-    ]
-
-
-@dataclass
 class AppState:
-    """Application state - pure Python, DPG-agnostic."""
+    """Application state - runtime only, not persisted."""
 
-    cats: list[Cat] = field(default_factory=list)
-    room_configs: list[RoomConfig] = field(default_factory=list)
+    cats: list[Cat] = []
+    room_configs: list[RoomConfig] = []
     results: OptimizationResult | None = None
     selected_result_room_key: str | None = None
     selected_cat_db_key: int | None = None
     last_save_path: str | None = None
-    game_data: GameData = field(
-        default_factory=lambda: (
-            GameData.from_gpak(p) if (p := _find_gpak_path()) else GameData.empty()
-        )
-    )
+    game_data: GameData | None = None
 
     min_stats: int = 0
-    max_risk: float = 0.2  # Probability (0.0-1.0), displayed as percentage in UI
+    max_risk: float = 0.2
     minimize_variance: bool = True
     prefer_low_aggression: bool = True
     prefer_high_libido: bool = True
     prefer_high_charisma: bool = True
     maximize_throughput: bool = False
 
-    trait_requirements: list[TraitRequirement] = field(default_factory=list)
+    trait_requirements: list[TraitRequirement] = []
 
     sim_cat_a_key: int | None = None
     sim_cat_b_key: int | None = None
@@ -186,70 +112,53 @@ class AppState:
 
     is_loading: bool = False
 
-    @staticmethod
-    def _convert_max_risk(value: float) -> float:
-        """Convert saved max_risk from percentage (0-100) to probability (0-1)."""
-        if value > 1.0:
-            return value / 100.0
-        return value
+    def __init__(self) -> None:
+        self.game_data = (
+            GameData.from_gpak(p) if (p := _find_gpak_path()) else GameData.empty()
+        )
 
     @classmethod
     def from_config(cls) -> Self:
-        """Create AppState from saved configuration."""
-        config = load_config()
-        saved_rooms = {r["key"]: r for r in config.get("rooms", [])}
-
-        room_configs = []
-        for default in DEFAULT_ROOM_CONFIGS:
-            if default.key in saved_rooms:
-                saved = saved_rooms[default.key]
-                room_configs.append(
-                    RoomConfig(
-                        key=default.key,
-                        room_type=RoomType(
-                            saved.get("room_type", default.room_type.value)
-                        ),
-                        max_cats=saved.get("max_cats", default.max_cats),
-                        base_stim=saved.get("base_stim", default.base_stim),
-                    )
-                )
-            else:
-                room_configs.append(default)
-
-        return cls(
-            room_configs=room_configs,
-            trait_requirements=migrate_trait_requirements(
-                trait_requirements_from_dict(config.get("trait_requirements", []))
-            ),
-            last_save_path=config.get("last_save_path"),
-            min_stats=config.get("min_stats", 0),
-            max_risk=cls._convert_max_risk(config.get("max_risk", 0.2)),
-            minimize_variance=config.get("minimize_variance", True),
-            prefer_low_aggression=config.get("prefer_low_aggression", True),
-            prefer_high_libido=config.get("prefer_high_libido", True),
-            prefer_high_charisma=config.get("prefer_high_charisma", True),
-            maximize_throughput=config.get("maximize_throughput", False),
-        )
-
-    def to_config(self) -> dict:
-        """Convert state to configuration dictionary for saving."""
-        return {
-            "rooms": room_configs_to_dict(self.room_configs),
-            "trait_requirements": trait_requirements_to_dict(self.trait_requirements),
-            "last_save_path": self.last_save_path,
-            "min_stats": self.min_stats,
-            "max_risk": self.max_risk
-            * 100,  # Convert probability to percentage for backwards compatibility
-            "minimize_variance": self.minimize_variance,
-            "prefer_low_aggression": self.prefer_low_aggression,
-            "prefer_high_libido": self.prefer_high_libido,
-            "prefer_high_charisma": self.prefer_high_charisma,
-            "maximize_throughput": self.maximize_throughput,
-        }
+        """Create AppState from persisted configuration."""
+        config = ConfigModel.load()
+        state = cls()
+        state.room_configs = config.rooms
+        state.trait_requirements = config.trait_requirements
+        state.last_save_path = config.last_save_path
+        state.min_stats = config.min_stats
+        state.max_risk = config.max_risk / 100.0
+        state.scoring_preferences = config.scoring_prefs
+        return state
 
     def save(self) -> None:
-        """Save current state to disk."""
-        save_config(self.to_config())
+        """Persist current state to disk."""
+        config = ConfigModel(
+            rooms=self.room_configs,
+            trait_requirements=self.trait_requirements,
+            last_save_path=self.last_save_path,
+            min_stats=self.min_stats,
+            max_risk=self.max_risk * 100,
+            scoring_prefs=self.scoring_preferences,
+        )
+        config.save()
+
+    @property
+    def scoring_preferences(self) -> ScoringPreferences:
+        return ScoringPreferences(
+            minimize_variance=self.minimize_variance,
+            prefer_low_aggression=self.prefer_low_aggression,
+            prefer_high_libido=self.prefer_high_libido,
+            prefer_high_charisma=self.prefer_high_charisma,
+            maximize_throughput=self.maximize_throughput,
+        )
+
+    @scoring_preferences.setter
+    def scoring_preferences(self, prefs: ScoringPreferences) -> None:
+        self.minimize_variance = prefs.minimize_variance
+        self.prefer_low_aggression = prefs.prefer_low_aggression
+        self.prefer_high_libido = prefs.prefer_high_libido
+        self.prefer_high_charisma = prefs.prefer_high_charisma
+        self.maximize_throughput = prefs.maximize_throughput
 
     @property
     def has_cats(self) -> bool:

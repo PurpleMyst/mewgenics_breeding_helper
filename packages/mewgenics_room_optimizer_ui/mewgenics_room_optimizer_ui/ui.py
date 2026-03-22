@@ -175,19 +175,6 @@ def build_params_section(state: AppState) -> None:
                     )
             with dpg.group(horizontal=True):
                 dpg.add_slider_float(
-                    label="Risk Barrier Lambda",
-                    tag="risk_barrier_lambda",
-                    default_value=20.0,
-                    min_value=1.0,
-                    max_value=100.0,
-                    width=200,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Controls steepness of risk penalty. Higher = stricter barrier."
-                    )
-            with dpg.group(horizontal=True):
-                dpg.add_slider_float(
                     label="Disruption Penalty",
                     tag="move_penalty_weight",
                     default_value=0.5,
@@ -247,39 +234,6 @@ def build_params_section(state: AppState) -> None:
                     dpg.add_text(
                         "Favors having many distinct pairs to maximize the number of offspring produced per generation."
                     )
-
-            with dpg.group(horizontal=True):
-                dpg.add_text("SA Temperature:")
-                dpg.add_input_float(
-                    tag="sa_temperature",
-                    default_value=100.0,
-                    min_value=1.0,
-                    max_value=500.0,
-                    step=1.0,
-                    width=100,
-                )
-
-            with dpg.group(horizontal=True):
-                dpg.add_text("Cooling Rate:")
-                dpg.add_input_float(
-                    tag="sa_cooling_rate",
-                    default_value=0.95,
-                    min_value=0.8,
-                    max_value=0.99,
-                    step=0.01,
-                    width=100,
-                )
-
-            with dpg.group(horizontal=True):
-                dpg.add_text("Neighbors/Temp:")
-                dpg.add_input_int(
-                    tag="sa_neighbors",
-                    default_value=200,
-                    min_value=50,
-                    max_value=1000,
-                    step=10,
-                    width=100,
-                )
 
 
 def on_param_changed(sender: int, app_data: Any, user_data: AppState) -> None:
@@ -502,12 +456,6 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
 
     min_stats = dpg.get_value("min_stats")
     max_risk = dpg.get_value("max_risk") / 100.0
-
-    sa_temp = dpg.get_value("sa_temperature")
-    sa_cooling = dpg.get_value("sa_cooling_rate")
-    sa_neighbors = dpg.get_value("sa_neighbors")
-
-    risk_barrier_lambda = dpg.get_value("risk_barrier_lambda")
     move_penalty_weight = dpg.get_value("move_penalty_weight")
 
     minimize_variance = dpg.get_value("minimize_variance")
@@ -529,10 +477,6 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
         max_risk=max_risk,
         scoring_prefs=scoring_prefs,
         trait_requirements=user_data.trait_requirements,
-        sa_temperature=sa_temp,
-        sa_cooling_rate=sa_cooling,
-        sa_neighbors_per_temp=sa_neighbors,
-        risk_barrier_lambda=risk_barrier_lambda,
         move_penalty_weight=move_penalty_weight,
     )
 

@@ -8,6 +8,8 @@ dependencies = [
     "mewgenics_scorer",
     "mewgenics_room_optimizer",
     "dearpygui>=1.6",
+    "platformdirs>=4.9.4",
+    "pydantic>=2.12.5",
 ]
 
 [project.scripts]
