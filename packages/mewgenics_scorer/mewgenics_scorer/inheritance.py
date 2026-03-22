@@ -31,13 +31,19 @@ def _calc_slot_inheritance_prob(
     parent_b: Cat,
     slot: CatBodySlot,
     favor: float,
+    specific_part_id: int | None = None,
 ) -> float:
     """Calculate probability that a slot inherits from parent A based on mutation favor.
 
     Mutation favor applies to ANY mutation (good or bad) in the slot.
+    If specific_part_id is provided, only that exact mutation is considered a match.
     """
     a_has = cat_has_mutation_in_slot(parent_a, slot)
     b_has = cat_has_mutation_in_slot(parent_b, slot)
+
+    if specific_part_id is not None:
+        a_has = a_has and parent_a.body_parts.get(slot) == specific_part_id
+        b_has = b_has and parent_b.body_parts.get(slot) == specific_part_id
 
     if not a_has and not b_has:
         return 0.0
@@ -457,6 +463,7 @@ def _calc_body_part_inheritance(
     inherit_chance = 0.8 + 0.2 * (9 / 10)  # = 0.98
 
     favor = _better_chance(stimulation)
+    specific_part_id = body_trait.part_id
 
     # Calculate per-pair probabilities with symmetrization
     pair_probs: list[float] = []
@@ -464,15 +471,17 @@ def _calc_body_part_inheritance(
         if len(pair) == 1:
             slot = pair[0]
             pair_probs.append(
-                _calc_slot_inheritance_prob(parent_a, parent_b, slot, favor)
+                _calc_slot_inheritance_prob(
+                    parent_a, parent_b, slot, favor, specific_part_id
+                )
             )
         else:
             left_slot, right_slot = pair
             prob_left = _calc_slot_inheritance_prob(
-                parent_a, parent_b, left_slot, favor
+                parent_a, parent_b, left_slot, favor, specific_part_id
             )
             prob_right = _calc_slot_inheritance_prob(
-                parent_a, parent_b, right_slot, favor
+                parent_a, parent_b, right_slot, favor, specific_part_id
             )
             pair_probs.append(_symmetrization_prob(prob_left, prob_right))
 
@@ -480,9 +489,12 @@ def _calc_body_part_inheritance(
 
     final_prob = inherit_chance * prob_given_inherit
 
-    # Determine parent_source
-    has_any_a = any(cat_has_mutation_in_slot(parent_a, s) for s in slots)
-    has_any_b = any(cat_has_mutation_in_slot(parent_b, s) for s in slots)
+    # Determine parent_source - check for the specific mutation in specific slot
+    def has_specific_mutation(cat: Cat, slot: CatBodySlot) -> bool:
+        return cat.body_parts.get(slot) == specific_part_id
+
+    has_any_a = any(has_specific_mutation(parent_a, s) for s in slots)
+    has_any_b = any(has_specific_mutation(parent_b, s) for s in slots)
 
     if has_any_a and has_any_b:
         parent_source = f"{parent_a.name} or {parent_b.name}"

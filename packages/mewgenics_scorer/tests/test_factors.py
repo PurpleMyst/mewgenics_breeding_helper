@@ -704,6 +704,33 @@ class TestMutationFavoring:
         # Final = 0.98 * 0.5 = 0.49
         assert result.probability == pytest.approx(0.49)
 
+    def test_bug_different_mutations_show_wrong_probability(self):
+        """Parents have Ears300 and Ears400, but we ask about Ears700.
+
+        This demonstrates the bug where the probability is non-zero even though
+        neither parent has Ears700. The parent_source is also wrong.
+        """
+        mother = make_cat(
+            1,
+            body_parts={**_default_body_parts(), CatBodySlot.LEFT_EAR: 300},
+        )
+        father = make_cat(
+            2,
+            body_parts={**_default_body_parts(), CatBodySlot.RIGHT_EAR: 400},
+        )
+        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears700"))
+
+        result = calculate_trait_probability(trait, mother, father, 0.0)
+
+        print(f"Probability: {result.probability}")
+        print(f"Parent source: {result.parent_source}")
+        print(f"Inherit chance: {result.inherit_chance}")
+        print(f"Parent favor chance: {result.parent_favor_chance}")
+
+        # Neither parent has Ears700, so probability should be 0
+        assert result.probability == 0.0, f"Expected 0.0 but got {result.probability}"
+        assert result.parent_source == "Neither"
+
 
 class TestDisorderTraitProbability:
     """Tests for disorder trait inheritance probability."""
