@@ -39,25 +39,6 @@ def load_startup_save(filepath: str, state: Any) -> bool:
         return False
 
 
-def on_render_frame(state: Any) -> None:
-    """Poll optimization queue and update UI when results are ready."""
-    import dearpygui.dearpygui as dpg
-
-    from mewgenics_room_optimizer_ui.ui import update_results_table
-
-    if not state.optimization_queue.empty():
-        status, payload = state.optimization_queue.get()
-        state.is_optimizing = False
-        dpg.configure_item("optimize_button", enabled=True)
-
-        if status == "success":
-            state.results = payload
-            dpg.set_value("status_text", "Optimization Complete")
-            update_results_table(payload, state)
-        else:
-            dpg.set_value("status_text", f"Error: {payload}")
-
-
 def main() -> None:
     """Main entry point."""
 
@@ -88,8 +69,6 @@ def main() -> None:
     )
     dpg.setup_dearpygui()
     dpg.set_primary_window("main_window", True)
-
-    dpg.set_frame_callback(frame=0, callback=lambda: on_render_frame(state))
 
     dpg.show_viewport()
 

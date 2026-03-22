@@ -1,6 +1,5 @@
 """DearPyGui UI components for room optimizer."""
 
-import threading
 import traceback
 from typing import Any
 
@@ -489,46 +488,28 @@ def exit_callback(sender: int, app_data: Any, user_data: Any) -> None:
     dpg.destroy_context()
 
 
-def _optimization_worker(
-    cats: list,
-    room_configs: list,
-    params: Any,
-    state: AppState,
-) -> None:
-    """Background worker for running optimization in a separate thread."""
-    from mewgenics_room_optimizer import optimize_sa
-
-    try:
-        results = optimize_sa(cats, room_configs, params)
-        state.optimization_queue.put(("success", results))
-    except Exception as e:
-        state.optimization_queue.put(("error", str(e)))
-
-
 def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
-    """Run the optimization in a background thread."""
+    """Run the optimization (blocking)."""
+    from mewgenics_room_optimizer import optimize_sa
     from mewgenics_room_optimizer.types import OptimizationParams
 
-    if not user_data.cats or user_data.is_optimizing:
+    if not user_data.cats:
         return
 
-    user_data.is_optimizing = True
     dpg.set_value("status_text", "Calculating...")
     dpg.configure_item("optimize_button", enabled=False)
+    dpg.render_dearpygui_frame()
 
     min_stats = dpg.get_value("min_stats")
     max_risk = dpg.get_value("max_risk") / 100.0
 
-    # SA Parameters
     sa_temp = dpg.get_value("sa_temperature")
     sa_cooling = dpg.get_value("sa_cooling_rate")
     sa_neighbors = dpg.get_value("sa_neighbors")
 
-    # New Parameters
     risk_barrier_lambda = dpg.get_value("risk_barrier_lambda")
     move_penalty_weight = dpg.get_value("move_penalty_weight")
 
-    # Scoring Preferences
     minimize_variance = dpg.get_value("minimize_variance")
     prefer_low_aggression = dpg.get_value("prefer_low_aggression")
     prefer_high_libido = dpg.get_value("prefer_high_libido")
@@ -556,12 +537,13 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
         move_penalty_weight=move_penalty_weight,
     )
 
-    thread = threading.Thread(
-        target=_optimization_worker,
-        args=(user_data.cats, user_data.room_configs, params, user_data),
-        daemon=True,
-    )
-    thread.start()
+    results = optimize_sa(user_data.cats, user_data.room_configs, params)
+    user_data.results = results
+
+    dpg.set_value("status_text", "Optimization Complete")
+    dpg.configure_item("optimize_button", enabled=True)
+
+    update_results_table(results, user_data)
 
 
 def update_results_table(results: OptimizationResult, state: AppState) -> None:
