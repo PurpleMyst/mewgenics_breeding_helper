@@ -3,7 +3,14 @@
 import platformdirs
 from typing import Any, Self
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SkipValidation,
+    field_validator,
+    field_serializer,
+)
 
 from mewgenics_parser import Cat
 from mewgenics_parser.gpak import GameData
@@ -44,9 +51,13 @@ def _find_gpak_path() -> str:
 
 
 class ConfigModel(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     version: int = 1
     rooms: list[RoomConfig] = Field(default_factory=lambda: list(DEFAULT_ROOM_CONFIGS))
-    trait_requirements: list[TraitRequirement] = Field(default_factory=list)
+    trait_requirements: list[SkipValidation[TraitRequirement]] = Field(
+        default_factory=list
+    )
     last_save_path: str | None = None
     min_stats: int = 0
     max_risk: float = 20.0
@@ -64,9 +75,24 @@ class ConfigModel(BaseModel):
                 parsed.append(
                     TraitRequirement(trait=trait, weight=t.get("weight", 5.0))
                 )
+            elif isinstance(t, TraitRequirement):
+                parsed.append(t)
             else:
                 parsed.append(t)
         return parsed
+
+    @field_serializer("trait_requirements")
+    def serialize_trait_requirements(self, v: list[TraitRequirement]) -> list[dict]:
+        return [
+            {
+                "category": t.trait.category.value
+                if hasattr(t.trait.category, "value")
+                else t.trait.category,
+                "key": t.trait.key,
+                "weight": t.weight,
+            }
+            for t in v
+        ]
 
     @classmethod
     def load(cls) -> Self:
@@ -93,7 +119,7 @@ class AppState:
     selected_result_room_key: str | None = None
     selected_cat_db_key: int | None = None
     last_save_path: str | None = None
-    game_data: GameData | None = None
+    game_data: GameData
 
     min_stats: int = 0
     max_risk: float = 0.2
