@@ -101,14 +101,52 @@ def _parse_pedigree(conn) -> dict:
         pb = int(pb_k) if pb_k != NULL and 0 < pb_k <= MAX_KEY else None
         cat_key = int(cat_k)
 
+        if pa is None or pb is None:
+            continue
+
         existing = ped_map.get(cat_key)
         if existing is None:
             ped_map[cat_key] = (pa, pb)
         elif existing[0] is None or existing[1] is None:
-            if pa is not None and pb is not None:
-                ped_map[cat_key] = (pa, pb)
+            ped_map[cat_key] = (pa, pb)
 
     return ped_map
+
+
+def _break_pedigree_cycles(cats: list[Cat]) -> list[Cat]:
+    """
+    Detect and break cycles in the pedigree graph by setting parent references to None.
+
+    When a cycle is detected, both parent_a and parent_b of the cat at the cycle point
+    are set to None.
+
+    Returns list of cats that had their parents cleared due to cycle detection.
+    """
+    affected = []
+
+    def dfs(cat: Cat, path: set[int]) -> bool:
+        if cat.db_key in path:
+            return True
+
+        path.add(cat.db_key)
+
+        if cat.parent_a and dfs(cat.parent_a, path):
+            affected.append(cat)
+            cat.parent_a = None
+            cat.parent_b = None
+
+        if cat.parent_b and dfs(cat.parent_b, path):
+            affected.append(cat)
+            cat.parent_a = None
+            cat.parent_b = None
+
+        path.remove(cat.db_key)
+        return False
+
+    for cat in cats:
+        dfs(cat, set())
+
+    return affected
 
 
 def parse_save(path: str) -> SaveData:
@@ -163,6 +201,10 @@ def parse_save(path: str) -> SaveData:
             hater = cats_by_key.get(cat.hater)
             if hater is not None and hater is not cat:
                 cat.hater = hater
+
+    affected = _break_pedigree_cycles(cats)
+    if affected:
+        print(f"Broke {len(affected)} pedigree cycles")
 
     house_count = sum(1 for c in cats if c.status == "In House")
     adventure_count = sum(1 for c in cats if c.status == "Adventure")
