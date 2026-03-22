@@ -114,11 +114,12 @@ def score_pair(
         trait_requirements=params.trait_requirements,
     )
 
-    if factors.combined_malady_chance > params.max_risk:
-        return None
-
     scoring_prefs = params.scoring_prefs or ScoringPreferences()
     quality = calculate_pair_quality(factors, scoring_prefs)
+
+    if factors.combined_malady_chance > params.max_risk:
+        excess_risk = factors.combined_malady_chance - params.max_risk
+        quality *= math.exp(-params.risk_barrier_lambda * excess_risk)
 
     sex_a = cat_a.sexuality or 0.0
     sex_b = cat_b.sexuality or 0.0
@@ -145,13 +146,14 @@ def _can_fit_single(
 
 def _evaluate_state(
     state_dict: dict[int, str],
+    original_state: dict[int, str],
     cats_by_id: dict[int, Cat],
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
     kinship_manager: KinshipManager,
     params: OptimizationParams,
 ) -> float:
-    """Evaluate total quality for a room assignment state."""
+    """Evaluate total quality for a room assignment state using pure EV math."""
     total_quality = 0.0
     rooms_content: dict[str, list[Cat]] = {r.key: [] for r in room_configs}
 
@@ -164,12 +166,13 @@ def _evaluate_state(
             continue
 
         cats_in_room = rooms_content[room.key]
+        N_r = len(cats_in_room)
 
-        # Hard capacity constraint
-        if room.max_cats is not None and len(cats_in_room) > room.max_cats:
-            return -float("inf")
+        if room.max_cats is not None and N_r > room.max_cats:
+            excess = N_r - room.max_cats
+            total_quality -= 1000.0 * (excess**2)
 
-        if len(cats_in_room) < 2:
+        if N_r < 2:
             continue
 
         true_stim = room.base_stim
@@ -196,16 +199,11 @@ def _evaluate_state(
         if valid_pairs == 0:
             continue
 
-        # Expected quality of a single random breeding event in this room
-        expected_breed_quality = sum_quality / valid_pairs
+        total_possible_pairs = (N_r * (N_r - 1)) / 2.0
+        expected_quality_per_tick = sum_quality / total_possible_pairs
 
-        # Percentage-based dilution penalty (1.0 = perfect, 0.5 = half the cats are useless)
-        dilution_penalty = len(valid_cats) / len(cats_in_room)
-
-        # --- Throughput Soft Constraint ---
         scoring_prefs = params.scoring_prefs or ScoringPreferences()
         if scoring_prefs.maximize_throughput:
-            # Only count cats that actually form valid pairs towards the multiplier
             males = sum(
                 1 for c in cats_in_room if c.gender == "male" and c.db_key in valid_cats
             )
@@ -218,33 +216,67 @@ def _evaluate_state(
                 1 for c in cats_in_room if c.gender == "?" and c.db_key in valid_cats
             )
 
-            # Calculate max simultaneous breeding pairs
+            theoretical_max = room.max_cats // 2 if room.max_cats else float("inf")
             concurrent_breeds = min(
-                len(valid_cats) // 2, males + spiders, females + spiders
+                len(valid_cats) // 2,
+                males + spiders,
+                females + spiders,
+                theoretical_max,
             )
 
-            # Apply an exponent to artificially inflate the value of high-capacity rooms.
-            density_bonus = concurrent_breeds**1.5
-
-            room_quality = expected_breed_quality * density_bonus * dilution_penalty
+            room_quality = concurrent_breeds * expected_quality_per_tick
         else:
-            room_quality = expected_breed_quality * dilution_penalty
+            room_quality = expected_quality_per_tick
 
         total_quality += room_quality
+
+    cats_moved = sum(
+        1 for cid, r in state_dict.items() if r != original_state.get(cid) and r
+    )
+    total_quality -= cats_moved * params.move_penalty_weight
 
     return total_quality
 
 
-def _get_neighbor(state: dict[int, str], rooms: list[str]) -> dict[int, str]:
-    """Generate a neighboring state by moving one cat or swapping two cats."""
+def _get_neighbor(
+    state: dict[int, str], room_configs: list[RoomConfig]
+) -> dict[int, str]:
+    """Generate a neighboring state by moving one cat or swapping two cats.
+
+    Uses biased room selection to favor under-capacity rooms.
+    """
     new_state = state.copy()
     keys = list(new_state.keys())
 
-    if not keys or not rooms:
+    if not keys:
+        return new_state
+
+    breeding_rooms = [r for r in room_configs if r.room_type == RoomType.BREEDING]
+    if not breeding_rooms:
         return new_state
 
     if random.random() < 0.5:
-        new_state[random.choice(keys)] = random.choice(rooms)
+        cat_to_move = random.choice(keys)
+
+        room_counts: dict[str, int] = {r.key: 0 for r in breeding_rooms}
+        for r_key in new_state.values():
+            if r_key in room_counts:
+                room_counts[r_key] += 1
+
+        weights: list[float] = []
+        valid_keys: list[str] = []
+        for r in breeding_rooms:
+            valid_keys.append(r.key)
+            if r.max_cats is None:
+                weights.append(1.0)
+            else:
+                remaining = max(0.1, r.max_cats - room_counts[r.key])
+                weights.append(remaining)
+
+        valid_keys.append("")
+        weights.append(0.5)
+
+        new_state[cat_to_move] = random.choices(valid_keys, weights=weights, k=1)[0]
     else:
         if len(keys) >= 2:
             c1, c2 = random.sample(keys, 2)
@@ -255,6 +287,7 @@ def _get_neighbor(state: dict[int, str], rooms: list[str]) -> dict[int, str]:
 
 def _run_sa_worker(
     initial_state: dict[int, str],
+    original_state: dict[int, str],
     cats_by_id: dict[int, Cat],
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
@@ -273,30 +306,54 @@ def _run_sa_worker(
 
     current_state = initial_state.copy()
     current_score = _evaluate_state(
-        current_state, cats_by_id, room_configs, pair_cache, kinship_manager, params
+        current_state,
+        original_state,
+        cats_by_id,
+        room_configs,
+        pair_cache,
+        kinship_manager,
+        params,
     )
+
+    positive_deltas: list[float] = []
+    test_state = current_state.copy()
+    test_score = current_score
+
+    for _ in range(100):
+        neighbor = _get_neighbor(test_state, room_configs)
+        n_score = _evaluate_state(
+            neighbor,
+            original_state,
+            cats_by_id,
+            room_configs,
+            pair_cache,
+            kinship_manager,
+            params,
+        )
+        if n_score > test_score:
+            positive_deltas.append(n_score - test_score)
+        test_state = neighbor
+        test_score = n_score
+
+    avg_delta = sum(positive_deltas) / len(positive_deltas) if positive_deltas else 1.0
+    T = -avg_delta / math.log(0.8)
 
     best_state = current_state.copy()
     best_score = current_score
 
     iteration = 0
-    valid_rooms = [r.key for r in room_configs if r.room_type == RoomType.BREEDING] + [
-        ""
-    ]
     while T > T_min:
         for _ in range(neighbors_per_temp):
-            neighbor = _get_neighbor(current_state, valid_rooms)
+            neighbor = _get_neighbor(current_state, room_configs)
             neighbor_score = _evaluate_state(
                 neighbor,
+                original_state,
                 cats_by_id,
                 room_configs,
                 pair_cache,
                 kinship_manager,
                 params,
             )
-
-            if neighbor_score == -float("inf"):
-                continue
 
             delta = neighbor_score - current_score
 
@@ -408,13 +465,13 @@ def optimize_sa(
 
     best_overall_state = None
     best_overall_score = -float("inf")
-    MOVE_PENALTY_WEIGHT = 0.5
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = [
             executor.submit(
                 _run_sa_worker,
                 state,
+                original_state,
                 cats_by_id,
                 sa_room_configs,
                 pair_cache,
@@ -429,19 +486,8 @@ def optimize_sa(
             try:
                 final_state, final_score = future.result()
 
-                # Calculate how many cats moved from original save state
-                cats_moved = sum(
-                    1
-                    for cat_id, r in final_state.items()
-                    if r != original_state.get(cat_id)
-                    if r
-                )
-
-                # Apply movement penalty to prefer solutions with less disruption
-                adjusted_score = final_score - (cats_moved * MOVE_PENALTY_WEIGHT)
-
-                if adjusted_score > best_overall_score:
-                    best_overall_score = adjusted_score
+                if final_score > best_overall_score:
+                    best_overall_score = final_score
                     best_overall_state = final_state
             except Exception:
                 pass

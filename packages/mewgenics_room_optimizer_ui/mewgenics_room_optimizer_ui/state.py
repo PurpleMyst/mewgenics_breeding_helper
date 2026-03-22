@@ -2,6 +2,7 @@
 
 import json
 import os
+import queue
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
@@ -186,6 +187,8 @@ class AppState:
     selected_pair_index: int | None = None
 
     is_loading: bool = False
+    optimization_queue: queue.Queue = field(default_factory=queue.Queue)
+    is_optimizing: bool = False
 
     @staticmethod
     def _convert_max_risk(value: float) -> float:

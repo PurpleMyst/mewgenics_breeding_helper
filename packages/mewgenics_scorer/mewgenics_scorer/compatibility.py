@@ -1,17 +1,14 @@
 """Compatibility checks for breeding pairs."""
 
+from mewgenics_parser.cat import CatGender
+
 from mewgenics_parser import Cat
 
 
 def can_breed(a: Cat, b: Cat) -> bool:
     """Check if two cats can produce offspring."""
-    ga = (a.gender or "?").strip().lower()
-    gb = (b.gender or "?").strip().lower()
-    if ga == "?" or gb == "?":
-        return True
-    if ga != gb and {ga, gb} == {"male", "female"}:
-        return True
-    return False
+    g_set = {a.gender, b.gender}
+    return CatGender.DITTO in g_set or g_set == {CatGender.MALE, CatGender.FEMALE}
 
 
 def is_hater_conflict(a: Cat, b: Cat) -> bool:

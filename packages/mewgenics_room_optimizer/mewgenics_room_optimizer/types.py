@@ -66,6 +66,8 @@ class OptimizationParams:
     sa_temperature: float = 100.0
     sa_cooling_rate: float = 0.95
     sa_neighbors_per_temp: int = 200
+    risk_barrier_lambda: float = 20.0
+    move_penalty_weight: float = 0.5
 
 
 @dataclass

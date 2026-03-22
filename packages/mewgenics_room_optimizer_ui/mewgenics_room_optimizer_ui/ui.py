@@ -1,5 +1,6 @@
 """DearPyGui UI components for room optimizer."""
 
+import threading
 import traceback
 from typing import Any
 
@@ -146,7 +147,7 @@ def build_room_config_section(state: AppState) -> None:
 def build_params_section(state: AppState) -> None:
     """Build the optimization parameters section."""
     with dpg.collapsing_header(label="Optimization Parameters", default_open=True):
-        with dpg.child_window(height=180, border=True, tag="params_section"):
+        with dpg.child_window(height=240, border=True, tag="params_section"):
             with dpg.group(horizontal=True):
                 dpg.add_input_int(
                     label="Min Stats",
@@ -163,8 +164,7 @@ def build_params_section(state: AppState) -> None:
                 dpg.add_slider_float(
                     label="Max Risk %",
                     tag="max_risk",
-                    default_value=state.max_risk
-                    * 100,  # Convert probability to percentage for display
+                    default_value=state.max_risk * 100,
                     max_value=100.0,
                     width=200,
                     callback=on_param_changed,
@@ -173,6 +173,34 @@ def build_params_section(state: AppState) -> None:
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
                         "Maximum inbreeding risk percentage allowed for breeding pairs."
+                    )
+            with dpg.group(horizontal=True):
+                dpg.add_slider_float(
+                    label="Risk Barrier Lambda",
+                    tag="risk_barrier_lambda",
+                    default_value=20.0,
+                    min_value=1.0,
+                    max_value=100.0,
+                    step=1.0,
+                    width=200,
+                )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Controls steepness of risk penalty. Higher = stricter barrier."
+                    )
+            with dpg.group(horizontal=True):
+                dpg.add_slider_float(
+                    label="Disruption Penalty",
+                    tag="move_penalty_weight",
+                    default_value=0.5,
+                    min_value=0.0,
+                    max_value=5.0,
+                    step=0.1,
+                    width=200,
+                )
+                with dpg.tooltip(dpg.last_item()):
+                    dpg.add_text(
+                        "Cost of moving cats from current room. Higher = prefers stable layouts."
                     )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(
@@ -185,17 +213,6 @@ def build_params_section(state: AppState) -> None:
                 with dpg.tooltip(dpg.last_item()):
                     dpg.add_text(
                         "Prioritizes consistent stat lines across offspring rather than gambling for single high-stat spikes."
-                    )
-                dpg.add_checkbox(
-                    label="Avoid Lovers",
-                    tag="avoid_lovers",
-                    default_value=state.avoid_lovers,
-                    callback=on_param_changed,
-                    user_data=state,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Excludes pairs that are mutual lovers to prevent relationship conflicts."
                     )
             with dpg.group(horizontal=True):
                 dpg.add_checkbox(
@@ -277,11 +294,9 @@ def on_param_changed(sender: int, app_data: Any, user_data: AppState) -> None:
     if tag == "min_stats":
         user_data.min_stats = app_data
     elif tag == "max_risk":
-        user_data.max_risk = app_data / 100.0  # Convert percentage to probability
+        user_data.max_risk = app_data / 100.0
     elif tag == "minimize_variance":
         user_data.minimize_variance = app_data
-    elif tag == "avoid_lovers":
-        user_data.avoid_lovers = app_data
     elif tag == "prefer_high_libido":
         user_data.prefer_high_libido = app_data
     elif tag == "prefer_high_charisma":
@@ -476,26 +491,44 @@ def exit_callback(sender: int, app_data: Any, user_data: Any) -> None:
     dpg.destroy_context()
 
 
-def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
-    """Run the optimization."""
+def _optimization_worker(
+    cats: list,
+    room_configs: list,
+    params: Any,
+    state: AppState,
+) -> None:
+    """Background worker for running optimization in a separate thread."""
     from mewgenics_room_optimizer import optimize_sa
+
+    try:
+        results = optimize_sa(cats, room_configs, params)
+        state.optimization_queue.put(("success", results))
+    except Exception as e:
+        state.optimization_queue.put(("error", str(e)))
+
+
+def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
+    """Run the optimization in a background thread."""
     from mewgenics_room_optimizer.types import OptimizationParams
 
-    if not user_data.cats:
+    if not user_data.cats or user_data.is_optimizing:
         return
 
+    user_data.is_optimizing = True
     dpg.set_value("status_text", "Calculating...")
     dpg.configure_item("optimize_button", enabled=False)
-    dpg.render_dearpygui_frame()
 
     min_stats = dpg.get_value("min_stats")
-    max_risk = dpg.get_value("max_risk") / 100.0  # Convert percentage to probability
-    avoid_lovers = dpg.get_value("avoid_lovers")
+    max_risk = dpg.get_value("max_risk") / 100.0
 
     # SA Parameters
     sa_temp = dpg.get_value("sa_temperature")
     sa_cooling = dpg.get_value("sa_cooling_rate")
     sa_neighbors = dpg.get_value("sa_neighbors")
+
+    # New Parameters
+    risk_barrier_lambda = dpg.get_value("risk_barrier_lambda")
+    move_penalty_weight = dpg.get_value("move_penalty_weight")
 
     # Scoring Preferences
     minimize_variance = dpg.get_value("minimize_variance")
@@ -515,21 +548,22 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     params = OptimizationParams(
         min_stats=min_stats,
         max_risk=max_risk,
-        avoid_lovers=avoid_lovers,
+        avoid_lovers=True,
         scoring_prefs=scoring_prefs,
         trait_requirements=user_data.trait_requirements,
         sa_temperature=sa_temp,
         sa_cooling_rate=sa_cooling,
         sa_neighbors_per_temp=sa_neighbors,
+        risk_barrier_lambda=risk_barrier_lambda,
+        move_penalty_weight=move_penalty_weight,
     )
 
-    results = optimize_sa(user_data.cats, user_data.room_configs, params)
-    user_data.results = results
-
-    dpg.set_value("status_text", "Optimization Complete")
-    dpg.configure_item("optimize_button", enabled=True)
-
-    update_results_table(results, user_data)
+    thread = threading.Thread(
+        target=_optimization_worker,
+        args=(user_data.cats, user_data.room_configs, params, user_data),
+        daemon=True,
+    )
+    thread.start()
 
 
 def update_results_table(results: OptimizationResult, state: AppState) -> None:

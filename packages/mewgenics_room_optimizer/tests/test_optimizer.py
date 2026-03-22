@@ -182,11 +182,12 @@ class TestSAEvaluator:
 
         room = RoomConfig("b1", RoomType.BREEDING, max_cats=6, base_stim=50.0)
         state = {1: "b1", 2: "b1", 3: "b1"}
+        original_state = {1: "", 2: "", 3: ""}
         params = OptimizationParams(stimulation=50.0)
         cache = PairCache()
         km = KinshipManager(list(cats.values()))
 
-        _score = _evaluate_state(state, cats, [room], cache, km, params)
+        _score = _evaluate_state(state, original_state, cats, [room], cache, km, params)
 
         # Should have at least one pair scored
         assert mock_score_pair.called
