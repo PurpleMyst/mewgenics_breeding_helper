@@ -94,7 +94,6 @@ def score_pair(
     cat_b: Cat,
     kinship_manager: KinshipManager,
     params: OptimizationParams,
-    skip_risk_check: bool = False,
 ) -> ScoredPair | None:
     """Score a pair, returning None if they can't be paired."""
     if not can_breed(cat_a, cat_b):
@@ -115,7 +114,7 @@ def score_pair(
         trait_requirements=params.trait_requirements,
     )
 
-    if not skip_risk_check and factors.combined_malady_chance > params.max_risk:
+    if factors.combined_malady_chance > params.max_risk:
         return None
 
     scoring_prefs = params.scoring_prefs or ScoringPreferences()
