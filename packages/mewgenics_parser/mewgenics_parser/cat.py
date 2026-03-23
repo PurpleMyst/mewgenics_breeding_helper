@@ -157,7 +157,7 @@ class Cat:
     """Total stats tuple (base + modifiers) calculated from the blob's base, mod, and sec stat groups."""
 
     age: int | None
-    """Calculated age based on creation_day from the blob and current_day passed to from_blob. Capped at 100 unless EternalYouth is present, in which case capped at 500. None if creation_day is missing or invalid."""
+    """Calculated age based on creation_day from the blob and current_day passed to from_blob. None if creation_day is missing or invalid."""
 
     aggression: float | None
     """Aggression personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
@@ -353,37 +353,41 @@ class Cat:
                 disorders.append(s)
             r.skip(4)
 
-        # ── Age ──────────────────────────────────────────────────────────────────
-        # creation_day is stored near the end of the blob at approximately
-        # blob_len - 103. We scan a small window around that offset to handle
-        # minor layout variance across save versions.
+        # ── Equipment (skip) ─────────────────────────────────────────────────────
+        # Equipment struct layout (5 slots: head, face, neck, weapon, trinket):
+        #   u32 version    - always 0x5
+        #   bool has_equip
+        #   if has_equip:
+        #     String name
+        #     String unknown_0
+        #     s32 unknown_1-4 (4 * 4 = 16 bytes)
+        #     u8 unknown_5-6 (2 bytes)
+        def _skip_equipment(r: BinaryReader) -> None:
+            for _ in range(5):
+                r.skip(4)  # version (always 0x5)
+                has_equip = r.u8()
+                if has_equip:
+                    r.str()
+                    r.str()
+                    r.skip(16)
+                    r.skip(2)
+
+        _skip_equipment(r)
+
+        # ── Collar, Level, COI (skip) ──────────────────────────────────────────
+        r.str()  # collar
+        r.skip(4)  # level (s32)
+        r.skip(8)  # coi (double)
+
+        # ── Birthday / Age ───────────────────────────────────────────────────────
+        # birthday is s64, stored near end of blob
+        # Day -2 and -1 are valid (e.g., starter cats born on day -2)
         age: int | None = None
+        birthday = r.i64()
         if current_day is not None:
-            age_limit = (
-                500 if any(p.lower() == "eternalyouth" for p in disorders) else 100
-            )
-            for offset_from_end in [
-                103,
-                102,
-                104,
-                101,
-                105,
-                100,
-                106,
-                107,
-                108,
-                109,
-                110,
-            ]:
-                pos = len(raw) - offset_from_end
-                if not (0 <= pos <= len(raw) - 4):
-                    continue
-                creation_day = struct.unpack_from("<I", raw, pos)[0]
-                if 0 <= creation_day <= current_day:
-                    candidate = current_day - creation_day
-                    if 0 <= candidate <= age_limit:
-                        age = candidate
-                        break
+            candidate = current_day - birthday
+            if -2 <= candidate:
+                age = candidate
 
         return cls(
             db_key=cat_key,

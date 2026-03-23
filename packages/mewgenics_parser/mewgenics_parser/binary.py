@@ -35,6 +35,12 @@ class BinaryReader:
         self.pos += 8
         return lo + hi * 4_294_967_296
 
+    def i64(self) -> int:
+        """Read signed 64-bit integer (little-endian)."""
+        v = struct.unpack_from("<q", self.data, self.pos)[0]
+        self.pos += 8
+        return v
+
     def f64(self) -> float:
         """Read 64-bit float (double)."""
         v = struct.unpack_from("<d", self.data, self.pos)[0]
