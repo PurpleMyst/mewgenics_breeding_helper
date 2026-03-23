@@ -139,10 +139,10 @@ class Cat:
     """Cat's name, decoded from UTF-16 in the blob. Defaults to 'Unnamed' if missing."""
 
     name_tag: str
-    """Cat's name tag string after the name field, set by the player arbitrarily. Can be empty."""
+    """Cat's nameplate symbol/tag after the name field, set by the player arbitrarily. Can be empty."""
 
     gender: CatGender
-    """Cat's gender, normalized from multiple possible save data representations."""
+    """Cat's sex, normalized from multiple possible save data representations."""
 
     status: CatStatus
     """Current status of the cat (In House, Adventure, or Gone), determined from save data context."""
@@ -151,13 +151,13 @@ class Cat:
     """Current room if In House, or None if on Adventure or Gone. Decoded from save data context."""
 
     stat_base: Stats
-    """Base stats tuple (HP, STR, DEX, INT, WIS, LUK, CHA) directly from the blob."""
+    """Base heritable stats tuple (HP, STR, DEX, INT, WIS, LUK, CHA) directly from the blob."""
 
     stat_total: Stats
-    """Total stats tuple (base + modifiers) calculated from the blob's base, mod, and sec stat groups."""
+    """Total stats tuple calculated from the blob's base, levelling deltas, and injury deltas."""
 
     age: int | None
-    """Calculated age based on creation_day from the blob and current_day passed to from_blob. None if creation_day is missing or invalid."""
+    """Calculated age based on birthday from the blob and current_day passed to from_blob. None if birthday is missing or invalid."""
 
     aggression: float | None
     """Aggression personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
@@ -166,28 +166,31 @@ class Cat:
     """Libido personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
 
     fertility: float | None
-    """Fertility personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
+    """Fertility personality stat, numerically multiplied with a partner's fertility to influence number of kittens."""
 
     sexuality: float | None
-    """Sexuality personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
+    """Sexual preference personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
 
     active_abilities: list[str]
-    """List of active ability keys extracted from the blob's ability run, normalized to exclude junk entries."""
+    """List of active abilities (movement, basic attacks, and current accessible actives) extracted from the blob's ability run."""
 
     passive_abilities: list[str]
-    """List of passive ability keys extracted from the blob's ability run, normalized to exclude junk entries."""
+    """List of current usable passive ability keys extracted from the blob's ability run, normalized to exclude junk entries."""
 
     disorders: list[str]
-    """List of disorder keys extracted from the blob's ability run, normalized to exclude junk entries."""
+    """List of disorder and mutation passives extracted from the blob's ability run, normalized to exclude junk entries."""
 
     body_parts: dict[CatBodySlot, int]
     """Structured body part identifiers extracted from specific body slot indices in the blob."""
 
     level: int
+    """The current level of the cat."""
 
     collar: str
+    """Currently equipped collar identifier."""
 
     coi: float
+    """Coefficient of inbreeding. Identical to values in files/pedigree."""
 
     parent_a: Self | None = field(default=None, repr=False)
     """Direct parent cat A, assigned after parsing based on database id references. None if unknown or not found."""
@@ -196,10 +199,10 @@ class Cat:
     """Direct parent cat B, assigned after parsing based on database id references. None if unknown or not found."""
 
     lover: Self | int | None = field(default=None, repr=False)
-    """Lover as either a Cat object (after resolution) or int (before resolution). None if no lover."""
+    """Lover (SQL key of loved cat) as either a Cat object (after resolution) or int (before resolution). None if no lover."""
 
     hater: Self | int | None = field(default=None, repr=False)
-    """Hater as either a Cat object (after resolution) or int (before resolution). None if no hater."""
+    """Hater (SQL key of rival cat) as either a Cat object (after resolution) or int (before resolution). None if no hater."""
 
     @classmethod
     def from_save_data(
@@ -232,9 +235,12 @@ class Cat:
         version = r.u32()
         assert version == 19, f"Unexpected cat blob version {version} for cat {cat_key}"
 
+        # Entropy: Random bits rolled when a cat/kitten is generated.
+        # Hashed to select a picture pose in the family tree viewer.
         r.skip(8)
+
         name = r.utf16str() or "Unnamed"
-        name_tag = r.str() or ""
+        name_tag = r.str() or ""  # nameplate_symbol
 
         gender: CatGender = {
             0: CatGender.MALE,
@@ -243,18 +249,18 @@ class Cat:
         }[r.u32()]
 
         # ── Personality ─────────────────────────────────────────────────────────
+        # Sex duplicate field - appears to carry the same value as Sex
         _gender_dup = r.u32()
 
-        # Skip over status flags, which are partially unknown.
+        # Skip over boolean status bitfields (StatusFlagsB0 through StatusFlagsB3To7).
+        # These flag whether a cat cannot adventure, returned, is starving, dead, donated, etc.
         r.skip((8 + 8 + 8 + 5 * 8) // 8)
 
-        # A string field observed to always be "None" across all known saves.
-        # Purpose unknown; asserted here to surface unexpected values during development.
+        # unknown_2 and unknown_3 could form a passive ability structure ("None", 1)
+        # It's referenced as a base pointer but not functionally used in current decomp database
         _unknown_none_str = r.str()
         assert _unknown_none_str is None or _unknown_none_str == "None"
 
-        # A constant field observed to always be 1 across all known saves.
-        # Purpose unknown; asserted here to surface unexpected values during development.
         _unknown_one = r.u32()
         assert _unknown_one == 1, (
             f"Expected constant 1 at offset {r.pos - 4} for cat {cat_key}, got {_unknown_one}"
@@ -263,9 +269,11 @@ class Cat:
         libido = r.f64()
         sexuality = r.f64()
         lover_id = r.u64()
-        r.skip(8)  # unknown
+        r.skip(8)  # unknown_7: Nonzero with a valid lover cat (could be affinity?)
+
         aggression = r.f64()
         hater_id = r.u64()
+
         fertility = r.f64()
 
         # The game uses 0xFFFFFFFF as a null sentinel for relationship slots.
@@ -274,13 +282,15 @@ class Cat:
         if hater_id == 0xFFFF_FFFF:
             hater_id = None
 
-        r.skip(8)  # unknown
+        r.skip(8)  # unknown_9: Nonzero with a valid rival cat (could be affinity?)
 
         # ── Body parts ──────────────────────────────────────────────────────────
         # 72 slots of u32 body part IDs. Only specific indices are meaningful;
         # pairs of indices (e.g. legs at 18 and 23) should agree — we take the
         # last non-zero value across each part's indices.
         body_slots = [r.u32() for _ in range(72)]
+
+        # Validated indices mapping to BodyParts struct and BodyPartDescriptors
         body_part_indices = {
             CatBodySlot.TEXTURE: 0,
             CatBodySlot.BODY: 3,
@@ -298,6 +308,7 @@ class Cat:
             CatBodySlot.RIGHT_EAR: 63,
             CatBodySlot.MOUTH: 68,
         }
+
         body_parts = {}
         for part, i in body_part_indices.items():
             part_id = body_slots[i]
@@ -311,32 +322,42 @@ class Cat:
             )
             body_parts[part] = part_id
 
-        r.skip(12)  # unknown
+        r.skip(12)  # unknown_0 and unknown_1 from BodyParts struct
 
-        # The cat's voice variant. Doesn't necessarily correspond to gender.
+        # Voice actor
         _voice_code = r.str()
 
-        r.f64()  # unknown float
+        # Voice pitch modifier
+        r.f64()
 
         # ── Stats ────────────────────────────────────────────────────────────────
-        stat_base = _stats()
-        stat_mod1 = _stats()
-        stat_mod2 = _stats()
+        stat_base = (
+            _stats()
+        )  # Base stats that would be passed to children (stats_heritable)
+        stat_mod1 = (
+            _stats()
+        )  # Stat deltas as a result of levelling and events (stats_delta_levelling)
+        stat_mod2 = _stats()  # Stat deltas as a result of injury (stats_delta_injuries)
+
         stat_total = Stats(
             *(b + m + s for b, m, s in zip(stat_base, stat_mod1, stat_mod2))
         )
 
+        # Stores the string name of a stat; correlates with last injury
         _last_injury_debuffed_stat = r.str()
 
-        # CampaignStats static fields
+        # CampaignStats static fields (possibly tracks adventure stats)
         _hp = r.i32()
         _dead = r.u8()
-        _unknown_8 = r.u8()
+        _unknown_8 = r.u8()  # unknown_0
         _unknown_1 = r.u32()
+
         event_stat_modifiers_count = r.u32()
         for _ in range(event_stat_modifiers_count):
             _expression = r.str()
-            _unknown_0 = r.u32()
+            _unknown_0 = (
+                r.u32()
+            )  # Likely a downcounter indicating how many rounds this effect will last
 
         # ── Abilities ────────────────────────────────────────────────────────────
         # The ability block is a run of u64-length-prefixed ASCII identifiers.
@@ -344,25 +365,20 @@ class Cat:
         # that anchors the run, since the region between stats and abilities
         # contains variable-length content we don't fully understand yet.
         #
-        # Run structure (from open-source editor research):
-        #   [0]    = "DefaultMove" (active slot 1 placeholder, always present)
-        #   [1–5]  = active abilities
-        #   [6–9]  = unknown padding slots
-        #   [10+]  = passive mutations
-        #
-        # After the run: u32 tier for passive1, then 3 × (str + u32 tier) for
-        # passive2, disorder1, and disorder2.
-        # Read up to 5 active abilities, ignoring empty/null entries.
+        # Run structure:
+        #   [0-1]  = Movement and basic attack actives (actives_basic)
+        #   [2-5]  = Current usable active ability list (actives_accessible)
+        # Read up to 6 active abilities, ignoring empty/null entries.
         actives: list[str] = [
             s for _ in range(6) if (s := r.str()) not in (None, "None")
         ]
 
-        # Seem to be a block of the 4 active ability slots the cat was born with, perhaps for
-        # Autism.
+        # Copy of active abilities originally inherited from parents
         _born_active_abilities: list[str] = [
             s for _ in range(4) if (s := r.str()) not in (None, "None")
         ]
 
+        # Current usable passive ability list
         passives: list[str] = []
         for _ in range(2):
             s = r.str()
@@ -370,6 +386,7 @@ class Cat:
                 passives.append(s)
             r.skip(4)
 
+        # Disorder and mutation passives
         disorders: list[str] = []
         for _ in range(2):
             s = r.str()
@@ -383,9 +400,11 @@ class Cat:
         #   bool has_equip
         #   if has_equip:
         #     String name
-        #     String unknown_0
-        #     s32 unknown_1-4 (4 * 4 = 16 bytes)
-        #     u8 unknown_5-6 (2 bytes)
+        #     String unknown_0 (set by str_aux_initialize)
+        #     s32 unknown_1 (uses left)
+        #     s32 unknown_2-4
+        #     u8 unknown_5
+        #     u8 unknown_6 (possibly times taken on adventure?)
         def _skip_equipment(r: BinaryReader) -> None:
             for _ in range(5):
                 equip_version = r.u32()
@@ -402,7 +421,7 @@ class Cat:
         _skip_equipment(r)
 
         # ── Collar, Level, COI (skip) ──────────────────────────────────────────
-        collar = r.str()  # collar
+        collar = r.str()
         level = r.i32()
         coi = r.f64()
 
