@@ -79,4 +79,3 @@ class BinaryReader:
     def skip(self, n: int) -> None:
         """Skip n bytes."""
         self.pos += n
-

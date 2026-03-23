@@ -162,19 +162,19 @@ class BodyPartTrait(Trait):
     def category(self) -> TraitCategory:
         return TraitCategory.BODY_PART
 
-    def _split_key(self) -> tuple[str, int]:
+    def _split_key(self) -> tuple[CatBodyPartCategory, int]:
         """Parse trait key into category name and part_id."""
         import re
 
         match = re.fullmatch(r"(\D+)(\d+)", self._key)
         if not match:
             raise ValueError(f"Invalid body part key format: {self._key}")
-        category, part_id = match.groups()
+        bp_category, part_id = match.groups()
         part_id = int(part_id)
-        if category.endswith("-"):
-            category = category[:-1]
+        if bp_category.endswith("-"):
+            bp_category = bp_category[:-1]
             part_id = -part_id
-        return category.lower(), part_id
+        return CatBodyPartCategory(bp_category.lower()), part_id
 
     @override
     def is_negative(self) -> bool:
@@ -190,24 +190,14 @@ class BodyPartTrait(Trait):
 
     @override
     def get_display_name(self, game_data: GameData) -> str:
-        category_str, part_id = self._split_key()
-        # Fallback for legacy "Arms" trait keys mapping to LEGS
-        if category_str.lower() == "arms":
-            cat_enum = CatBodyPartCategory.LEGS
-        else:
-            cat_enum = CatBodyPartCategory(category_str.lower())
-        name_desc = game_data.body_part_text[cat_enum][part_id]
+        bp_category, part_id = self._split_key()
+        name_desc = game_data.body_part_text[bp_category][part_id]
         return name_desc.name or self._key
 
     @override
     def get_description(self, game_data: GameData) -> str:
-        category_str, part_id = self._split_key()
-        # Fallback for legacy "Arms" trait keys mapping to LEGS
-        if category_str.lower() == "arms":
-            cat_enum = CatBodyPartCategory.LEGS
-        else:
-            cat_enum = CatBodyPartCategory(category_str.lower())
-        name_desc = game_data.body_part_text[cat_enum][part_id]
+        bp_category, part_id = self._split_key()
+        name_desc = game_data.body_part_text[bp_category][part_id]
         return name_desc.description
 
     @override
@@ -217,24 +207,22 @@ class BodyPartTrait(Trait):
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
         """Check if the cat has this body part trait in ANY slot of the category."""
-        category, part_id = self._split_key()
-        cat_enum = CatBodyPartCategory(category)
-        return cat_has_mutation_in_category(cat, cat_enum) and self.is_mutation()
+        bp_category, part_id = self._split_key()
+        return any(
+            cat.body_parts.get(slot) == part_id
+            for slot in get_slots_for_category(bp_category)
+            if slot.category == bp_category
+        )
 
     @property
     def body_part_category(self) -> CatBodyPartCategory:
         """Return the body part category (e.g., ears, tail) for this trait."""
-        category_str, _ = self._split_key()
-        # Fallback for legacy "Arms" trait keys mapping to LEGS
-        if category_str.lower() == "arms":
-            return CatBodyPartCategory.LEGS
-        return CatBodyPartCategory(category_str.lower())
+        return self._split_key()[0]
 
     @property
     def part_id(self) -> int:
         """Return the part ID number."""
-        _, part_id = self._split_key()
-        return part_id
+        return self._split_key()[1]
 
 
 def cat_has_mutation_in_slot(cat: Cat, slot: CatBodySlot) -> bool:
