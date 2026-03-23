@@ -259,7 +259,7 @@ class Cat:
         # unknown_2 and unknown_3 could form a passive ability structure ("None", 1)
         # It's referenced as a base pointer but not functionally used in current decomp database
         _unknown_none_str = r.str()
-        assert _unknown_none_str is None or _unknown_none_str == "None"
+        assert _unknown_none_str == "None"
 
         _unknown_one = r.u32()
         assert _unknown_one == 1, (
@@ -369,13 +369,11 @@ class Cat:
         #   [0-1]  = Movement and basic attack actives (actives_basic)
         #   [2-5]  = Current usable active ability list (actives_accessible)
         # Read up to 6 active abilities, ignoring empty/null entries.
-        actives: list[str] = [
-            s for _ in range(6) if (s := r.str()) not in (None, "None")
-        ]
+        actives: list[str] = [s for _ in range(6) if (s := r.str()) != "None"]
 
         # Copy of active abilities originally inherited from parents
         _born_active_abilities: list[str] = [
-            s for _ in range(4) if (s := r.str()) not in (None, "None")
+            s for _ in range(4) if (s := r.str()) != "None"
         ]
 
         # Current usable passive ability list
@@ -383,7 +381,9 @@ class Cat:
         for _ in range(2):
             s = r.str()
             level = r.u32()
-            assert level in (1, 2), "Unexpected passive ability level {level} for cat {cat_key} and passive {s}"
+            assert level in (1, 2), (
+                "Unexpected passive ability level {level} for cat {cat_key} and passive {s}"
+            )
             if s and s != "None":
                 passives.append(s + (str(level) if level > 1 else ""))
 

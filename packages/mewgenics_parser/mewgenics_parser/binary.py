@@ -47,26 +47,18 @@ class BinaryReader:
         self.pos += 8
         return v
 
-    def str(self, *, print_length: bool = False) -> builtins.str | None:
+    def str(self, *, print_length: bool = False) -> builtins.str:
         """Read length-prefixed UTF-8 string."""
-        start = self.pos
-        try:
-            length = self.u64()
-            if print_length:
-                print(f"\t{length}")
-            if length < 0 or length > 10_000:
-                self.pos = start
-                return None
-            s = self.data[self.pos : self.pos + int(length)].decode(
-                "utf-8", errors="ignore"
-            )
-            self.pos += int(length)
-            return s
-        except Exception:
-            self.pos = start
-            return None
+        length = self.u64()
+        if print_length:
+            print(f"\t{length}")
+        s = self.data[self.pos : self.pos + int(length)].decode(
+            "utf-8", errors="ignore"
+        )
+        self.pos += int(length)
+        return s
 
-    def utf16str(self) -> builtins.str | None:
+    def utf16str(self) -> builtins.str:
         """Read length-prefixed UTF-16LE string."""
         char_count = self.u64()
         byte_len = int(char_count * 2)
