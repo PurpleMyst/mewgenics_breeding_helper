@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from .cat import Cat
 from .constants import APPDATA_SAVE_DIR
+from .pedigree import parse_pedigree_blob
 
 
 @dataclass
@@ -68,18 +69,15 @@ def _get_adventure_keys(conn) -> set:
     return keys
 
 
-def _parse_pedigree(conn) -> dict:
+def _parse_pedigree(conn) -> dict[int, tuple[int, int]]:
     """
     Parse the pedigree blob from the files table.
-    Each 32-byte entry: u64 cat_key, u64 parent_a_key, u64 parent_b_key, u64 extra.
-    0xFFFFFFFFFFFFFFFF means null/unknown for parent fields.
 
-    Returns ped_map: db_key -> (parent_a_db_key | None, parent_b_db_key | None).
+    Returns ped_map: db_key -> (parent_a_db_key, parent_b_db_key)
+    Only includes cats where BOTH parents are known.
 
-    NOTE: children are NOT derived from this map because the pedigree blob
-    appears to store more than just direct parent-child pairs (possibly full
-    lineage chains), which causes circular references when used for children.
-    Children are instead computed bottom-up from resolved parent fields.
+    Raises:
+        ValueError: If HashMap version doesn't match expected.
     """
     try:
         row = conn.execute("SELECT data FROM files WHERE key='pedigree'").fetchone()
@@ -89,64 +87,8 @@ def _parse_pedigree(conn) -> dict:
     except Exception:
         return {}
 
-    NULL = 0xFFFF_FFFF_FFFF_FFFF
-    MAX_KEY = 1_000_000
-    ped_map: dict = {}
-
-    for pos in range(8, len(data) - 31, 32):
-        cat_k, pa_k, pb_k, extra = struct.unpack_from("<QQQQ", data, pos)
-        if cat_k == 0 or cat_k == NULL or cat_k > MAX_KEY:
-            continue
-        pa = int(pa_k) if pa_k != NULL and 0 < pa_k <= MAX_KEY else None
-        pb = int(pb_k) if pb_k != NULL and 0 < pb_k <= MAX_KEY else None
-        cat_key = int(cat_k)
-
-        if pa is None or pb is None:
-            continue
-
-        existing = ped_map.get(cat_key)
-        if existing is None:
-            ped_map[cat_key] = (pa, pb)
-        elif existing[0] is None or existing[1] is None:
-            ped_map[cat_key] = (pa, pb)
-
-    return ped_map
-
-
-def _break_pedigree_cycles(cats: list[Cat]) -> list[Cat]:
-    """
-    Detect and break cycles in the pedigree graph by setting parent references to None.
-
-    When a cycle is detected, both parent_a and parent_b of the cat at the cycle point
-    are set to None.
-
-    Returns list of cats that had their parents cleared due to cycle detection.
-    """
-    affected = []
-
-    def dfs(cat: Cat, path: set[int]) -> bool:
-        if cat.db_key in path:
-            return True
-
-        path.add(cat.db_key)
-
-        if cat.parent_a and dfs(cat.parent_a, path):
-            affected.append(cat)
-            cat.parent_a = None
-            cat.parent_b = None
-
-        if cat.parent_b and dfs(cat.parent_b, path):
-            affected.append(cat)
-            cat.parent_a = None
-            cat.parent_b = None
-
-        path.remove(cat.db_key)
-        return False
-
-    for cat in cats:
-        dfs(cat, set())
-
-    return affected
+    child_pedigrees = parse_pedigree_blob(data)
+    return {cp.child_id: (cp.parent_a_id, cp.parent_b_id) for cp in child_pedigrees}
 
 
 def parse_save(path: str) -> SaveData:
@@ -185,26 +127,18 @@ def parse_save(path: str) -> SaveData:
             pa_k, pb_k = ped_map[cat.db_key]
             pa = cats_by_key.get(pa_k)
             pb = cats_by_key.get(pb_k)
-            if pa is cat:
-                pa = None
-            if pb is cat:
-                pb = None
         cat.parent_a = pa
         cat.parent_b = pb
 
         if isinstance(cat.lover, int):
             lover = cats_by_key.get(cat.lover)
-            if lover is not None and lover is not cat:
+            if lover is not None:
                 cat.lover = lover
 
         if isinstance(cat.hater, int):
             hater = cats_by_key.get(cat.hater)
-            if hater is not None and hater is not cat:
+            if hater is not None:
                 cat.hater = hater
-
-    affected = _break_pedigree_cycles(cats)
-    if affected:
-        print(f"Broke {len(affected)} pedigree cycles")
 
     house_count = sum(1 for c in cats if c.status == "In House")
     adventure_count = sum(1 for c in cats if c.status == "Adventure")
