@@ -132,9 +132,9 @@ def on_cat_selected(
 
 def _render_trait_tree_node(label: str, traits: list[Trait], state: AppState) -> None:
     """Reusable component for rendering a collapsable list of traits in the inspector."""
-    with dpg.tree_node(label=f"{label} ({len(traits)})", default_open=True):
+    with dpg.tree_node(label=f"{label} ({len(traits)})", default_open=bool(traits)):
         if not traits:
-            dpg.add_text("None", color=COLOR_MUTED)
+            dpg.add_text("  None", color=COLOR_MUTED)
             return
 
         for trait in traits:
