@@ -23,6 +23,7 @@ class TestParseSaveIntegration:
         assert cat.gender == snapshot(CatGender.FEMALE)
         assert cat.sexuality == snapshot(0.08160075767255394)
         assert cat.libido == snapshot(0.6100491969838884)
+        assert cat.fertility == snapshot(0.2630632950000001)
         assert cat.status == snapshot(CatStatus.GONE)
         assert cat.room == snapshot(None)
         assert cat.stat_base == snapshot(
@@ -51,7 +52,7 @@ class TestParseSaveIntegration:
         assert cat.aggression == snapshot(0.9648030361579043)
         assert cat.libido == snapshot(0.6100491969838884)
         assert cat.active_abilities == snapshot(
-            ["BasicButcherMelee", "Burp2", "Rally", "Grill", "Butcher"]
+            ["DefaultMove", "BasicButcherMelee", "Burp2", "Rally", "Grill", "Butcher"]
         )
         assert cat.passive_abilities == snapshot(["Masochist", "DukeOfFlies"])
         assert cat.disorders == snapshot([])
@@ -80,6 +81,9 @@ class TestParseSaveIntegration:
         assert cat.parent_b.db_key == snapshot(781)
         assert cat.lover_id == snapshot(821)
         assert cat.hater_id == snapshot(766)
+        assert cat.level == snapshot(9)
+        assert cat.coi == snapshot(0.088083416223526)
+        assert cat.collar == snapshot("Butcher")
 
 
 class TestGpakIntegration:

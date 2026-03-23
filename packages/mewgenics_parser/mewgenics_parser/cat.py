@@ -165,6 +165,9 @@ class Cat:
     libido: float | None
     """Libido personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
 
+    fertility: float | None
+    """Fertility personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
+
     sexuality: float | None
     """Sexuality personality stat, a float between 0.0 and 1.0 if valid, or None if missing/invalid."""
 
@@ -179,6 +182,12 @@ class Cat:
 
     body_parts: dict[CatBodySlot, int]
     """Structured body part identifiers extracted from specific body slot indices in the blob."""
+
+    level: int
+
+    collar: str
+
+    coi: float
 
     parent_a: Self | None = field(default=None, repr=False)
     """Direct parent cat A, assigned after parsing based on database id references. None if unknown or not found."""
@@ -205,9 +214,8 @@ class Cat:
         raw = lz4.block.decompress(blob[4:], uncompressed_size=uncomp_size)
         r = BinaryReader(raw)
 
-        def _stats(*, signed: bool) -> Stats:
-            n = r.i32 if signed else r.u32
-            return Stats(n(), n(), n(), n(), n(), n(), n())
+        def _stats() -> Stats:
+            return Stats(r.i32(), r.i32(), r.i32(), r.i32(), r.i32(), r.i32(), r.i32())
 
         # ── Location / status ───────────────────────────────────────────────────
         if cat_key in adventure_keys:
@@ -229,10 +237,13 @@ class Cat:
             0: CatGender.MALE,
             1: CatGender.FEMALE,
             2: CatGender.DITTO,
-        }[r.u8()]
+        }[r.u32()]
 
         # ── Personality ─────────────────────────────────────────────────────────
-        r.skip(15)  # unknown
+        _gender_dup = r.u32()
+
+        # Skip over status flags, which are partially unknown.
+        r.skip((8 + 8 + 8 + 5 * 8) // 8)
 
         # A string field observed to always be "None" across all known saves.
         # Purpose unknown; asserted here to surface unexpected values during development.
@@ -252,6 +263,7 @@ class Cat:
         r.skip(8)  # unknown
         aggression = r.f64()
         hater_id = r.u64()
+        fertility = r.f64()
 
         # The game uses 0xFFFFFFFF as a null sentinel for relationship slots.
         if lover_id == 0xFFFF_FFFF:
@@ -259,7 +271,7 @@ class Cat:
         if hater_id == 0xFFFF_FFFF:
             hater_id = None
 
-        r.skip(16)  # unknown
+        r.skip(8)  # unknown
 
         # ── Body parts ──────────────────────────────────────────────────────────
         # 72 slots of u32 body part IDs. Only specific indices are meaningful;
@@ -304,12 +316,24 @@ class Cat:
         r.f64()  # unknown float
 
         # ── Stats ────────────────────────────────────────────────────────────────
-        stat_base = _stats(signed=False)
-        stat_mod1 = _stats(signed=True)  # primary modifiers, positive or negative
-        stat_mod2 = _stats(signed=True)  # secondary modifiers, observed non-positive
+        stat_base = _stats()
+        stat_mod1 = _stats()
+        stat_mod2 = _stats()
         stat_total = Stats(
             *(b + m + s for b, m, s in zip(stat_base, stat_mod1, stat_mod2))
         )
+
+        _last_injury_debuffed_stat = r.str()
+
+        # CampaignStats static fields
+        _hp = r.i32()
+        _dead = r.u8()
+        _unknown_8 = r.u8()
+        _unknown_1 = r.u32()
+        event_stat_modifiers_count = r.u32()
+        for _ in range(event_stat_modifiers_count):
+            _expression = r.str()
+            _unknown_0 = r.u32()
 
         # ── Abilities ────────────────────────────────────────────────────────────
         # The ability block is a run of u64-length-prefixed ASCII identifiers.
@@ -325,12 +349,9 @@ class Cat:
         #
         # After the run: u32 tier for passive1, then 3 × (str + u32 tier) for
         # passive2, disorder1, and disorder2.
-        r.find(b"DefaultMove")
-        r.skip(len("DefaultMove"))
-
         # Read up to 5 active abilities, ignoring empty/null entries.
         actives: list[str] = [
-            s for _ in range(5) if (s := r.str()) not in (None, "None")
+            s for _ in range(6) if (s := r.str()) not in (None, "None")
         ]
 
         # Seem to be a block of the 4 active ability slots the cat was born with, perhaps for
@@ -375,9 +396,9 @@ class Cat:
         _skip_equipment(r)
 
         # ── Collar, Level, COI (skip) ──────────────────────────────────────────
-        r.str()  # collar
-        r.skip(4)  # level (s32)
-        r.skip(8)  # coi (double)
+        collar = r.str()  # collar
+        level = r.i32()
+        coi = r.f64()
 
         # ── Birthday / Age ───────────────────────────────────────────────────────
         # birthday is s64, stored near end of blob
@@ -401,6 +422,7 @@ class Cat:
             age=age,
             aggression=aggression,
             libido=libido,
+            fertility=fertility,
             sexuality=sexuality,
             active_abilities=actives,
             passive_abilities=passives,
@@ -410,6 +432,9 @@ class Cat:
             parent_b=None,
             lover=lover_id,
             hater=hater_id,
+            level=level,
+            coi=coi,
+            collar=collar,
         )
 
     @property
