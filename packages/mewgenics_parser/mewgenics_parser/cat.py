@@ -229,7 +229,10 @@ class Cat:
             room = None
 
         # ── Identity ────────────────────────────────────────────────────────────
-        r.skip(12)
+        version = r.u32()
+        assert version == 19, f"Unexpected cat blob version {version} for cat {cat_key}"
+
+        r.skip(8)
         name = r.utf16str() or "Unnamed"
         name_tag = r.str() or ""
 
@@ -385,7 +388,10 @@ class Cat:
         #     u8 unknown_5-6 (2 bytes)
         def _skip_equipment(r: BinaryReader) -> None:
             for _ in range(5):
-                r.skip(4)  # version (always 0x5)
+                equip_version = r.u32()
+                assert equip_version == 0x5, (
+                    f"Unexpected equipment version {equip_version} for cat {cat_key}"
+                )
                 has_equip = r.u8()
                 if has_equip:
                     r.str()
