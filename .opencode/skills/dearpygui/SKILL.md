@@ -1,4 +1,3 @@
-```markdown
 ---
 name: dearpygui-autonomous-agent
 description: Comprehensive operational guidelines for an OpenCode agent to autonomously write, execute, and debug modern DearPyGui (1.x) applications.
@@ -101,5 +100,4 @@ Because you are executing code autonomously, GUI programming presents unique cha
 3. **Handle Context Crashes:** If the script crashes immediately with `SystemError` or `Exception: Error: [1009] Message: No container to pop`, **do not panic**.
 * *Root Cause:* This specifically means you passed an invalid/deprecated keyword argument (like `borders_inner`) to a widget inside a context manager (like `with dpg.table():`).
 * *Resolution:* The DPG stack corrupted and failed to close. Review your newly written widget against the Translation Matrix, fix the incorrect parameter, and re-execute.
-
 4. **Handoff:** Because you cannot "see" the GUI or click the buttons, once the application runs without throwing initialization errors in the terminal, stop execution and ask the user to test the visual layout and interaction.

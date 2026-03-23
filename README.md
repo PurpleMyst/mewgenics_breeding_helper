@@ -115,4 +115,5 @@ Contributions are welcome! Please ensure:
 - Original idea and reference: [MewgenicsBreedingManager](https://github.com/frankieg33/mewgenics_breeding_manager) by frankieg33
 - Favicon is an emoji from Twemoji, licensed under CC-BY 4.0 and obtained from [favicon.io](https://favicon.io/emoji-favicons/cat)
 - [Breeding notes by the excellent SciresM](https://gist.github.com/SciresM/95a9dbba22937420e75d4da617af1397)
+- Reverse engineered ImHex patterns by the amazing p0lymeric, taken with proper license from [mewgenics_analysis](https://github.com/p0lymeric/mewgenics_analysis)
 - Developed with assistance from AI tools
