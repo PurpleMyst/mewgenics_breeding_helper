@@ -1,3 +1,4 @@
+from mewgenics_room_optimizer_ui.display_models import AbilityDisplay
 import dearpygui.dearpygui as dpg
 from mewgenics_parser.cat import Cat, CatStatus
 from mewgenics_parser.traits import Trait, TraitCategory, extract_traits_from_cat
@@ -9,6 +10,7 @@ from ...colors import (
     COLOR_MUTED,
     COLOR_SUCCESS,
 )
+from ...display_helpers import get_cat_abilities, get_cat_body_parts, get_cat_passives
 from ...state import AppState
 
 
@@ -89,26 +91,26 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
         dpg.add_separator()
 
         all_traits = extract_traits_from_cat(cat)
-        active_traits = [
-            t for t in all_traits if t.category == TraitCategory.ACTIVE_ABILITY
-        ]
-        passive_traits = [
-            t for t in all_traits if t.category == TraitCategory.PASSIVE_ABILITY
-        ]
         disorder_traits = [
             t for t in all_traits if t.category == TraitCategory.DISORDER
         ]
-        body_part_traits = [
-            t for t in all_traits if t.category == TraitCategory.BODY_PART
-        ]
-        _render_trait_tree_node("Active Abilities", active_traits, state)
-        _render_trait_tree_node("Passive Abilities", passive_traits, state)
-        _render_trait_tree_node(
-            "Disorders",
-            disorder_traits,
+
+        _render_ability_list(
+            "Active Abilities",
+            get_cat_abilities(cat, state.game_data),
             state,
         )
-        _render_trait_tree_node("Body Parts", body_part_traits, state)
+        _render_ability_list(
+            "Passive Abilities",
+            get_cat_passives(cat, state.game_data),
+            state,
+        )
+        _render_trait_tree_node("Disorders", disorder_traits, state)
+        _render_body_part_list(
+            "Body Parts",
+            get_cat_body_parts(cat, state.game_data),
+            state,
+        )
 
 
 def on_cat_selected(
@@ -147,11 +149,59 @@ def _render_trait_tree_node(label: str, traits: list[Trait], state: AppState) ->
 
             if trait.is_negative():
                 color = COLOR_DANGER
-                prefix = "  "
             else:
                 color = COLOR_SUCCESS if is_fav else COLOR_DEFAULT_TEXT
-                prefix = "[*] " if is_fav else "  "
 
-            dpg.add_text(f"{prefix}{name}", color=color)
+            dpg.add_text(f"  {name}", color=color)
             if desc:
                 dpg.add_text(f"    {desc}", color=COLOR_MUTED)
+
+
+def _render_ability_list(
+    label: str, abilities: list[AbilityDisplay], state: AppState
+) -> None:
+    """Render abilities with upgrade indicator (+ suffix) and favorable trait highlighting."""
+    with dpg.tree_node(
+        label=f"{label} ({len(abilities)})", default_open=bool(abilities)
+    ):
+        if not abilities:
+            dpg.add_text("  None", color=COLOR_MUTED)
+            return
+
+        req_keys = {req.trait.key for req in state.trait_requirements}
+
+        for ability in abilities:
+            color = (
+                COLOR_SUCCESS if ability.base_key in req_keys else COLOR_DEFAULT_TEXT
+            )
+            dpg.add_text(f"  {ability.name}", color=color)
+            if ability.description:
+                dpg.add_text(f"    {ability.description}", color=COLOR_MUTED)
+
+
+def _render_body_part_list(label: str, body_parts: list, state: AppState) -> None:
+    """Render body parts grouped by symmetric slots with favorable trait highlighting."""
+    with dpg.tree_node(
+        label=f"{label} ({len(body_parts)})", default_open=bool(body_parts)
+    ):
+        if not body_parts:
+            dpg.add_text("  None", color=COLOR_MUTED)
+            return
+
+        req_keys = {req.trait.key for req in state.trait_requirements}
+
+        for bp in body_parts:
+            is_fav = bp.key in req_keys
+
+            slots_str = ", ".join(bp.slot_labels)
+            text = f"{bp.display_name} [{slots_str}]"
+
+            color = (
+                COLOR_SUCCESS
+                if is_fav
+                else (COLOR_DANGER if bp.is_negative else COLOR_DEFAULT_TEXT)
+            )
+
+            dpg.add_text(f"  {text}", color=color)
+            if bp.description:
+                dpg.add_text(f"    {bp.description}", color=COLOR_MUTED)
