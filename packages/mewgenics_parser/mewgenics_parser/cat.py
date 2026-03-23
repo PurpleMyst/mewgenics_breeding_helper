@@ -382,9 +382,10 @@ class Cat:
         passives: list[str] = []
         for _ in range(2):
             s = r.str()
+            level = r.u32()
+            assert level in (1, 2), "Unexpected passive ability level {level} for cat {cat_key} and passive {s}"
             if s and s != "None":
-                passives.append(s)
-            r.skip(4)
+                passives.append(s + (str(level) if level > 1 else ""))
 
         # Disorder and mutation passives
         disorders: list[str] = []
