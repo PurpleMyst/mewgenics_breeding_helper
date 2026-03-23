@@ -100,7 +100,7 @@ def _filter_lover_exclusivity(
     lover_lookup: dict[int, int | None] = {
         c.db_key: c.lover_id
         for c in room_cats
-        if c.lover is not None and c.lover.db_key in room_cat_ids
+        if c.lover is not None and c.lover_id in room_cat_ids
     }
 
     filtered = []
@@ -131,8 +131,8 @@ def _filter_hater_conflicts(
     hater_lookup: dict[int, set[int]] = {c.db_key: set() for c in room_cats}
 
     for c in room_cats:
-        if c.hater is not None and c.hater.db_key in room_cat_ids:
-            hater_lookup[c.db_key].add(c.hater.db_key)
+        if c.hater is not None and c.hater_id in room_cat_ids:
+            hater_lookup[c.db_key].add(c.hater_id)
 
     filtered = []
     for a, b in pairs:

@@ -54,7 +54,7 @@ class TestParseSaveIntegration:
         assert cat.active_abilities == snapshot(
             ["DefaultMove", "BasicButcherMelee", "Burp2", "Rally", "Grill", "Butcher"]
         )
-        assert cat.passive_abilities == snapshot(["Masochist", "DukeOfFlies"])
+        assert cat.passive_abilities == snapshot(["Masochist2", "DukeOfFlies2"])
         assert cat.disorders == snapshot([])
         assert cat.body_parts == snapshot(
             {

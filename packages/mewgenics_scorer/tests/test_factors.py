@@ -85,6 +85,10 @@ def make_cat(
         body_parts=body_parts or _default_body_parts(),
         lover=None,
         hater=None,
+        fertility=0.5,
+        level=1,
+        collar="",
+        coi=0.0,
     )
 
 

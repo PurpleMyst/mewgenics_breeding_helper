@@ -50,6 +50,10 @@ def make_cat(
         parent_b=None,
         lover=lover_id,
         hater=hater_id,
+        fertility=0.5,
+        level=1,
+        collar="",
+        coi=0.0,
     )
 
 

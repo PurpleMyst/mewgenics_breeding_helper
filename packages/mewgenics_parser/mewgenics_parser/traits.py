@@ -234,7 +234,7 @@ def cat_has_mutation_in_slot(cat: Cat, slot: CatBodySlot) -> bool:
     part_id = cat.body_parts.get(slot)
     if part_id is None:
         return False
-    temp_trait = BodyPartTrait(_key=f"{slot}{part_id}")
+    temp_trait = BodyPartTrait(_key=f"{slot.category}{part_id}")
     return temp_trait.is_mutation()
 
 
@@ -247,7 +247,7 @@ def cat_has_defect_in_slot(cat: Cat, slot: CatBodySlot) -> bool:
     part_id = cat.body_parts.get(slot)
     if part_id is None:
         return False
-    temp_trait = BodyPartTrait(_key=f"{slot}{part_id}")
+    temp_trait = BodyPartTrait(_key=f"{slot.category}{part_id}")
     return temp_trait.is_negative()
 
 
