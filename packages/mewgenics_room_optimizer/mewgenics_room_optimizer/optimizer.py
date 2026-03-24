@@ -623,7 +623,12 @@ def _build_results_from_state_dict(
     unassigned.sort(key=_cat_ens_value, reverse=True)
 
     for cat in unassigned:
-        rooms_to_try = fighting_rooms + general_rooms
+        cat_value = _cat_ens_value(cat)
+        rooms_to_try = (
+            (general_rooms + fighting_rooms)
+            if cat_value > 0
+            else (fighting_rooms + general_rooms)
+        )
 
         for room in rooms_to_try:
             if _can_fit_single(room, len(rooms_content[room.key])):
