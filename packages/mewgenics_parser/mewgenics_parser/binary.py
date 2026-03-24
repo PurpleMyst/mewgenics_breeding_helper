@@ -3,6 +3,12 @@
 import builtins
 import struct
 
+_U32_STRUCT = struct.Struct("<I")
+_I32_STRUCT = struct.Struct("<i")
+_U64_STRUCT = struct.Struct("<Q")
+_I64_STRUCT = struct.Struct("<q")
+_F64_STRUCT = struct.Struct("<d")
+
 
 class BinaryReader:
     """Helper class for reading binary data from save file blobs."""
@@ -19,13 +25,13 @@ class BinaryReader:
 
     def u32(self) -> int:
         """Read unsigned 32-bit integer (little-endian)."""
-        v = struct.unpack_from("<I", self.data, self.pos)[0]
+        v = _U32_STRUCT.unpack_from(self.data, self.pos)[0]
         self.pos += 4
         return v
 
     def i32(self) -> int:
         """Read signed 32-bit integer (little-endian)."""
-        v = struct.unpack_from("<i", self.data, self.pos)[0]
+        v = _I32_STRUCT.unpack_from(self.data, self.pos)[0]
         self.pos += 4
         return v
 
@@ -37,13 +43,13 @@ class BinaryReader:
 
     def i64(self) -> int:
         """Read signed 64-bit integer (little-endian)."""
-        v = struct.unpack_from("<q", self.data, self.pos)[0]
+        v = _I64_STRUCT.unpack_from(self.data, self.pos)[0]
         self.pos += 8
         return v
 
     def f64(self) -> float:
         """Read 64-bit float (double)."""
-        v = struct.unpack_from("<d", self.data, self.pos)[0]
+        v = _F64_STRUCT.unpack_from(self.data, self.pos)[0]
         self.pos += 8
         return v
 
@@ -52,16 +58,14 @@ class BinaryReader:
         length = self.u64()
         if print_length:
             print(f"\t{length}")
-        s = self.data[self.pos : self.pos + int(length)].decode(
-            "utf-8", errors="ignore"
-        )
-        self.pos += int(length)
+        s = self.data[self.pos : self.pos + length].decode("utf-8", errors="ignore")
+        self.pos += length
         return s
 
     def utf16str(self) -> builtins.str:
         """Read length-prefixed UTF-16LE string."""
         char_count = self.u64()
-        byte_len = int(char_count * 2)
+        byte_len = char_count * 2
         s = self.data[self.pos : self.pos + byte_len].decode(
             "utf-16le", errors="ignore"
         )

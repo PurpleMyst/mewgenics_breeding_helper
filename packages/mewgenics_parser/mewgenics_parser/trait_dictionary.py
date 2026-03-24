@@ -212,9 +212,7 @@ def is_class_active(spell_id: str) -> bool:
 
 def is_class_passive(passive_id: str) -> bool:
     """Returns True if passive ability is class-specific."""
-    return normalize_ability_key(
-        passive_id
-    ) not in _COLLARLESS_PASSIVES
+    return normalize_ability_key(passive_id) not in _COLLARLESS_PASSIVES
 
 
 def has_skillshare_plus(cat) -> bool:

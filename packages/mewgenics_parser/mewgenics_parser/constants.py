@@ -2,6 +2,7 @@
 
 import os
 import re
+from pathlib import Path
 
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -17,8 +18,4 @@ ROOM_DISPLAY = {
     "Attic": "Attic",
 }
 
-APPDATA_SAVE_DIR = os.path.join(
-    os.environ.get("APPDATA", ""),
-    "Glaiel Games",
-    "Mewgenics",
-)
+APPDATA_SAVE_DIR = Path(os.environ.get("APPDATA", "")) / "Glaiel Games" / "Mewgenics"

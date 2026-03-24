@@ -1,6 +1,6 @@
 """Domain model for Mewgenics traits."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol, override
 
@@ -151,6 +151,22 @@ class BodyPartTrait(Trait):
     """Trait representing a body part."""
 
     _key: str
+    _bp_category: CatBodyPartCategory = field(init=False, repr=False)
+    _part_id: int = field(init=False, repr=False)
+
+    def __post_init__(self):
+        import re
+
+        match = re.fullmatch(r"(\D+)(\d+)", self._key)
+        if not match:
+            raise ValueError(f"Invalid body part key format: {self._key}")
+        bp_category, part_id = match.groups()
+        part_id = int(part_id)
+        if bp_category.endswith("-"):
+            bp_category = bp_category[:-1]
+            part_id = -part_id
+        self._bp_category = CatBodyPartCategory(bp_category.lower())
+        self._part_id = part_id
 
     @property
     @override
@@ -162,42 +178,21 @@ class BodyPartTrait(Trait):
     def category(self) -> TraitCategory:
         return TraitCategory.BODY_PART
 
-    def _split_key(self) -> tuple[CatBodyPartCategory, int]:
-        """Parse trait key into category name and part_id."""
-        import re
-
-        match = re.fullmatch(r"(\D+)(\d+)", self._key)
-        if not match:
-            raise ValueError(f"Invalid body part key format: {self._key}")
-        bp_category, part_id = match.groups()
-        part_id = int(part_id)
-        if bp_category.endswith("-"):
-            bp_category = bp_category[:-1]
-            part_id = -part_id
-        return CatBodyPartCategory(bp_category.lower()), part_id
-
     @override
     def is_negative(self) -> bool:
-        # XXX: This is a quick and dirty check; the game GONs technically have birth_defect tags we
-        # could leverage if this becomes an issue.
-        _, part_id = self._split_key()
-        return part_id == -2 or (part_id >= 700 and part_id <= 710)
+        return self._part_id == -2 or (self._part_id >= 700 and self._part_id <= 710)
 
     def is_mutation(self) -> bool:
-        # XXX: Same hack as is_negative; however I don't think mutations are tagged. ¯\_(ツ)_/¯
-        _, part_id = self._split_key()
-        return part_id >= 300
+        return self._part_id >= 300
 
     @override
     def get_display_name(self, game_data: GameData) -> str:
-        bp_category, part_id = self._split_key()
-        name_desc = game_data.body_part_text[bp_category][part_id]
+        name_desc = game_data.body_part_text[self._bp_category][self._part_id]
         return name_desc.name or self._key
 
     @override
     def get_description(self, game_data: GameData) -> str:
-        bp_category, part_id = self._split_key()
-        name_desc = game_data.body_part_text[bp_category][part_id]
+        name_desc = game_data.body_part_text[self._bp_category][self._part_id]
         return name_desc.description
 
     @override
@@ -207,22 +202,20 @@ class BodyPartTrait(Trait):
     @override
     def is_possessed_by(self, cat: Cat) -> bool:
         """Check if the cat has this body part trait in ANY slot of the category."""
-        bp_category, part_id = self._split_key()
         return any(
-            cat.body_parts.get(slot) == part_id
-            for slot in get_slots_for_category(bp_category)
-            if slot.category == bp_category
+            cat.body_parts.get(slot) == self._part_id
+            for slot in get_slots_for_category(self._bp_category)
         )
 
     @property
     def body_part_category(self) -> CatBodyPartCategory:
         """Return the body part category (e.g., ears, tail) for this trait."""
-        return self._split_key()[0]
+        return self._bp_category
 
     @property
     def part_id(self) -> int:
         """Return the part ID number."""
-        return self._split_key()[1]
+        return self._part_id
 
 
 def cat_has_mutation_in_slot(cat: Cat, slot: CatBodySlot) -> bool:

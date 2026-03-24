@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .constants import STAT_NAMES
+
 _IMG_RE = re.compile(r"\[img:([^\]]+)\]")
 _SIZE_COLOR_RE = re.compile(r"\[[sc]:[^\]]*\]|\[/[sc]\]")
 _WS_RE = re.compile(r"\s+")
@@ -39,6 +41,26 @@ def _resolve_game_string(value: str, game_strings: dict[str, str]) -> str:
         nxt = game_strings[resolved].strip()
         resolved = nxt
     return resolved
+
+
+def _parse_literal(val: str) -> int | float | str:
+    """Parse a literal string to int, float, or str."""
+    try:
+        return int(val)
+    except ValueError:
+        try:
+            return float(val)
+        except ValueError:
+            return val
+
+
+def _parse_array_values(val: str) -> list[int | float | str]:
+    """Parse array string to list of ints, floats, or strings."""
+    inner_str = val[1:-1].replace(",", " ")
+    result = []
+    for item in inner_str.split():
+        result.append(_parse_literal(item))
+    return result
 
 
 def _parse_gon_to_dicts(text: str, *, comment_key: str = "name") -> dict[str, Any]:
@@ -114,25 +136,9 @@ def _parse_gon_to_dicts(text: str, *, comment_key: str = "name") -> dict[str, An
                 if next_kind == "STRING":
                     parsed_val = next_val[1:-1]
                 elif next_kind == "ARRAY":
-                    # Strip brackets, normalize delimiters (commas to spaces), and parse
-                    inner_str = next_val[1:-1].replace(",", " ")
-                    parsed_val = []
-                    for item in inner_str.split():
-                        try:
-                            parsed_val.append(int(item))
-                        except ValueError:
-                            try:
-                                parsed_val.append(float(item))
-                            except ValueError:
-                                parsed_val.append(item)
+                    parsed_val = _parse_array_values(next_val)
                 else:
-                    try:
-                        parsed_val = int(next_val)
-                    except ValueError:
-                        try:
-                            parsed_val = float(next_val)
-                        except ValueError:
-                            parsed_val = next_val
+                    parsed_val = _parse_literal(next_val)
 
                 stack[-1][key] = parsed_val
                 i += 1
@@ -150,3 +156,13 @@ class NameAndDescription:
 
     name: str = ""
     description: str = ""
+
+
+def format_stat_changes(data: dict) -> str:
+    """Extract stat changes from ability/mutation data and format as string."""
+    changes = []
+    for stat_name in STAT_NAMES:
+        change = data.get(stat_name.lower())
+        if isinstance(change, int):
+            changes.append(f"{change:+} {stat_name}")
+    return ", ".join(changes)

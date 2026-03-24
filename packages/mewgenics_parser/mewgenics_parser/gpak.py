@@ -10,13 +10,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import DefaultDict, Self
 
-from mewgenics_parser.constants import STAT_NAMES
-
 from .utils import (
     NameAndDescription,
     _clean_game_text,
     _parse_gon_to_dicts,
     _resolve_game_string,
+    format_stat_changes,
 )
 
 
@@ -52,18 +51,10 @@ def _parse_gon_abilities(
 
         name = name or ability_id
 
-        # TODO: This is just lazily copy-pasted from the mutation parsing code, it should be adapted
-        # to an helper + it should be handled for upgraded abilities as well.
-        stat_descriptions = []
-        for stat_name in STAT_NAMES:
-            # XXX: ↑ The body part GON files have the stat changes directly under the mutation
-            # entry, but the ability GON files have them nested under "stats", so we need to check
-            # both places.
-            stat_change = ability_info.get("stats", {}).get(stat_name.lower())
-            if isinstance(stat_change, int):
-                stat_descriptions.append(f"{stat_change:+} {stat_name}")
-        if stat_descriptions:
-            desc += (" " if desc else "") + ", ".join(stat_descriptions)
+        # TODO: This should be handled for upgraded abilities as well.
+        stat_changes = format_stat_changes(ability_info.get("stats", {}))
+        if stat_changes:
+            desc += (" " if desc else "") + stat_changes
 
         # Load upgraded versions of the ability (e.g., "Fireball2" for "Fireball+") if they exist in
         # the GON data, using the same description if not specified.
@@ -119,13 +110,9 @@ def _parse_mutation_gon(
             # add a stat bonus/malus often have an empty description and just list the bonus/malus
             # in the mutation_info, leaving the description field empty. In that case, we can try to
             # construct a more informative description from the mutation_info.
-            stat_descriptions = []
-            for stat_name in STAT_NAMES:
-                stat_change = mutation_info.get(stat_name.lower())
-                if isinstance(stat_change, int):
-                    stat_descriptions.append(f"{stat_change:+} {stat_name}")
-            if stat_descriptions:
-                desc += (" " if desc else "") + ", ".join(stat_descriptions)
+            stat_changes = format_stat_changes(mutation_info)
+            if stat_changes:
+                desc += (" " if desc else "") + stat_changes
             if category.casefold() not in name.casefold():
                 name = f"{name} ({category.title()})"
 

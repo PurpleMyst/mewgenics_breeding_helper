@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 
-from .cat import Cat
+from .cat import Cat, CatStatus
 from .constants import APPDATA_SAVE_DIR
 from .pedigree import parse_pedigree_blob
 
@@ -140,9 +140,9 @@ def parse_save(path: str) -> SaveData:
             if hater is not None:
                 cat.hater = hater
 
-    house_count = sum(1 for c in cats if c.status == "In House")
-    adventure_count = sum(1 for c in cats if c.status == "Adventure")
-    gone_count = sum(1 for c in cats if c.status == "Gone")
+    house_count = sum(1 for c in cats if c.status == CatStatus.IN_HOUSE)
+    adventure_count = sum(1 for c in cats if c.status == CatStatus.ADVENTURE)
+    gone_count = sum(1 for c in cats if c.status == CatStatus.GONE)
 
     return SaveData(
         cats=cats,
