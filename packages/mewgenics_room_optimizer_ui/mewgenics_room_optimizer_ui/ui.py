@@ -111,7 +111,14 @@ def build_room_config_section(state: AppState) -> None:
                 dpg.add_table_column(label="Max Cats")
                 dpg.add_table_column(label="Base Stim")
 
-            room_types = ["breeding", "fighting", "general", "none"]
+            room_types = [
+                "breeding",
+                "fighting",
+                "general",
+                "health",
+                "mutation",
+                "none",
+            ]
             for room in state.room_configs:
                 with dpg.table_row(parent="room_config_table"):
                     dpg.add_text(room.display_name, tag=f"room_name_{room.key}")
