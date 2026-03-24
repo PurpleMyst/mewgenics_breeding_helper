@@ -19,7 +19,7 @@ from .compatibility import (
     is_lover_conflict,
     is_mutual_lovers,
 )
-from .types import TraitRequirement, ScoringPreferences
+from .types import TraitRequirement
 
 __all__ = [
     "PairFactors",
@@ -38,5 +38,4 @@ __all__ = [
     "is_lover_conflict",
     "is_mutual_lovers",
     "TraitRequirement",
-    "ScoringPreferences",
 ]

@@ -6,7 +6,6 @@ from typing import Any
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import TraitCategory
 from mewgenics_room_optimizer import OptimizationResult, RoomType
-from mewgenics_scorer import ScoringPreferences
 
 from .colors import COLOR_DANGER, COLOR_EY_TEAL, COLOR_HIGH_RISK_ROW, COLOR_MUTED
 from .components.cats_table import build_all_cats_tab, update_all_cats_table
@@ -34,7 +33,6 @@ def build_ui(state: AppState) -> None:
             with dpg.child_window(width=450, border=False):
                 build_saves_section(state)
                 build_room_config_section(state)
-                build_params_section(state)
                 build_traits_section(state)
 
             with dpg.child_window(border=False):
@@ -141,121 +139,6 @@ def build_room_config_section(state: AppState) -> None:
                         callback=on_room_config_changed,
                         user_data=state,
                     )
-
-
-def build_params_section(state: AppState) -> None:
-    """Build the optimization parameters section."""
-    with dpg.collapsing_header(label="Optimization Parameters", default_open=True):
-        with dpg.child_window(height=240, border=True, tag="params_section"):
-            with dpg.group(horizontal=True):
-                dpg.add_input_int(
-                    label="Min Stats",
-                    tag="min_stats",
-                    default_value=state.min_stats,
-                    width=100,
-                    callback=on_param_changed,
-                    user_data=state,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Minimum total base stats required for a cat to be considered for breeding."
-                    )
-                dpg.add_slider_float(
-                    label="Max Risk %",
-                    tag="max_risk",
-                    default_value=state.max_risk * 100,
-                    max_value=100.0,
-                    width=200,
-                    callback=on_param_changed,
-                    user_data=state,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Maximum inbreeding risk percentage allowed for breeding pairs."
-                    )
-            with dpg.group(horizontal=True):
-                dpg.add_slider_float(
-                    label="Disruption Penalty",
-                    tag="move_penalty_weight",
-                    default_value=0.5,
-                    min_value=0.0,
-                    max_value=5.0,
-                    width=200,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Cost of moving cats from current room. Higher = prefers stable layouts."
-                    )
-            with dpg.group(horizontal=True):
-                dpg.add_checkbox(
-                    label="Minimize Variance",
-                    tag="minimize_variance",
-                    default_value=state.minimize_variance,
-                    callback=on_param_changed,
-                    user_data=state,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Prioritizes consistent stat lines across offspring rather than gambling for single high-stat spikes."
-                    )
-            with dpg.group(horizontal=True):
-                dpg.add_checkbox(
-                    label="Prefer High Libido",
-                    tag="prefer_high_libido",
-                    default_value=state.prefer_high_libido,
-                    callback=on_param_changed,
-                    user_data=state,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Favors pairs with higher combined libido for faster breeding."
-                    )
-                dpg.add_checkbox(
-                    label="Prefer High Charisma",
-                    tag="prefer_high_charisma",
-                    default_value=state.prefer_high_charisma,
-                    callback=on_param_changed,
-                    user_data=state,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Favors pairs with higher combined charisma for better breeding odds."
-                    )
-
-            with dpg.group(horizontal=True):
-                dpg.add_checkbox(
-                    label="Maximize Throughput",
-                    tag="maximize_throughput",
-                    default_value=state.maximize_throughput,
-                    callback=on_param_changed,
-                    user_data=state,
-                )
-                with dpg.tooltip(dpg.last_item()):
-                    dpg.add_text(
-                        "Favors having many distinct pairs to maximize the number of offspring produced per generation."
-                    )
-
-
-def on_param_changed(sender: int, app_data: Any, user_data: AppState) -> None:
-    """Handle parameter change - update state and auto-save."""
-    tag = dpg.get_item_alias(sender) or dpg.get_item_label(sender)
-    if not tag:
-        tag = sender
-
-    if tag == "min_stats":
-        user_data.min_stats = app_data
-    elif tag == "max_risk":
-        user_data.max_risk = app_data / 100.0
-    elif tag == "minimize_variance":
-        user_data.minimize_variance = app_data
-    elif tag == "prefer_high_libido":
-        user_data.prefer_high_libido = app_data
-    elif tag == "prefer_high_charisma":
-        user_data.prefer_high_charisma = app_data
-    elif tag == "maximize_throughput":
-        user_data.maximize_throughput = app_data
-
-    user_data.save()
 
 
 def build_results_section(state: AppState) -> None:
@@ -445,7 +328,6 @@ def exit_callback(sender: int, app_data: Any, user_data: Any) -> None:
 def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     """Run the optimization (blocking)."""
     from mewgenics_room_optimizer import optimize_sa
-    from mewgenics_room_optimizer.types import OptimizationParams
 
     if not user_data.cats:
         return
@@ -454,33 +336,9 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     dpg.configure_item("optimize_button", enabled=False)
     dpg.render_dearpygui_frame()
 
-    min_stats = dpg.get_value("min_stats")
-    max_risk = dpg.get_value("max_risk") / 100.0
-    move_penalty_weight = dpg.get_value("move_penalty_weight")
-
-    minimize_variance = dpg.get_value("minimize_variance")
-    prefer_low_aggression = dpg.get_value("prefer_low_aggression")
-    prefer_high_libido = dpg.get_value("prefer_high_libido")
-    prefer_high_charisma = dpg.get_value("prefer_high_charisma")
-    maximize_throughput = dpg.get_value("maximize_throughput")
-
-    scoring_prefs = ScoringPreferences(
-        minimize_variance=minimize_variance,
-        prefer_low_aggression=prefer_low_aggression,
-        prefer_high_libido=prefer_high_libido,
-        prefer_high_charisma=prefer_high_charisma,
-        maximize_throughput=maximize_throughput,
+    results = optimize_sa(
+        user_data.cats, user_data.room_configs, user_data.trait_requirements
     )
-
-    params = OptimizationParams(
-        min_stats=min_stats,
-        max_risk=max_risk,
-        scoring_prefs=scoring_prefs,
-        trait_requirements=user_data.trait_requirements,
-        move_penalty_weight=move_penalty_weight,
-    )
-
-    results = optimize_sa(user_data.cats, user_data.room_configs, params)
     user_data.results = results
 
     dpg.set_value("status_text", "Optimization Complete")

@@ -218,8 +218,6 @@ def on_room_selected(
             dpg.set_value(old_item, False)
 
     state.selected_result_room_key = selected_key
-    state.sim_cat_a_key = None
-    state.sim_cat_b_key = None
 
     clear_inspector(state)
 

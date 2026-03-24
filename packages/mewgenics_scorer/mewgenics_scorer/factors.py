@@ -5,21 +5,17 @@ from dataclasses import dataclass
 from mewgenics_parser import Cat
 
 from .ancestry import KinshipManager
-from .compatibility import (
-    can_breed,
-    is_mutual_lovers,
-)
+from .compatibility import can_breed, is_mutual_lovers
 from .inheritance import (
     TraitInheritanceProbability,
     calculate_trait_probability,
     expected_stats,
-    novel_disorder_chance,
-    novel_part_defect_chance,
     inherited_disorder_chance,
     inherited_part_defect_chance,
+    novel_disorder_chance,
+    novel_part_defect_chance,
 )
-
-from .types import ScoringPreferences, TraitRequirement
+from .types import TraitRequirement
 
 DEFAULT_STIMULATION = 50.0
 
@@ -142,27 +138,17 @@ def calculate_pair_factors(
     )
 
 
-def calculate_pair_quality(factors: PairFactors, prefs: ScoringPreferences) -> float:
+def calculate_pair_quality(factors: PairFactors) -> float:
     """Calculate quality score from pair factors using Expected Value math."""
     avg_stats = factors.total_expected_stats / 7.0
     risk_factor = 1.0 - factors.combined_malady_chance / 2.0
 
     variance_penalty = 0.0
-    if prefs.minimize_variance:
-        for diff in [
-            abs(a - b)
-            for a, b in zip(factors.expected_stats[:3], factors.expected_stats[3:])
-        ]:
-            if diff > 2:
-                variance_penalty += (diff**2) * 0.5
 
     personality_bonus = 0.0
-    if prefs.prefer_low_aggression:
-        personality_bonus += factors.aggression_factor * 2.5
-    if prefs.prefer_high_libido:
-        personality_bonus += factors.libido_factor * 2.5
-    if prefs.prefer_high_charisma:
-        personality_bonus += factors.charisma_factor * 2.5
+    personality_bonus += factors.aggression_factor * 2.5
+    personality_bonus += factors.libido_factor * 2.5
+    personality_bonus += factors.charisma_factor * 2.5
 
     trait_bonus = (
         sum(p.probability * p.trait.weight for p in factors.trait_probabilities) * 5.0

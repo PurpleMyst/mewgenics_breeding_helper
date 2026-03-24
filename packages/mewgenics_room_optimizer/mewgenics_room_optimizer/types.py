@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from mewgenics_parser import Cat
-from mewgenics_scorer import PairFactors, ScoringPreferences, TraitRequirement
+from mewgenics_scorer import PairFactors
 
 
 class RoomType(Enum):
@@ -51,22 +51,6 @@ class RoomAssignment:
     cats: list[Cat]
     pairs: list[ScoredPair]
     eternal_youth_cats: list[Cat] = field(default_factory=list)
-
-
-@dataclass
-class OptimizationParams:
-    """Optimizer configuration."""
-
-    min_stats: int = 0
-    max_risk: float = 0.2
-    stimulation: float = 50.0
-    trait_requirements: list[TraitRequirement] = field(default_factory=list)
-    scoring_prefs: ScoringPreferences | None = None
-    sa_temperature: float = 100.0
-    sa_cooling_rate: float = 0.95
-    sa_neighbors_per_temp: int = 200
-    risk_barrier_lambda: float = 20.0
-    move_penalty_weight: float = 0.5
 
 
 @dataclass

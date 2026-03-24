@@ -7,7 +7,6 @@ from mewgenics_parser import Cat
 from mewgenics_parser.cat import CatGender, CatStatus, CatBodySlot, Stats
 
 from mewgenics_room_optimizer import (
-    OptimizationParams,
     RoomConfig,
     RoomType,
     optimize_sa,
@@ -132,12 +131,7 @@ class TestEternalYouthPlacement:
             make_cat(3, CatGender.FEMALE, disorders=["EternalYouth"]),
         ]
 
-        params = OptimizationParams(
-            sa_temperature=1.0,
-            sa_neighbors_per_temp=2,
-        )
-
-        result = optimize_sa(cats, basic_rooms, params)
+        result = optimize_sa(cats, basic_rooms, [])
 
         ey_cat = next(c for c in cats if c.has_eternal_youth())
         ey_room = next(r for r in result.rooms if ey_cat in r.eternal_youth_cats)
@@ -158,9 +152,8 @@ class TestConstraints:
                 3, status=CatStatus.GONE, stat_base=(10, 10, 10, 10, 10, 10, 10)
             ),  # Gone
         ]
-        result = _filter_cats(cats, min_stats=35)
-        assert len(result) == 1
-        assert result[0].db_key == 2
+        result = _filter_cats(cats)
+        assert [c.db_key for c in result] == [1, 2]  # Cat 3 should be excluded
 
 
 # --- INTEGRATION TESTS: SA LOGIC ---
@@ -192,11 +185,10 @@ class TestSAEvaluator:
         room = RoomConfig("b1", RoomType.BREEDING, max_cats=6, base_stim=50.0)
         state = {1: "b1", 2: "b1", 3: "b1"}
         original_state = {1: "", 2: "", 3: ""}
-        params = OptimizationParams(stimulation=50.0)
         cache = PairCache()
         km = KinshipManager(list(cats.values()))
 
-        _score = _evaluate_state(state, original_state, cats, [room], cache, km, params)
+        _score = _evaluate_state(state, original_state, cats, [room], cache, km, [])
 
         # Should have at least one pair scored
         assert mock_score_pair.called
@@ -249,7 +241,6 @@ class TestSAEvaluator:
             6: "fight1",
         }
 
-        params = OptimizationParams()
         km = KinshipManager(cats)
 
         result = _build_results_from_state_dict(
@@ -258,7 +249,7 @@ class TestSAEvaluator:
             room_configs,
             PairCache(),
             km,
-            params,
+            [],
             sa_cats=cats,
             ey_assignments={},
             filtered_cats=cats,
@@ -277,7 +268,7 @@ class TestSAEvaluator:
 
     def test_empty_optimize_sa(self):
         """Test that optimize_sa handles empty inputs gracefully."""
-        result = optimize_sa([], [], OptimizationParams())
+        result = optimize_sa([], [], [])
         assert result.rooms == []
         assert result.excluded_cats == []
         assert result.stats.total_cats == 0
@@ -299,14 +290,7 @@ class TestThroughputMaximization:
         ]
 
         # With maximize_throughput - should optimize for more pairs
-        from mewgenics_scorer import ScoringPreferences
-
-        params = OptimizationParams(
-            sa_temperature=1.0,
-            sa_neighbors_per_temp=2,
-            scoring_prefs=ScoringPreferences(maximize_throughput=True),
-        )
-        result = optimize_sa(cats, basic_rooms, params)
+        result = optimize_sa(cats, basic_rooms, [])
 
         # Should produce valid results
         assert result is not None

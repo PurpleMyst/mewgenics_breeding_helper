@@ -6,9 +6,9 @@ from dataclasses import replace
 from typing import Callable
 
 from mewgenics_parser import Cat
+from mewgenics_parser.cat import CatGender
 from mewgenics_scorer import (
     KinshipManager,
-    ScoringPreferences,
     TraitRequirement,
     calculate_pair_factors,
     calculate_pair_quality,
@@ -16,7 +16,6 @@ from mewgenics_scorer import (
 )
 
 from .types import (
-    OptimizationParams,
     OptimizationResult,
     OptimizationStats,
     RoomAssignment,
@@ -24,6 +23,8 @@ from .types import (
     RoomType,
     ScoredPair,
 )
+
+MOVE_PENALTY = 0.5
 
 PairCacheKey = tuple[int, int, float]
 
@@ -63,11 +64,9 @@ def _calculate_trait_weight_sum(
     return sum(tr.weight for tr in trait_requirements if tr.trait.is_possessed_by(cat))
 
 
-def _filter_cats(cats: list[Cat], min_stats: int) -> list[Cat]:
+def _filter_cats(cats: list[Cat]) -> list[Cat]:
     """Filter cats to only include valid breeding candidates."""
-    return [
-        c for c in cats if c.status == "In House" and _cat_stats_sum(c) >= min_stats
-    ]
+    return [c for c in cats if c.status == "In House"]
 
 
 def _generate_pairs(
@@ -151,7 +150,8 @@ def score_pair(
     cat_a: Cat,
     cat_b: Cat,
     kinship_manager: KinshipManager,
-    params: OptimizationParams,
+    trait_requirements: list[TraitRequirement],
+    stimulation: float,
 ) -> ScoredPair | None:
     """Score a pair, returning None if they can't be paired."""
     if not can_breed(cat_a, cat_b):
@@ -161,16 +161,11 @@ def score_pair(
         kinship_manager,
         cat_a,
         cat_b,
-        stimulation=params.stimulation,
-        trait_requirements=params.trait_requirements,
+        stimulation=stimulation,
+        trait_requirements=trait_requirements,
     )
 
-    scoring_prefs = params.scoring_prefs or ScoringPreferences()
-    quality = calculate_pair_quality(factors, scoring_prefs)
-
-    if factors.combined_malady_chance > params.max_risk:
-        excess_risk = factors.combined_malady_chance - params.max_risk
-        quality *= math.exp(-params.risk_barrier_lambda * excess_risk)
+    quality = calculate_pair_quality(factors)
 
     sex_a = cat_a.sexuality or 0.0
     sex_b = cat_b.sexuality or 0.0
@@ -202,7 +197,7 @@ def _evaluate_state(
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
     kinship_manager: KinshipManager,
-    params: OptimizationParams,
+    traits_requirements: list[TraitRequirement],
 ) -> float:
     """Evaluate total quality for a room assignment state using pure EV math."""
     total_quality = 0.0
@@ -236,12 +231,13 @@ def _evaluate_state(
         valid_cats = set()
 
         for a, b in pairs:
-            effective_params = replace(params, stimulation=true_stim)
             scored = pair_cache.get_score(
                 a,
                 b,
                 true_stim,
-                lambda: score_pair(a, b, kinship_manager, effective_params),
+                lambda: score_pair(
+                    a, b, kinship_manager, traits_requirements, true_stim
+                ),
             )
             if scored:
                 sum_quality += scored.quality
@@ -255,38 +251,33 @@ def _evaluate_state(
         total_possible_pairs = (N_r * (N_r - 1)) / 2.0
         expected_quality_per_tick = sum_quality / total_possible_pairs
 
-        scoring_prefs = params.scoring_prefs or ScoringPreferences()
-        if scoring_prefs.maximize_throughput:
-            males = sum(
-                1 for c in cats_in_room if c.gender == "male" and c.db_key in valid_cats
-            )
-            females = sum(
-                1
-                for c in cats_in_room
-                if c.gender == "female" and c.db_key in valid_cats
-            )
-            spiders = sum(
-                1 for c in cats_in_room if c.gender == "?" and c.db_key in valid_cats
-            )
+        males, females, dittos = 0, 0, 0
+        for c in cats_in_room:
+            if c.db_key not in valid_cats:
+                continue
+            match c.gender:
+                case CatGender.MALE:
+                    males += 1
+                case CatGender.FEMALE:
+                    females += 1
+                case CatGender.DITTO:
+                    dittos += 1
 
-            theoretical_max = room.max_cats // 2 if room.max_cats else float("inf")
-            concurrent_breeds = min(
-                len(valid_cats) // 2,
-                males + spiders,
-                females + spiders,
-                theoretical_max,
-            )
+        concurrent_breeds = min(
+            len(valid_cats) // 2,
+            males + dittos,
+            females + dittos,
+            room.max_cats // 2 if room.max_cats else float("inf"),
+        )
 
-            room_quality = concurrent_breeds * expected_quality_per_tick
-        else:
-            room_quality = expected_quality_per_tick
+        room_quality = concurrent_breeds * expected_quality_per_tick
 
         total_quality += room_quality
 
     cats_moved = sum(
         1 for cid, r in state_dict.items() if r != original_state.get(cid) and r
     )
-    total_quality -= cats_moved * params.move_penalty_weight
+    total_quality -= cats_moved * MOVE_PENALTY
 
     return total_quality
 
@@ -345,17 +336,16 @@ def _run_sa_worker(
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
     kinship_manager: KinshipManager,
-    params: OptimizationParams,
+    trait_requirements: list[TraitRequirement],
     seed: int | None = None,
 ) -> tuple[dict[int, str], float]:
     """Run simulated annealing worker on a single state."""
     if seed is not None:
         random.seed(seed)
 
-    T = params.sa_temperature
-    T_min = 0.1
-    cooling_rate = params.sa_cooling_rate
-    neighbors_per_temp = params.sa_neighbors_per_temp
+    T_MIN = 0.1
+    COOLING_RATE = 0.95
+    NEIGHBORS_PER_TEMP = 200
 
     current_state = initial_state.copy()
     current_score = _evaluate_state(
@@ -365,7 +355,7 @@ def _run_sa_worker(
         room_configs,
         pair_cache,
         kinship_manager,
-        params,
+        trait_requirements,
     )
 
     positive_deltas: list[float] = []
@@ -381,7 +371,7 @@ def _run_sa_worker(
             room_configs,
             pair_cache,
             kinship_manager,
-            params,
+            trait_requirements,
         )
         if n_score > test_score:
             positive_deltas.append(n_score - test_score)
@@ -395,8 +385,8 @@ def _run_sa_worker(
     best_score = current_score
 
     iteration = 0
-    while T > T_min:
-        for _ in range(neighbors_per_temp):
+    while T > T_MIN:
+        for _ in range(NEIGHBORS_PER_TEMP):
             neighbor = _get_neighbor(current_state, room_configs)
             neighbor_score = _evaluate_state(
                 neighbor,
@@ -405,7 +395,7 @@ def _run_sa_worker(
                 room_configs,
                 pair_cache,
                 kinship_manager,
-                params,
+                trait_requirements,
             )
 
             delta = neighbor_score - current_score
@@ -418,7 +408,7 @@ def _run_sa_worker(
                     best_state = current_state.copy()
                     best_score = current_score
 
-        T *= cooling_rate
+        T *= COOLING_RATE
         iteration += 1
 
     return best_state, best_score
@@ -461,13 +451,13 @@ def _generate_random_valid_state(
 def optimize_sa(
     cats: list[Cat],
     room_configs: list[RoomConfig],
-    params: OptimizationParams,
+    trait_requirements: list[TraitRequirement],
 ) -> OptimizationResult:
     """Optimize using Parallel Simulated Annealing."""
     import concurrent.futures
     import multiprocessing
 
-    filtered_cats = _filter_cats(cats, params.min_stats)
+    filtered_cats = _filter_cats(cats)
 
     if not filtered_cats:
         return OptimizationResult(
@@ -529,7 +519,7 @@ def optimize_sa(
                 sa_room_configs,
                 pair_cache,
                 kinship_manager,
-                params,
+                trait_requirements,
                 i,
             )
             for i, state in enumerate(initial_states)
@@ -554,7 +544,7 @@ def optimize_sa(
         sa_room_configs,
         pair_cache,
         kinship_manager,
-        params,
+        trait_requirements,
         sa_cats,
         ey_assignments,
         filtered_cats,
@@ -567,7 +557,7 @@ def _build_results_from_state_dict(
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
     kinship_manager: KinshipManager,
-    params: OptimizationParams,
+    trait_requirements: list[TraitRequirement],
     sa_cats: list[Cat],
     ey_assignments: dict[str, list[Cat]],
     filtered_cats: list[Cat],
@@ -591,12 +581,13 @@ def _build_results_from_state_dict(
 
         pairs = _generate_pairs(cats_in_room)
         for a, b in pairs:
-            effective_params = replace(params, stimulation=room.base_stim)
             scored = pair_cache.get_score(
                 a,
                 b,
                 room.base_stim,
-                lambda: score_pair(a, b, kinship_manager, effective_params),
+                lambda: score_pair(
+                    a, b, kinship_manager, trait_requirements, room.base_stim
+                ),
             )
             if scored:
                 room_pairs[room.key].append(scored)
@@ -609,14 +600,14 @@ def _build_results_from_state_dict(
     # Sort descending by (trait_weight_sum, stat_sum) - higher value = more desirable
     unassigned.sort(
         key=lambda c: (
-            _calculate_trait_weight_sum(c, params.trait_requirements),
+            _calculate_trait_weight_sum(c, trait_requirements),
             sum(c.stat_base),
         ),
         reverse=True,
     )
 
     for cat in unassigned:
-        trait_weight = _calculate_trait_weight_sum(cat, params.trait_requirements)
+        trait_weight = _calculate_trait_weight_sum(cat, trait_requirements)
         rooms_to_try = (
             (general_rooms + fighting_rooms)
             if trait_weight > 0

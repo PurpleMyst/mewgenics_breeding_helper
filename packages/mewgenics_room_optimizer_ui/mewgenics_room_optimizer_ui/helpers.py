@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from mewgenics_parser import GameData
 from mewgenics_parser.traits import Trait
 from mewgenics_room_optimizer import ScoredPair, OptimizationResult
-from mewgenics_room_optimizer.types import TraitRequirement
+from mewgenics_scorer.types import TraitRequirement
 
 from mewgenics_room_optimizer_ui.state import AppState
 

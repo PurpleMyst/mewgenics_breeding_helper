@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 from mewgenics_parser.traits import TraitCategory, create_trait
-from mewgenics_scorer import ScoringPreferences, TraitRequirement
+from mewgenics_scorer import TraitRequirement
 
 from mewgenics_room_optimizer_ui.state import ConfigModel
 
@@ -143,12 +143,6 @@ class TestConfigModelFullRoundtrip:
                 ),
             ],
             last_save_path="test.gpak",
-            min_stats=10,
-            max_risk=25.0,
-            scoring_prefs=ScoringPreferences(
-                minimize_variance=True,
-                prefer_high_libido=True,
-            ),
         )
 
         with tempfile.NamedTemporaryFile(
@@ -160,13 +154,7 @@ class TestConfigModelFullRoundtrip:
         loaded = ConfigModel.model_validate_json(temp_path.read_text())
 
         assert loaded.version == original.version
-        assert loaded.min_stats == original.min_stats
-        assert loaded.max_risk == original.max_risk
         assert loaded.last_save_path == original.last_save_path
-        assert (
-            loaded.scoring_prefs.minimize_variance
-            == original.scoring_prefs.minimize_variance
-        )
         assert len(loaded.trait_requirements) == 1
         assert loaded.trait_requirements[0].trait.key == "Sturdy"
         assert loaded.trait_requirements[0].weight == 8.0

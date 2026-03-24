@@ -26,7 +26,7 @@ from mewgenics_room_optimizer import (
     RoomConfig,
 )
 from mewgenics_room_optimizer.types import ScoredPair
-from mewgenics_scorer import ScoringPreferences, TraitRequirement
+from mewgenics_scorer import TraitRequirement
 
 CONFIG_DIR = platformdirs.user_config_path(
     "mewgenics_breeding_helper", appauthor="PurpleMyst"
@@ -59,9 +59,6 @@ class ConfigModel(BaseModel):
         default_factory=list
     )
     last_save_path: str | None = None
-    min_stats: int = 0
-    max_risk: float = 20.0
-    scoring_prefs: ScoringPreferences = Field(default_factory=ScoringPreferences)
 
     @field_validator("trait_requirements", mode="before")
     @classmethod
@@ -116,27 +113,15 @@ class AppState:
     cats: list[Cat] = []
     room_configs: list[RoomConfig] = []
     results: OptimizationResult | None = None
-    selected_result_room_key: str | None = None
-    selected_cat_db_key: int | None = None
     last_save_path: str | None = None
     game_data: GameData
 
-    min_stats: int = 0
-    max_risk: float = 0.2
-    minimize_variance: bool = True
-    prefer_low_aggression: bool = True
-    prefer_high_libido: bool = True
-    prefer_high_charisma: bool = True
-    maximize_throughput: bool = False
-
     trait_requirements: list[TraitRequirement] = []
 
-    sim_cat_a_key: int | None = None
-    sim_cat_b_key: int | None = None
     selected_pair: ScoredPair | None = None
     selected_pair_index: int | None = None
-
-    is_loading: bool = False
+    selected_result_room_key: str | None = None
+    selected_cat_db_key: int | None = None
 
     def __init__(self) -> None:
         self.game_data = (
@@ -151,9 +136,6 @@ class AppState:
         state.room_configs = config.rooms
         state.trait_requirements = config.trait_requirements
         state.last_save_path = config.last_save_path
-        state.min_stats = config.min_stats
-        state.max_risk = config.max_risk / 100.0
-        state.scoring_preferences = config.scoring_prefs
         return state
 
     def save(self) -> None:
@@ -162,29 +144,8 @@ class AppState:
             rooms=self.room_configs,
             trait_requirements=self.trait_requirements,
             last_save_path=self.last_save_path,
-            min_stats=self.min_stats,
-            max_risk=self.max_risk * 100,
-            scoring_prefs=self.scoring_preferences,
         )
         config.save()
-
-    @property
-    def scoring_preferences(self) -> ScoringPreferences:
-        return ScoringPreferences(
-            minimize_variance=self.minimize_variance,
-            prefer_low_aggression=self.prefer_low_aggression,
-            prefer_high_libido=self.prefer_high_libido,
-            prefer_high_charisma=self.prefer_high_charisma,
-            maximize_throughput=self.maximize_throughput,
-        )
-
-    @scoring_preferences.setter
-    def scoring_preferences(self, prefs: ScoringPreferences) -> None:
-        self.minimize_variance = prefs.minimize_variance
-        self.prefer_low_aggression = prefs.prefer_low_aggression
-        self.prefer_high_libido = prefs.prefer_high_libido
-        self.prefer_high_charisma = prefs.prefer_high_charisma
-        self.maximize_throughput = prefs.maximize_throughput
 
     @property
     def has_cats(self) -> bool:
