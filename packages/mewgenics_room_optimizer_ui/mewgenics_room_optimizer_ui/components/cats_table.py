@@ -7,6 +7,7 @@ from mewgenics_parser.traits import extract_traits_from_cat
 from ..colors import COLOR_DANGER, COLOR_MUTED, COLOR_SUCCESS, COLOR_WARNING
 from ..helpers import (
     LOCATION_COL_WIDTH,
+    get_all_favorable_keys,
     get_assigned_room_key,
     plain_substring_match,
     trait_substring_match,
@@ -65,7 +66,12 @@ def render_cat_table_rows(
         total = sum(stat_values)
 
         all_traits = extract_traits_from_cat(cat)
-        trait_names = [t.get_display_name(state.game_data) for t in all_traits[:3]]
+        fav_keys = get_all_favorable_keys(state)
+        if fav_keys:
+            fav_traits = [t for t in all_traits if t.key in fav_keys]
+            trait_names = [t.get_display_name(state.game_data) for t in fav_traits]
+        else:
+            trait_names = [t.get_display_name(state.game_data) for t in all_traits[:3]]
         trait_display = ", ".join(trait_names)
 
         callback = row_callback

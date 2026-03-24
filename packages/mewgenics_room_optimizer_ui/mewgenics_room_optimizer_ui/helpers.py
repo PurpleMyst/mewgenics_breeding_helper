@@ -40,7 +40,7 @@ def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
     universal_ev = pair.factors.universal_ev
     build_yields = pair.factors.build_yields
 
-    combined_malady_pct = (expected_disorders * 5.0 + expected_defects * 1.0) * 100
+    combined_malady_pct = expected_disorders * 5.0 + expected_defects * 1.0
     risk_color = COLOR_DANGER if combined_malady_pct > 15 else COLOR_SUCCESS
 
     return PairSummaryData(
@@ -87,3 +87,14 @@ def get_assigned_room_key(
         if any(c.db_key == cat_db_key for c in room.cats):
             return room.room.key
     return None
+
+
+def get_all_favorable_keys(state: AppState) -> set[str]:
+    """Collect all trait keys from universals AND TargetBuild requirements."""
+    keys: set[str] = set()
+    for universal in state.universals:
+        keys.add(universal.trait.key)
+    for build in state.target_builds:
+        for tw in build.requirements:
+            keys.add(tw.trait.key)
+    return keys

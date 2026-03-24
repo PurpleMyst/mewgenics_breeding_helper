@@ -260,7 +260,7 @@ wheels = [
 [[package]]
 name = "mewgenics-breeding"
 version = "1.0.0"
-source = { virtual = "packages/mewgenics_breeding" }
+source = { editable = "packages/mewgenics_breeding" }
 dependencies = [
     { name = "mewgenics-parser" },
 ]
@@ -417,11 +417,15 @@ name = "mewgenics-scorer"
 version = "1.0.0"
 source = { editable = "packages/mewgenics_scorer" }
 dependencies = [
+    { name = "mewgenics-breeding" },
     { name = "mewgenics-parser" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mewgenics-parser", editable = "packages/mewgenics_parser" }]
+requires-dist = [
+    { name = "mewgenics-breeding", editable = "packages/mewgenics_breeding" },
+    { name = "mewgenics-parser", editable = "packages/mewgenics_parser" },
+]
 
 [[package]]
 name = "packaging"
