@@ -201,6 +201,7 @@ def scan_and_load_saves(
         try:
             save_data = parse_save(newest)
             state.cats = save_data.cats
+            state.save_data = save_data
             state.last_save_path = newest
             state.results = None
 
@@ -247,6 +248,7 @@ def on_save_selected(sender: int, app_data: str, user_data: AppState) -> None:
     try:
         save_data = parse_save(filepath)
         user_data.cats = save_data.cats
+        user_data.save_data = save_data
         user_data.last_save_path = filepath
         user_data.results = None
 
@@ -329,7 +331,7 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     """Run the optimization (blocking)."""
     from mewgenics_room_optimizer import optimize_sa
 
-    if not user_data.cats:
+    if not user_data.cats or not user_data.save_data:
         return
 
     dpg.set_value("status_text", "Calculating...")
@@ -337,7 +339,7 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     dpg.render_dearpygui_frame()
 
     results = optimize_sa(
-        user_data.cats, user_data.room_configs, user_data.trait_requirements
+        user_data.save_data, user_data.room_configs, user_data.trait_requirements
     )
     user_data.results = results
 

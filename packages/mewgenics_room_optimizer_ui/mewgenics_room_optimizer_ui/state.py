@@ -12,7 +12,7 @@ from pydantic import (
     field_serializer,
 )
 
-from mewgenics_parser import Cat
+from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import (
     Trait,
@@ -111,6 +111,7 @@ class AppState:
     """Application state - runtime only, not persisted."""
 
     cats: list[Cat] = []
+    save_data: SaveData | None = None
     room_configs: list[RoomConfig] = []
     results: OptimizationResult | None = None
     last_save_path: str | None = None

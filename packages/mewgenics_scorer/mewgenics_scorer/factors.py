@@ -2,9 +2,8 @@
 
 from dataclasses import dataclass
 
-from mewgenics_parser import Cat
+from mewgenics_parser import Cat, SaveData
 
-from .ancestry import KinshipManager
 from .compatibility import can_breed, is_mutual_lovers
 from .inheritance import (
     TraitInheritanceProbability,
@@ -102,7 +101,7 @@ def _charisma_factor(a: Cat, b: Cat) -> float:
 
 
 def calculate_pair_factors(
-    kinship_manager: KinshipManager,
+    save_data: SaveData,
     a: Cat,
     b: Cat,
     stimulation: float = DEFAULT_STIMULATION,
@@ -117,7 +116,7 @@ def calculate_pair_factors(
         for trait in (trait_requirements or [])
     ]
 
-    coi = kinship_manager.get_inbreeding_coefficient(a)
+    coi = save_data.get_offspring_coi(a, b)
 
     return PairFactors(
         can_breed=can_breed(a, b),

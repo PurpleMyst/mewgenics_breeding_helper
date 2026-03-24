@@ -32,6 +32,7 @@ def load_startup_save(filepath: str, state: Any) -> bool:
     try:
         save_data = parse_save(filepath)
         state.cats = save_data.cats
+        state.save_data = save_data
         state.last_save_path = filepath
         return True
     except Exception as e:

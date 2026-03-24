@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import pytest
-from mewgenics_parser import Cat
+from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatGender, CatStatus, CatBodySlot, Stats
 
 from mewgenics_room_optimizer import (
@@ -11,7 +11,6 @@ from mewgenics_room_optimizer import (
     RoomType,
     optimize_sa,
 )
-from mewgenics_scorer import KinshipManager
 from mewgenics_room_optimizer.optimizer import (
     PairCache,
     _build_results_from_state_dict,
@@ -85,6 +84,24 @@ def make_cat(
     )
 
 
+def make_save_data(cats: list[Cat] | None = None, coi: float = 0.0) -> SaveData:
+    """Create a mock SaveData with optional cats and default CoI for all pairs."""
+    if cats is None:
+        cats = []
+    coi_memo: dict[tuple[int, int], float] = {}
+    for cat_a in cats:
+        for cat_b in cats:
+            coi_memo[(cat_a.db_key, cat_b.db_key)] = coi
+    return SaveData(
+        cats=cats,
+        current_day=0,
+        house_count=len(cats),
+        adventure_count=0,
+        gone_count=0,
+        _parents_coi_memo=coi_memo,
+    )
+
+
 @pytest.fixture
 def basic_rooms():
     return [
@@ -131,7 +148,7 @@ class TestEternalYouthPlacement:
             make_cat(3, CatGender.FEMALE, disorders=["EternalYouth"]),
         ]
 
-        result = optimize_sa(cats, basic_rooms, [])
+        result = optimize_sa(make_save_data(cats), basic_rooms, [])
 
         ey_cat = next(c for c in cats if c.has_eternal_youth())
         ey_room = next(r for r in result.rooms if ey_cat in r.eternal_youth_cats)
@@ -186,9 +203,11 @@ class TestSAEvaluator:
         state = {1: "b1", 2: "b1", 3: "b1"}
         original_state = {1: "", 2: "", 3: ""}
         cache = PairCache()
-        km = KinshipManager(list(cats.values()))
+        save_data = make_save_data(list(cats.values()))
 
-        _score = _evaluate_state(state, original_state, cats, [room], cache, km, [])
+        _score = _evaluate_state(
+            state, original_state, cats, [room], cache, save_data, []
+        )
 
         # Should have at least one pair scored
         assert mock_score_pair.called
@@ -241,14 +260,14 @@ class TestSAEvaluator:
             6: "fight1",
         }
 
-        km = KinshipManager(cats)
+        save_data = make_save_data(cats)
 
         result = _build_results_from_state_dict(
             state,
             cats_by_id,
             room_configs,
             PairCache(),
-            km,
+            save_data,
             [],
             sa_cats=cats,
             ey_assignments={},
@@ -268,7 +287,8 @@ class TestSAEvaluator:
 
     def test_empty_optimize_sa(self):
         """Test that optimize_sa handles empty inputs gracefully."""
-        result = optimize_sa([], [], [])
+        empty_save_data = make_save_data([])
+        result = optimize_sa(empty_save_data, [], [])
         assert result.rooms == []
         assert result.excluded_cats == []
         assert result.stats.total_cats == 0
@@ -290,7 +310,7 @@ class TestThroughputMaximization:
         ]
 
         # With maximize_throughput - should optimize for more pairs
-        result = optimize_sa(cats, basic_rooms, [])
+        result = optimize_sa(make_save_data(cats), basic_rooms, [])
 
         # Should produce valid results
         assert result is not None

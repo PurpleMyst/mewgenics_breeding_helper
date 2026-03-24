@@ -5,10 +5,9 @@ import random
 from dataclasses import replace
 from typing import Callable
 
-from mewgenics_parser import Cat
+from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatGender
 from mewgenics_scorer import (
-    KinshipManager,
     TraitRequirement,
     calculate_pair_factors,
     calculate_pair_quality,
@@ -147,9 +146,9 @@ def _filter_hater_conflicts(
 
 
 def score_pair(
+    save_data: SaveData,
     cat_a: Cat,
     cat_b: Cat,
-    kinship_manager: KinshipManager,
     trait_requirements: list[TraitRequirement],
     stimulation: float,
 ) -> ScoredPair | None:
@@ -158,7 +157,7 @@ def score_pair(
         return None
 
     factors = calculate_pair_factors(
-        kinship_manager,
+        save_data,
         cat_a,
         cat_b,
         stimulation=stimulation,
@@ -196,7 +195,7 @@ def _evaluate_state(
     cats_by_id: dict[int, Cat],
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
-    kinship_manager: KinshipManager,
+    save_data: SaveData,
     traits_requirements: list[TraitRequirement],
 ) -> float:
     """Evaluate total quality for a room assignment state using pure EV math."""
@@ -235,9 +234,7 @@ def _evaluate_state(
                 a,
                 b,
                 true_stim,
-                lambda: score_pair(
-                    a, b, kinship_manager, traits_requirements, true_stim
-                ),
+                lambda: score_pair(save_data, a, b, traits_requirements, true_stim),
             )
             if scored:
                 sum_quality += scored.quality
@@ -335,7 +332,7 @@ def _run_sa_worker(
     cats_by_id: dict[int, Cat],
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
-    kinship_manager: KinshipManager,
+    save_data: SaveData,
     trait_requirements: list[TraitRequirement],
     seed: int | None = None,
 ) -> tuple[dict[int, str], float]:
@@ -354,7 +351,7 @@ def _run_sa_worker(
         cats_by_id,
         room_configs,
         pair_cache,
-        kinship_manager,
+        save_data,
         trait_requirements,
     )
 
@@ -370,7 +367,7 @@ def _run_sa_worker(
             cats_by_id,
             room_configs,
             pair_cache,
-            kinship_manager,
+            save_data,
             trait_requirements,
         )
         if n_score > test_score:
@@ -394,7 +391,7 @@ def _run_sa_worker(
                 cats_by_id,
                 room_configs,
                 pair_cache,
-                kinship_manager,
+                save_data,
                 trait_requirements,
             )
 
@@ -449,7 +446,7 @@ def _generate_random_valid_state(
 
 
 def optimize_sa(
-    cats: list[Cat],
+    save_data: SaveData,
     room_configs: list[RoomConfig],
     trait_requirements: list[TraitRequirement],
 ) -> OptimizationResult:
@@ -457,6 +454,7 @@ def optimize_sa(
     import concurrent.futures
     import multiprocessing
 
+    cats = save_data.cats
     filtered_cats = _filter_cats(cats)
 
     if not filtered_cats:
@@ -493,7 +491,6 @@ def optimize_sa(
         else:
             sa_room_configs.append(r)
 
-    kinship_manager = KinshipManager(cats)
     cats_by_id = {c.db_key: c for c in sa_cats}
     pair_cache = PairCache()
 
@@ -518,7 +515,7 @@ def optimize_sa(
                 cats_by_id,
                 sa_room_configs,
                 pair_cache,
-                kinship_manager,
+                save_data,
                 trait_requirements,
                 i,
             )
@@ -543,7 +540,7 @@ def optimize_sa(
         cats_by_id,
         sa_room_configs,
         pair_cache,
-        kinship_manager,
+        save_data,
         trait_requirements,
         sa_cats,
         ey_assignments,
@@ -556,7 +553,7 @@ def _build_results_from_state_dict(
     cats_by_id: dict[int, Cat],
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
-    kinship_manager: KinshipManager,
+    save_data: SaveData,
     trait_requirements: list[TraitRequirement],
     sa_cats: list[Cat],
     ey_assignments: dict[str, list[Cat]],
@@ -585,9 +582,7 @@ def _build_results_from_state_dict(
                 a,
                 b,
                 room.base_stim,
-                lambda: score_pair(
-                    a, b, kinship_manager, trait_requirements, room.base_stim
-                ),
+                lambda: score_pair(save_data, a, b, trait_requirements, room.base_stim),
             )
             if scored:
                 room_pairs[room.key].append(scored)

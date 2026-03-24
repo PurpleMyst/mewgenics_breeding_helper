@@ -1,14 +1,13 @@
 """Tests for mewgenics_scorer factors module."""
 
 import pytest
-from mewgenics_parser import Cat, TraitCategory, create_trait
+from mewgenics_parser import Cat, SaveData, TraitCategory, create_trait
 from mewgenics_parser.cat import CatBodySlot, CatGender, CatStatus, Stats
 from mewgenics_parser.traits import (
     BodyPartTrait,
     cat_has_defect_in_slot,
     cat_has_mutation_in_slot,
 )
-from mewgenics_scorer.ancestry import KinshipManager
 from mewgenics_scorer.factors import (
     PairFactors,
     _aggression_factor,
@@ -89,6 +88,24 @@ def make_cat(
         level=1,
         collar="",
         coi=0.0,
+    )
+
+
+def make_save_data(cats: list[Cat] | None = None, coi: float = 0.0) -> SaveData:
+    """Create a mock SaveData with optional cats and default CoI for all pairs."""
+    if cats is None:
+        cats = []
+    coi_memo: dict[tuple[int, int], float] = {}
+    for cat_a in cats:
+        for cat_b in cats:
+            coi_memo[(cat_a.db_key, cat_b.db_key)] = coi
+    return SaveData(
+        cats=cats,
+        current_day=0,
+        house_count=len(cats),
+        adventure_count=0,
+        gone_count=0,
+        _parents_coi_memo=coi_memo,
     )
 
 
@@ -174,9 +191,9 @@ class TestCalculatePairFactors:
     def test_basic_calculation(self):
         a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
         b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        km = KinshipManager([a, b])
+        save_data = make_save_data([a, b])
 
-        result = calculate_pair_factors(km, a, b)
+        result = calculate_pair_factors(save_data, a, b)
 
         assert isinstance(result, PairFactors)
         assert result.can_breed is True
@@ -187,9 +204,9 @@ class TestCalculatePairFactors:
     def test_unrelated_cats_no_risk(self):
         a = make_cat(1, CatGender.MALE)
         b = make_cat(2, CatGender.FEMALE)
-        km = KinshipManager([a, b])
+        save_data = make_save_data([a, b])
 
-        result = calculate_pair_factors(km, a, b)
+        result = calculate_pair_factors(save_data, a, b)
 
         # Unrelated cats have CoI = 0.0, so:
         # - disorder chance = 2% (base)
@@ -200,9 +217,9 @@ class TestCalculatePairFactors:
     def test_total_expected_stats(self):
         a = make_cat(1, CatGender.MALE, stat_base=[10, 0, 0, 0, 0, 0, 0])
         b = make_cat(2, CatGender.FEMALE, stat_base=[0, 10, 0, 0, 0, 0, 0])
-        km = KinshipManager([a, b])
+        save_data = make_save_data([a, b])
 
-        result = calculate_pair_factors(km, a, b)
+        result = calculate_pair_factors(save_data, a, b)
 
         # Should be 7 values that sum to something based on better_chance
         assert len(result.expected_stats) == 7
@@ -298,9 +315,10 @@ class TestTraitInheritanceProbability:
 
         result = calculate_trait_probability(trait, mother, father, 0.0)
 
-        # 50% parent pick * 20% inherit chance * (1/4 pool size) = 2.5%
-        # Parent selection is decoupled from trait possession
-        assert result.probability == pytest.approx(0.025)
+        # 50% parent pick * 20% inherit chance * 50% pool pick = 5%
+        # The pool dilution uses 50% (neither parent favored) rather than 1/4
+        # (the pool size represents 4 unique abilities across both parents)
+        assert result.probability == pytest.approx(0.05)
 
     def test_passive_skillshare_plus_guaranteed(self):
         mother = make_cat(1, passives=["SkillShare2", "Sturdy"])
