@@ -183,6 +183,18 @@ def _can_fit_single(
     return (current_count + 1) <= room.max_cats
 
 
+def _cat_has_disorders(cat: Cat) -> bool:
+    """Check if cat has any disorders."""
+    return bool(cat.disorders)
+
+
+def _cat_has_birth_defects(cat: Cat) -> bool:
+    """Check if cat has any birth defects (part_id < 0 or 700-710)."""
+    return any(
+        part_id < 0 or (700 <= part_id <= 710) for part_id in cat.body_parts.values()
+    )
+
+
 def _evaluate_state(
     state_dict: dict[int, str],
     original_state: dict[int, str],
@@ -606,6 +618,8 @@ def _build_results_from_state_dict(
     unassigned = [c for c in sa_cats if c.db_key not in assigned_cats]
     general_rooms = [r for r in room_configs if r.room_type == RoomType.GENERAL]
     fighting_rooms = [r for r in room_configs if r.room_type == RoomType.FIGHTING]
+    health_rooms = [r for r in room_configs if r.room_type == RoomType.HEALTH]
+    mutation_rooms = [r for r in room_configs if r.room_type == RoomType.MUTATION]
 
     def _cat_ens_value(cat: Cat) -> float:
         val = sum(cat.stat_base)
@@ -623,12 +637,24 @@ def _build_results_from_state_dict(
     unassigned.sort(key=_cat_ens_value, reverse=True)
 
     for cat in unassigned:
-        cat_value = _cat_ens_value(cat)
-        rooms_to_try = (
-            (general_rooms + fighting_rooms)
-            if cat_value > 0
-            else (fighting_rooms + general_rooms)
-        )
+        has_disorders = _cat_has_disorders(cat)
+        has_defects = _cat_has_birth_defects(cat)
+
+        if has_disorders and has_defects:
+            rooms_to_try = (
+                mutation_rooms + health_rooms + general_rooms + fighting_rooms
+            )
+        elif has_disorders:
+            rooms_to_try = health_rooms + general_rooms + fighting_rooms
+        elif has_defects:
+            rooms_to_try = mutation_rooms + general_rooms + fighting_rooms
+        else:
+            cat_value = _cat_ens_value(cat)
+            rooms_to_try = (
+                (general_rooms + fighting_rooms)
+                if cat_value > 0
+                else (fighting_rooms + general_rooms)
+            )
 
         for room in rooms_to_try:
             if _can_fit_single(room, len(rooms_content[room.key])):
@@ -639,6 +665,21 @@ def _build_results_from_state_dict(
     excluded = [c for c in sa_cats if c.db_key not in assigned_cats]
 
     room_results: list[RoomAssignment] = []
+    if excluded:
+        room_results.append(
+            RoomAssignment(
+                room=RoomConfig(
+                    key="unassigned",
+                    room_type=RoomType.NONE,
+                    max_cats=None,
+                    base_stim=0.0,
+                ),
+                cats=excluded,
+                pairs=[],
+                eternal_youth_cats=[],
+            )
+        )
+
     breeding_rooms_used = 0
     general_rooms_used = 0
     total_pair_quality = 0.0

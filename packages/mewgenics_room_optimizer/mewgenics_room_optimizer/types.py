@@ -13,6 +13,8 @@ class RoomType(Enum):
     BREEDING = "breeding"
     FIGHTING = "fighting"
     GENERAL = "general"
+    HEALTH = "health"
+    MUTATION = "mutation"
     NONE = "none"
 
 
