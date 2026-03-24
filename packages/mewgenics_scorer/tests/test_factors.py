@@ -1,5 +1,6 @@
 """Tests for mewgenics_scorer factors module with ENS architecture."""
 
+import pytest
 from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatBodySlot, CatGender, CatStatus, Stats
 from mewgenics_parser.traits import (
@@ -301,6 +302,95 @@ class TestEvaluateBuild:
         yield_value = _evaluate_build(pmf, build)
 
         assert yield_value >= 0
+
+    def test_multiple_passives_synergy_not_zero(self):
+        a = make_cat(1, CatGender.MALE, passives=["Sturdy", "Hunter"])
+        b = make_cat(2, CatGender.FEMALE)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        hunter = create_trait(TraitCategory.PASSIVE_ABILITY, "Hunter")
+        build = TargetBuild(
+            name="Multi Passive Build",
+            requirements=[
+                TraitWeight(trait=sturdy, weight_ens=1.0),
+                TraitWeight(trait=hunter, weight_ens=1.0),
+            ],
+            anti_synergies=[],
+            synergy_bonus_ens=2.0,
+        )
+
+        yield_value = _evaluate_build(pmf, build)
+
+        p_sturdy = _get_marginal_prob(pmf, sturdy)
+        p_hunter = _get_marginal_prob(pmf, hunter)
+        p_at_least_one = 1.0 - (1.0 - p_sturdy) * (1.0 - p_hunter)
+        expected_synergy = p_at_least_one * 2.0
+        expected_yield = (p_sturdy + p_hunter) + expected_synergy
+
+        assert yield_value == pytest.approx(expected_yield, rel=1e-9)
+
+    def test_body_parts_same_category(self):
+        body_parts_a = {CatBodySlot.LEFT_EAR: 300}
+        body_parts_b = {CatBodySlot.LEFT_EAR: 400}
+        a = make_cat(1, CatGender.MALE, body_parts=body_parts_a)
+        b = make_cat(2, CatGender.FEMALE, body_parts=body_parts_b)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        ear_300 = create_trait(TraitCategory.BODY_PART, "Ears300")
+        ear_400 = create_trait(TraitCategory.BODY_PART, "Ears400")
+        build = TargetBuild(
+            name="Same Category Build",
+            requirements=[
+                TraitWeight(trait=ear_300, weight_ens=1.0),
+                TraitWeight(trait=ear_400, weight_ens=1.0),
+            ],
+            anti_synergies=[],
+            synergy_bonus_ens=1.0,
+        )
+
+        yield_value = _evaluate_build(pmf, build)
+
+        p_300 = _get_marginal_prob(pmf, ear_300)
+        p_400 = _get_marginal_prob(pmf, ear_400)
+        p_at_least_one = 1.0 - (1.0 - p_300) * (1.0 - p_400)
+        expected_yield = (p_300 + p_400) + p_at_least_one * 1.0
+
+        assert yield_value == pytest.approx(expected_yield, rel=1e-9)
+
+    def test_body_parts_different_categories(self):
+        body_parts_a = {CatBodySlot.LEFT_EAR: 300, CatBodySlot.TAIL: 300}
+        body_parts_b = {CatBodySlot.LEFT_EAR: 400, CatBodySlot.TAIL: 400}
+        a = make_cat(1, CatGender.MALE, body_parts=body_parts_a)
+        b = make_cat(2, CatGender.FEMALE, body_parts=body_parts_b)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        ear_trait = create_trait(TraitCategory.BODY_PART, "Ears300")
+        tail_trait = create_trait(TraitCategory.BODY_PART, "Tail300")
+        build = TargetBuild(
+            name="Different Category Build",
+            requirements=[
+                TraitWeight(trait=ear_trait, weight_ens=1.0),
+                TraitWeight(trait=tail_trait, weight_ens=1.0),
+            ],
+            anti_synergies=[],
+            synergy_bonus_ens=1.0,
+        )
+
+        yield_value = _evaluate_build(pmf, build)
+
+        p_ear = _get_marginal_prob(pmf, ear_trait)
+        p_tail = _get_marginal_prob(pmf, tail_trait)
+        p_at_least_one_ear = 1.0 - (1.0 - p_ear)
+        p_at_least_one_tail = 1.0 - (1.0 - p_tail)
+        expected_yield = (p_ear + p_tail) + (
+            p_at_least_one_ear * p_at_least_one_tail * 1.0
+        )
+
+        assert yield_value == pytest.approx(expected_yield, rel=1e-9)
 
 
 class TestBodyPartTraitHelpers:

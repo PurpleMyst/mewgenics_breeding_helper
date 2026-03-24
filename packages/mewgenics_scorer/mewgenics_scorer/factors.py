@@ -1,9 +1,15 @@
 """Pair factors calculation for breeding optimization using ENS architecture."""
 
+import math
 from dataclasses import dataclass
 
 from mewgenics_parser import Cat, SaveData, TraitCategory
-from mewgenics_parser.traits import get_slots_for_category, BodyPartTrait, Trait
+from mewgenics_parser.traits import (
+    BodyPartTrait,
+    CatBodyPartCategory,
+    Trait,
+    get_slots_for_category,
+)
 from mewgenics_breeding import simulate_breeding, OffspringProbabilityMass
 
 from .types import TargetBuild, UniversalTrait
@@ -71,8 +77,11 @@ def _get_marginal_prob(pmf: OffspringProbabilityMass, trait: Trait) -> float:
 def _evaluate_build(pmf: OffspringProbabilityMass, build: TargetBuild) -> float:
     """Evaluate the expected yield of a build from a PMF.
 
-    Yield = (Sum of requirement EVs) + (Joint probability of requirements * Synergy Bonus)
+    Yield = (Sum of requirement EVs) + (Synergy Prob * Synergy Bonus)
             - (Sum of anti-synergy EVs)
+
+    Where Synergy Prob = P(at least one passive) * P(at least one active)
+                          * ∏P(at least one body part per slot set)
 
     Returns max(0.0, yield) to prevent negative yields.
     """
@@ -83,13 +92,48 @@ def _evaluate_build(pmf: OffspringProbabilityMass, build: TargetBuild) -> float:
         _get_marginal_prob(pmf, tw.trait) * tw.weight_ens for tw in build.anti_synergies
     )
 
-    joint_prob = 1.0 if build.requirements else 0.0
-    for tw in build.requirements:
-        marginal = _get_marginal_prob(pmf, tw.trait)
-        joint_prob *= marginal
-    joint_prob = max(0.0, min(1.0, joint_prob))
+    passive_reqs = [
+        tw
+        for tw in build.requirements
+        if tw.trait.category == TraitCategory.PASSIVE_ABILITY
+    ]
+    active_reqs = [
+        tw
+        for tw in build.requirements
+        if tw.trait.category == TraitCategory.ACTIVE_ABILITY
+    ]
+    body_part_reqs = [
+        tw for tw in build.requirements if tw.trait.category == TraitCategory.BODY_PART
+    ]
 
-    yield_value = req_ev + joint_prob * build.synergy_bonus_ens - anti_ev
+    p_at_least_one_passive = 1.0
+    if passive_reqs:
+        p_at_least_one_passive = 1.0 - math.prod(
+            1.0 - _get_marginal_prob(pmf, tw.trait) for tw in passive_reqs
+        )
+
+    p_at_least_one_active = 1.0
+    if active_reqs:
+        p_at_least_one_active = 1.0 - math.prod(
+            1.0 - _get_marginal_prob(pmf, tw.trait) for tw in active_reqs
+        )
+
+    body_parts_by_category: dict[CatBodyPartCategory, list] = {}
+    for tw in body_part_reqs:
+        trait = tw.trait
+        assert isinstance(trait, BodyPartTrait)
+        body_parts_by_category.setdefault(trait.body_part_category, []).append(tw)
+
+    body_part_product = 1.0
+    for cat_tws in body_parts_by_category.values():
+        p_at_least_one = 1.0 - math.prod(
+            1.0 - _get_marginal_prob(pmf, tw.trait) for tw in cat_tws
+        )
+        body_part_product *= p_at_least_one
+
+    synergy_prob = p_at_least_one_passive * p_at_least_one_active * body_part_product
+
+    yield_value = req_ev + synergy_prob * build.synergy_bonus_ens - anti_ev
     return max(0.0, yield_value)
 
 
