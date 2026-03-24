@@ -293,6 +293,11 @@ def _evaluate_state(
 
     house_diversity_bonus = sum(math.sqrt(y) for y in house_build_yields.values())
 
+    if target_builds:
+        for build in target_builds:
+            if house_build_yields.get(build.name, 0.0) == 0.0:
+                house_diversity_bonus -= 1000.0
+
     cats_moved = sum(
         1 for cid, r in state_dict.items() if r != original_state.get(cid) and r
     )

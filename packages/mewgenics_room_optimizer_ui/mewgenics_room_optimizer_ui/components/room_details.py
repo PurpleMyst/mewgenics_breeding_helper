@@ -139,7 +139,7 @@ def _build_misplaced_tab(selected_room: RoomAssignment, state: AppState) -> None
     misplaced.sort(
         key=lambda x: (
             x["cat"].age if x["cat"].age is not None else 999,
-            x["cat"].name or "",
+            -x["cat"].db_key,
         )
     )
 
