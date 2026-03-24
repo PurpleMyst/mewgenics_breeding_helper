@@ -80,7 +80,7 @@ class TestConfigModelTraitRequirements:
     def test_roundtrip_trait_requirements(self) -> None:
         """Test full load/save roundtrip of trait_requirements."""
         trait1 = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
-        trait2 = create_trait(TraitCategory.BODY_PART, " CURLICUE ")
+        trait2 = create_trait(TraitCategory.BODY_PART, "Eyes300")
         original = ConfigModel(
             trait_requirements=[
                 TraitRequirement(trait=trait1, weight=7.0),
@@ -99,7 +99,7 @@ class TestConfigModelTraitRequirements:
         assert reloaded.trait_requirements[0].trait.key == "Sturdy"
         assert reloaded.trait_requirements[0].weight == 7.0
         assert reloaded.trait_requirements[1].trait.category == TraitCategory.BODY_PART
-        assert reloaded.trait_requirements[1].trait.key == " CURLICUE "
+        assert reloaded.trait_requirements[1].trait.key == "Eyes300"
         assert reloaded.trait_requirements[1].weight == 2.5
 
     def test_empty_trait_requirements(self) -> None:
