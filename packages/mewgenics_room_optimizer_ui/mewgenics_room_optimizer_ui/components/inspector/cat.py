@@ -145,7 +145,7 @@ def _render_trait_tree_node(label: str, traits: list[Trait], state: AppState) ->
             if not name and not desc:
                 print(trait)
 
-            is_fav = any(trait.key == req.trait.key for req in state.trait_requirements)
+            is_fav = any(trait.key == u.trait.key for u in state.universals)
 
             if trait.is_negative():
                 color = COLOR_DANGER
@@ -168,7 +168,7 @@ def _render_ability_list(
             dpg.add_text("  None", color=COLOR_MUTED)
             return
 
-        req_keys = {req.trait.key for req in state.trait_requirements}
+        req_keys = {u.trait.key for u in state.universals}
 
         for ability in abilities:
             color = (
@@ -188,7 +188,7 @@ def _render_body_part_list(label: str, body_parts: list, state: AppState) -> Non
             dpg.add_text("  None", color=COLOR_MUTED)
             return
 
-        req_keys = {req.trait.key for req in state.trait_requirements}
+        req_keys = {u.trait.key for u in state.universals}
 
         for bp in body_parts:
             is_fav = bp.key in req_keys

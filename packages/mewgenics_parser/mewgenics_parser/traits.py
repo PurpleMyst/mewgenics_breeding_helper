@@ -218,49 +218,9 @@ class BodyPartTrait(Trait):
         return self._part_id
 
 
-def cat_has_mutation_in_slot(cat: Cat, slot: CatBodySlot) -> bool:
-    """Check if a cat has a mutation in a given slot.
-
-    Returns True only for mutations (part_id >= 300).
-    Does NOT return True for negative birth defects.
-    """
-    part_id = cat.body_parts.get(slot)
-    if part_id is None:
-        return False
-    temp_trait = BodyPartTrait(_key=f"{slot.category}{part_id}")
-    return temp_trait.is_mutation()
-
-
-def cat_has_defect_in_slot(cat: Cat, slot: CatBodySlot) -> bool:
-    """Check if a cat has a negative body part in a given slot.
-
-    Uses is_negative() - returns True for birth defects.
-    Mutations that aren't negative return False.
-    """
-    part_id = cat.body_parts.get(slot)
-    if part_id is None:
-        return False
-    temp_trait = BodyPartTrait(_key=f"{slot.category}{part_id}")
-    return temp_trait.is_negative()
-
-
 def get_slots_for_category(category: CatBodyPartCategory) -> list[CatBodySlot]:
     """Get all slots belonging to a category (e.g., [LEFT_EAR, RIGHT_EAR] for EARS)."""
     return [slot for slot in CatBodySlot if slot.category == category]
-
-
-def cat_has_mutation_in_category(cat: Cat, category: CatBodyPartCategory) -> bool:
-    """Check if cat has a mutation (part_id >= 300) in ANY slot of a category."""
-    return any(
-        cat_has_mutation_in_slot(cat, slot) for slot in get_slots_for_category(category)
-    )
-
-
-def cat_has_defect_in_category(cat: Cat, category: CatBodyPartCategory) -> bool:
-    """Check if cat has a birth defect (negative part_id) in ANY slot of a category."""
-    return any(
-        cat_has_defect_in_slot(cat, slot) for slot in get_slots_for_category(category)
-    )
 
 
 @dataclass(slots=True)

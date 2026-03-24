@@ -184,6 +184,8 @@ class TestBreedingSimulation:
                     },
                 },
                 novel_birth_defect=0.4515,
+                expected_inherited_disorders=0.3,
+                expected_inherited_defects=0.9357530000000001,
             )
         )
 
@@ -225,12 +227,12 @@ class TestBreedingSimulation:
                     },
                     CatBodySlot.BODY: {410: 0.9357530000000001},
                     CatBodySlot.HEAD: {
-                        60: 0.46787650000000003,
-                        307: 0.46787650000000003,
+                        60: 0.4033418103448276,
+                        307: 0.5324111896551725,
                     },
                     CatBodySlot.TAIL: {
-                        143: 0.46787650000000003,
-                        417: 0.46787650000000003,
+                        143: 0.4033418103448276,
+                        417: 0.5324111896551725,
                     },
                     CatBodySlot.MOUTH: {
                         409: 0.46787650000000003,
@@ -266,6 +268,8 @@ class TestBreedingSimulation:
                     },
                 },
                 novel_birth_defect=0.4515,
+                expected_inherited_disorders=0.3,
+                expected_inherited_defects=0.9357530000000001,
             )
         )
 
@@ -307,12 +311,12 @@ class TestBreedingSimulation:
                     },
                     CatBodySlot.BODY: {410: 0.9357530000000001},
                     CatBodySlot.HEAD: {
-                        60: 0.46787650000000003,
-                        307: 0.46787650000000003,
+                        60: 0.31720440677966105,
+                        307: 0.6185485932203391,
                     },
                     CatBodySlot.TAIL: {
-                        143: 0.46787650000000003,
-                        417: 0.46787650000000003,
+                        143: 0.31720440677966105,
+                        417: 0.6185485932203391,
                     },
                     CatBodySlot.MOUTH: {
                         409: 0.46787650000000003,
@@ -348,6 +352,8 @@ class TestBreedingSimulation:
                     },
                 },
                 novel_birth_defect=0.4515,
+                expected_inherited_disorders=0.3,
+                expected_inherited_defects=0.9357530000000001,
             )
         )
 

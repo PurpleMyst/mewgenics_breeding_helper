@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from mewgenics_parser import GameData
 from mewgenics_parser.traits import Trait
 from mewgenics_room_optimizer import ScoredPair, OptimizationResult
-from mewgenics_scorer.types import TraitRequirement
 
 from mewgenics_room_optimizer_ui.state import AppState
 
@@ -14,36 +13,19 @@ from .colors import COLOR_DANGER, COLOR_SUCCESS
 LOCATION_COL_WIDTH = 125
 
 
-def get_favorable_trait_names(
-    cat, trait_requirements: list[TraitRequirement], game_data: GameData
-) -> list[str]:
-    """Get list of favorable trait display names possessed by cat.
-
-    Uses domain method trait.get_display_name() for proper names.
-    """
-    return [
-        req.trait.get_display_name(game_data)
-        for req in trait_requirements
-        if req.trait.is_possessed_by(cat)
-    ]
-
-
 @dataclass
 class PairSummaryData:
     """Common pair data for reuse in table and detail views."""
 
     names_display: str
     quality: float
-    disorder_pct: float
-    part_defect_pct: float
-    combined_pct: float
+    expected_disorders: float
+    expected_defects: float
+    expected_stats_sum: float
+    universal_ev: float
+    build_yields: dict[str, float]
+    combined_malady_pct: float
     risk_color: tuple[int, int, int, int]
-    mutual_lovers: bool
-    libido_factor: float
-    aggression_factor: float
-    charisma_factor: float
-    stat_variance: float
-    trait_ev: float
 
 
 def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
@@ -52,35 +34,25 @@ def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
     name_b = pair.cat_b.name or "Unnamed"
     names_display = f"{name_a} + {name_b}"
 
-    disorder = pair.factors.combined_disorder_chance * 100
-    part_defect = pair.factors.combined_part_defect_chance * 100
-    combined = pair.factors.combined_malady_chance * 100
-    risk_color = COLOR_DANGER if combined > 15 else COLOR_SUCCESS
+    expected_disorders = pair.factors.expected_disorders
+    expected_defects = pair.factors.expected_defects
+    expected_stats_sum = sum(pair.factors.expected_stats)
+    universal_ev = pair.factors.universal_ev
+    build_yields = pair.factors.build_yields
 
-    mutual_lovers = pair.factors.mutual_lovers
-    libido_factor = pair.factors.libido_factor
-    aggression_factor = pair.factors.aggression_factor
-    charisma_factor = pair.factors.charisma_factor
-    stat_variance = pair.factors.stat_variance
-
-    trait_ev = (
-        sum(p.probability * p.trait.weight for p in pair.factors.trait_probabilities)
-        * 5.0
-    )
+    combined_malady_pct = (expected_disorders * 5.0 + expected_defects * 1.0) * 100
+    risk_color = COLOR_DANGER if combined_malady_pct > 15 else COLOR_SUCCESS
 
     return PairSummaryData(
         names_display=names_display,
         quality=pair.quality,
-        disorder_pct=disorder,
-        part_defect_pct=part_defect,
-        combined_pct=combined,
+        expected_disorders=expected_disorders,
+        expected_defects=expected_defects,
+        expected_stats_sum=expected_stats_sum,
+        universal_ev=universal_ev,
+        build_yields=build_yields,
+        combined_malady_pct=combined_malady_pct,
         risk_color=risk_color,
-        mutual_lovers=mutual_lovers,
-        libido_factor=libido_factor,
-        aggression_factor=aggression_factor,
-        charisma_factor=charisma_factor,
-        stat_variance=stat_variance,
-        trait_ev=trait_ev,
     )
 
 

@@ -2,19 +2,18 @@ import dearpygui.dearpygui as dpg
 from mewgenics_room_optimizer.types import ScoredPair
 
 from ...colors import (
-    COLOR_DANGER,
-    COLOR_DEFAULT_TEXT,
     COLOR_MUTED,
     COLOR_SUCCESS,
-    COLOR_WARNING,
 )
 from ...helpers import get_pair_summary_data
 from ...state import AppState
 from .cat import on_cat_selected
 
+STAT_NAMES = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
+
 
 def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
-    """Show pair details in the inspector panel with trait inheritance probabilities."""
+    """Show pair details in the inspector panel with ENS factors."""
     container = "inspector_pair_container"
     if not dpg.does_item_exist(container):
         return
@@ -44,68 +43,53 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
             )
 
         dpg.add_text(
-            f"Quality: {summary.quality:.1f} | Disorder: {summary.disorder_pct:.0f}% | Part Defect: {summary.part_defect_pct:.0f}% | Combined: {summary.combined_pct:.0f}%",
+            f"Quality: {summary.quality:.1f} | Stats: {summary.expected_stats_sum:.1f} ENS | Malady: {summary.combined_malady_pct:.1f}%",
             color=summary.risk_color,
         )
 
-        if state.trait_requirements:
-            dpg.add_separator()
-            dpg.add_text("Trait Inheritance Probabilities:")
+        dpg.add_separator()
+        dpg.add_text("Expected Stats:")
 
-            with dpg.table(
-                tag="pair_trait_prob_table",
-                header_row=True,
-                borders_innerH=True,
-                row_background=True,
-            ):
-                dpg.add_table_column(label="Trait", width_stretch=True)
-                dpg.add_table_column(
-                    label="Type", width_fixed=True, init_width_or_weight=80
-                )
-                dpg.add_table_column(
-                    label="Probability", width_fixed=True, init_width_or_weight=90
-                )
-                dpg.add_table_column(label="Source", width_stretch=True)
-
-                for prob_result in pair.factors.trait_probabilities:
-                    if prob_result.probability >= 0.5:
-                        color = COLOR_SUCCESS
-                    elif prob_result.probability >= 0.25:
-                        color = COLOR_WARNING
-                    else:
-                        color = COLOR_DANGER
-
-                    with dpg.table_row():
-                        dpg.add_text(
-                            prob_result.trait.trait.get_display_name(state.game_data)
-                        )
-                        dpg.add_text(prob_result.trait.trait.category.display_name)
-                        dpg.add_text(
-                            f"{prob_result.probability * 100:.1f}%", color=color
-                        )
-                        source_color = (
-                            COLOR_MUTED
-                            if prob_result.parent_source == "Neither"
-                            else COLOR_DEFAULT_TEXT
-                        )
-                        dpg.add_text(prob_result.parent_source, color=source_color)
-
-            hits = sum(1 for p in pair.factors.trait_probabilities if p.probability > 0)
-            ev = (
-                sum(
-                    p.probability * p.trait.weight
-                    for p in pair.factors.trait_probabilities
-                )
-                * 5.0
+        with dpg.table(
+            tag="pair_stats_table",
+            header_row=True,
+            borders_innerH=True,
+            row_background=True,
+        ):
+            dpg.add_table_column(
+                label="Stat", width_fixed=True, init_width_or_weight=50
             )
-            total = len(state.trait_requirements)
-            if ev >= 1:
-                dpg.add_text(
-                    f"[* EV: {ev:.2f} from {hits}/{total} traits]",
-                    color=COLOR_SUCCESS,
-                )
-        else:
-            dpg.add_text("No favorable traits configured", color=COLOR_MUTED)
+            dpg.add_table_column(
+                label="Expected", width_fixed=True, init_width_or_weight=60
+            )
+
+            for i, stat_val in enumerate(pair.factors.expected_stats):
+                with dpg.table_row():
+                    dpg.add_text(STAT_NAMES[i])
+                    dpg.add_text(f"{stat_val:.1f}")
+
+        dpg.add_separator()
+        dpg.add_text("Malady Penalties:")
+
+        dpg.add_text(
+            f"Disorders: {summary.expected_disorders:.2f} ({summary.expected_disorders * 5.0:.1f} ENS penalty)"
+        )
+        dpg.add_text(
+            f"Defects: {summary.expected_defects:.2f} ({summary.expected_defects * 1.0:.1f} ENS penalty)"
+        )
+
+        if summary.universal_ev > 0:
+            dpg.add_separator()
+            dpg.add_text(
+                f"Universal EV: {summary.universal_ev:.2f} ENS", color=COLOR_SUCCESS
+            )
+
+        if summary.build_yields:
+            dpg.add_separator()
+            dpg.add_text("Build Yields:")
+            for build_name, yield_val in summary.build_yields.items():
+                yield_color = COLOR_SUCCESS if yield_val > 0 else COLOR_MUTED
+                dpg.add_text(f"  {build_name}: {yield_val:.2f} ENS", color=yield_color)
 
 
 def on_pair_selected(

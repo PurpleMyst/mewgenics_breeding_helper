@@ -7,7 +7,7 @@ import dearpygui.dearpygui as dpg
 from mewgenics_parser import TraitCategory
 from mewgenics_room_optimizer import OptimizationResult, RoomType
 
-from .colors import COLOR_DANGER, COLOR_EY_TEAL, COLOR_HIGH_RISK_ROW, COLOR_MUTED
+from .colors import COLOR_EY_TEAL, COLOR_MUTED
 from .components.cats_table import build_all_cats_tab, update_all_cats_table
 from .components.inspector.base import build_inspector_section, clear_inspector
 from .components.room_details import build_details_section  # called once in build_ui
@@ -156,7 +156,6 @@ def build_results_section(state: AppState) -> None:
                 dpg.add_table_column(label="Pairs")
                 dpg.add_table_column(label="EY")
                 dpg.add_table_column(label="Avg Quality")
-                dpg.add_table_column(label="Risk %")
 
             dpg.add_text("Run optimization to see results", tag="results_placeholder")
 
@@ -339,7 +338,10 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     dpg.render_dearpygui_frame()
 
     results = optimize_sa(
-        user_data.save_data, user_data.room_configs, user_data.trait_requirements
+        user_data.save_data,
+        user_data.room_configs,
+        universals=user_data.universals,
+        target_builds=user_data.target_builds,
     )
     user_data.results = results
 
@@ -356,16 +358,10 @@ def update_results_table(results: OptimizationResult, state: AppState) -> None:
     clear_inspector(state)
     dpg.hide_item("results_placeholder")
 
-    for i, room in enumerate(results.rooms):
+    for room in results.rooms:
         avg_quality = 0.0
-        avg_risk = 0.0
         if room.pairs:
             avg_quality = sum(p.quality for p in room.pairs) / len(room.pairs)
-            avg_risk = sum(
-                p.factors.combined_malady_chance * 100 for p in room.pairs
-            ) / len(room.pairs)
-
-        row_color = COLOR_HIGH_RISK_ROW if avg_risk > 15 else (0, 0, 0, 0)
 
         with dpg.table_row(parent="results_table"):
             dpg.add_selectable(
@@ -383,13 +379,6 @@ def update_results_table(results: OptimizationResult, state: AppState) -> None:
                 color=COLOR_EY_TEAL if ey_count > 0 else COLOR_MUTED,
             )
             dpg.add_text(f"{avg_quality:.1f}")
-            dpg.add_text(
-                f"{avg_risk:2.0f}%",
-                color=COLOR_DANGER if avg_risk > 15 else COLOR_MUTED,
-            )
-
-        if avg_risk > 15:
-            dpg.highlight_table_row("results_table", i, row_color)
 
 
 def clear_results_table() -> None:

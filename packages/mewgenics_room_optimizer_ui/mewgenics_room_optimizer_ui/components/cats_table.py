@@ -8,7 +8,6 @@ from ..colors import COLOR_DANGER, COLOR_MUTED, COLOR_SUCCESS, COLOR_WARNING
 from ..helpers import (
     LOCATION_COL_WIDTH,
     get_assigned_room_key,
-    get_favorable_trait_names,
     plain_substring_match,
     trait_substring_match,
 )
@@ -65,10 +64,9 @@ def render_cat_table_rows(
         stat_values = cat.stat_total
         total = sum(stat_values)
 
-        favorable_names = get_favorable_trait_names(
-            cat, state.trait_requirements, state.game_data
-        )
-        trait_display = ", ".join(favorable_names)
+        all_traits = extract_traits_from_cat(cat)
+        trait_names = [t.get_display_name(state.game_data) for t in all_traits[:3]]
+        trait_display = ", ".join(trait_names)
 
         callback = row_callback
         user_data = (cat, state)
@@ -93,7 +91,7 @@ def render_cat_table_rows(
                 dpg.add_text(str(sv))
             dpg.add_text(str(total))
             dpg.add_text(
-                trait_display, color=COLOR_SUCCESS if favorable_names else COLOR_MUTED
+                trait_display, color=COLOR_MUTED if not trait_display else COLOR_SUCCESS
             )
 
 

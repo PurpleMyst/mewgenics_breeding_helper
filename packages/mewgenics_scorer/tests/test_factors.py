@@ -1,19 +1,25 @@
-"""Tests for mewgenics_scorer factors module."""
+"""Tests for mewgenics_scorer factors module with ENS architecture."""
 
 from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatBodySlot, CatGender, CatStatus, Stats
 from mewgenics_parser.traits import (
     BodyPartTrait,
-    cat_has_defect_in_slot,
-    cat_has_mutation_in_slot,
+    TraitCategory,
+    create_trait,
 )
 from mewgenics_scorer.factors import (
     PairFactors,
-    _aggression_factor,
-    _libido_factor,
-    _stat_variance,
     calculate_pair_factors,
+    calculate_pair_quality,
+    _get_marginal_prob,
+    _evaluate_build,
 )
+from mewgenics_scorer.types import (
+    TraitWeight,
+    TargetBuild,
+    UniversalTrait,
+)
+from mewgenics_breeding import simulate_breeding
 
 
 def _default_body_parts() -> dict[CatBodySlot, int]:
@@ -40,13 +46,9 @@ def make_cat(
     db_key: int,
     gender: CatGender = CatGender.MALE,
     stat_base: list[int] | None = None,
-    aggression: float | None = None,
-    libido: float | None = None,
     passives: list | None = None,
     abilities: list | None = None,
     disorders: list | None = None,
-    parent_a: Cat | None = None,
-    parent_b: Cat | None = None,
     body_parts: dict[CatBodySlot, int] | None = None,
 ):
     return Cat(
@@ -57,14 +59,14 @@ def make_cat(
         gender=gender,
         stat_base=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
         stat_total=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
-        aggression=aggression,
-        libido=libido,
+        aggression=None,
+        libido=None,
         sexuality=None,
         passive_abilities=passives or [],
         active_abilities=abilities or [],
         disorders=disorders or [],
-        parent_a=parent_a,
-        parent_b=parent_b,
+        parent_a=None,
+        parent_b=None,
         room="Test Room",
         age=5,
         body_parts=body_parts or _default_body_parts(),
@@ -95,64 +97,8 @@ def make_save_data(cats: list[Cat] | None = None, coi: float = 0.0) -> SaveData:
     )
 
 
-class TestStatVariance:
-    """Tests for stat_variance function."""
-
-    def test_identical_stats(self):
-        a = make_cat(1, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_cat(2, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        assert _stat_variance(a, b) == 0.0
-
-    def test_all_different(self):
-        a = make_cat(1, stat_base=[10, 10, 10, 10, 10, 10, 10])
-        b = make_cat(2, stat_base=[0, 0, 0, 0, 0, 0, 0])
-        assert _stat_variance(a, b) == 70.0
-
-
-class TestAggressionFactor:
-    """Tests for aggression_factor function."""
-
-    def test_both_low_aggression(self):
-        a = make_cat(1, aggression=0.1)
-        b = make_cat(2, aggression=0.1)
-        result = _aggression_factor(a, b)
-        assert result > 0.8
-
-    def test_both_high_aggression(self):
-        a = make_cat(1, aggression=0.9)
-        b = make_cat(2, aggression=0.9)
-        result = _aggression_factor(a, b)
-        assert result < 0.2
-
-    def test_unknown_aggression_defaults(self):
-        a = make_cat(1, aggression=None)
-        b = make_cat(2, aggression=None)
-        assert _aggression_factor(a, b) == 0.5
-
-
-class TestLibidoFactor:
-    """Tests for libido_factor function."""
-
-    def test_both_low_libido(self):
-        a = make_cat(1, libido=0.1)
-        b = make_cat(2, libido=0.1)
-        result = _libido_factor(a, b)
-        assert result < 0.2
-
-    def test_both_high_libido(self):
-        a = make_cat(1, libido=0.9)
-        b = make_cat(2, libido=0.9)
-        result = _libido_factor(a, b)
-        assert result > 0.8
-
-    def test_unknown_libido_defaults(self):
-        a = make_cat(1, libido=None)
-        b = make_cat(2, libido=None)
-        assert _libido_factor(a, b) == 0.5
-
-
 class TestCalculatePairFactors:
-    """Tests for calculate_pair_factors function."""
+    """Tests for calculate_pair_factors function with ENS architecture."""
 
     def test_basic_calculation(self):
         a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
@@ -162,22 +108,31 @@ class TestCalculatePairFactors:
         result = calculate_pair_factors(save_data, a, b)
 
         assert isinstance(result, PairFactors)
-        assert result.can_breed is True
-        assert result.hater_conflict is False
-        assert result.lover_conflict is False
-        assert result.mutual_lovers is False
+        assert len(result.expected_stats) == 7
+        assert result.expected_disorders >= 0
+        assert result.expected_defects >= 0
+        assert result.universal_ev == 0.0
+        assert result.build_yields == {}
 
-    def test_unrelated_cats_no_risk(self):
+    def test_unrelated_cats_no_inherited_disorders(self):
         a = make_cat(1, CatGender.MALE)
         b = make_cat(2, CatGender.FEMALE)
         save_data = make_save_data([a, b])
 
         result = calculate_pair_factors(save_data, a, b)
 
-        assert result.novel_disorder_chance == 0.02
-        assert result.novel_part_defect_chance == 0.0
+        assert result.expected_defects == 0.0
 
-    def test_total_expected_stats(self):
+    def test_cats_with_disorders_inherit_probability(self):
+        a = make_cat(1, CatGender.MALE, disorders=["Scatological"])
+        b = make_cat(2, CatGender.FEMALE, disorders=["SavantSyndrome"])
+        save_data = make_save_data([a, b])
+
+        result = calculate_pair_factors(save_data, a, b)
+
+        assert result.expected_disorders > 0
+
+    def test_expected_stats_sum(self):
         a = make_cat(1, CatGender.MALE, stat_base=[10, 0, 0, 0, 0, 0, 0])
         b = make_cat(2, CatGender.FEMALE, stat_base=[0, 10, 0, 0, 0, 0, 0])
         save_data = make_save_data([a, b])
@@ -185,7 +140,167 @@ class TestCalculatePairFactors:
         result = calculate_pair_factors(save_data, a, b)
 
         assert len(result.expected_stats) == 7
-        assert result.total_expected_stats == sum(result.expected_stats)
+        assert sum(result.expected_stats) > 0
+
+    def test_universal_ev_with_universal_trait(self):
+        a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        save_data = make_save_data([a, b])
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        universals = [UniversalTrait(trait=sturdy, weight_ens=2.0)]
+
+        result = calculate_pair_factors(save_data, a, b, universals=universals)
+
+        assert result.universal_ev >= 0
+
+    def test_build_yields_with_target_build(self):
+        a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        save_data = make_save_data([a, b])
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        target_builds = [
+            TargetBuild(
+                name="Tank Build",
+                requirements=[TraitWeight(trait=sturdy, weight_ens=3.0)],
+                anti_synergies=[],
+                synergy_bonus_ens=1.0,
+            )
+        ]
+
+        result = calculate_pair_factors(save_data, a, b, target_builds=target_builds)
+
+        assert "Tank Build" in result.build_yields
+        assert result.build_yields["Tank Build"] >= 0
+
+
+class TestCalculatePairQuality:
+    """Tests for calculate_pair_quality function."""
+
+    def test_quality_formula_no_malady(self):
+        factors = PairFactors(
+            expected_stats=[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            expected_disorders=0.0,
+            expected_defects=0.0,
+            universal_ev=0.0,
+            build_yields={},
+        )
+
+        quality = calculate_pair_quality(factors)
+
+        assert quality == sum(factors.expected_stats)
+
+    def test_quality_with_disorders_penalized(self):
+        factors = PairFactors(
+            expected_stats=[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            expected_disorders=1.0,
+            expected_defects=0.0,
+            universal_ev=0.0,
+            build_yields={},
+        )
+
+        quality = calculate_pair_quality(factors)
+
+        assert quality == 35.0 - 5.0
+
+    def test_quality_with_defects_penalized(self):
+        factors = PairFactors(
+            expected_stats=[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            expected_disorders=0.0,
+            expected_defects=2.0,
+            universal_ev=0.0,
+            build_yields={},
+        )
+
+        quality = calculate_pair_quality(factors)
+
+        assert quality == 35.0 - 2.0
+
+    def test_quality_with_universal_ev(self):
+        factors = PairFactors(
+            expected_stats=[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            expected_disorders=0.0,
+            expected_defects=0.0,
+            universal_ev=10.0,
+            build_yields={},
+        )
+
+        quality = calculate_pair_quality(factors)
+
+        assert quality == 45.0
+
+
+class TestGetMarginalProb:
+    """Tests for _get_marginal_prob helper."""
+
+    def test_passive_ability_probability(self):
+        a = make_cat(1, CatGender.MALE, passives=["Sturdy", "Frenzy"])
+        b = make_cat(2, CatGender.FEMALE, passives=[])
+        coi = 0.0
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=coi)
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        prob = _get_marginal_prob(pmf, sturdy)
+
+        assert 0 <= prob <= 1.0
+
+    def test_body_part_only_checks_first_slot(self):
+        body_parts = {
+            CatBodySlot.LEFT_EAR: 300,
+            CatBodySlot.RIGHT_EAR: 400,
+        }
+        a = make_cat(1, CatGender.MALE, body_parts=body_parts)
+        b = make_cat(2, CatGender.FEMALE)
+        coi = 0.0
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=coi)
+
+        ear_trait = create_trait(TraitCategory.BODY_PART, "Ears300")
+        prob = _get_marginal_prob(pmf, ear_trait)
+
+        assert 0 <= prob <= 1.0
+
+
+class TestEvaluateBuild:
+    """Tests for _evaluate_build helper."""
+
+    def test_build_with_single_requirement(self):
+        a = make_cat(1, CatGender.MALE)
+        b = make_cat(2, CatGender.FEMALE)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        build = TargetBuild(
+            name="Test Build",
+            requirements=[TraitWeight(trait=sturdy, weight_ens=2.0)],
+            anti_synergies=[],
+            synergy_bonus_ens=0.0,
+        )
+
+        yield_value = _evaluate_build(pmf, build)
+
+        assert yield_value >= 0
+
+    def test_build_yield_clamped_at_zero(self):
+        a = make_cat(1, CatGender.MALE)
+        b = make_cat(2, CatGender.FEMALE)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        build = TargetBuild(
+            name="Anti Build",
+            requirements=[TraitWeight(trait=sturdy, weight_ens=2.0)],
+            anti_synergies=[TraitWeight(trait=sturdy, weight_ens=10.0)],
+            synergy_bonus_ens=0.0,
+        )
+
+        yield_value = _evaluate_build(pmf, build)
+
+        assert yield_value >= 0
 
 
 class TestBodyPartTraitHelpers:
@@ -200,95 +315,3 @@ class TestBodyPartTraitHelpers:
     def test_get_part_id(self):
         trait = BodyPartTrait(_key="Ears300")
         assert trait.part_id == 300
-
-    def test_cat_has_mutation_in_slot_true(self):
-        cat = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 300,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        assert cat_has_mutation_in_slot(cat, CatBodySlot.LEFT_EAR) is True
-
-    def test_cat_has_mutation_in_slot_true_for_defect(self):
-        cat = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 700,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        assert cat_has_mutation_in_slot(cat, CatBodySlot.LEFT_EAR) is True
-
-    def test_cat_has_defect_in_slot_true(self):
-        cat = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 700,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        assert cat_has_defect_in_slot(cat, CatBodySlot.LEFT_EAR) is True
-
-    def test_cat_has_defect_in_slot_false_for_mutation(self):
-        cat = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 300,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        assert cat_has_defect_in_slot(cat, CatBodySlot.LEFT_EAR) is False

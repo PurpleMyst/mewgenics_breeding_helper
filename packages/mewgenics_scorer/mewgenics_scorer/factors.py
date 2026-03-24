@@ -1,117 +1,27 @@
-"""Pair factors calculation for breeding optimization."""
+"""Pair factors calculation for breeding optimization using ENS architecture."""
 
-import math
 from dataclasses import dataclass
 
 from mewgenics_parser import Cat, SaveData, TraitCategory
-from mewgenics_parser.cat import CatBodySlot
-from mewgenics_parser.traits import get_slots_for_category, BodyPartTrait
+from mewgenics_parser.traits import get_slots_for_category, BodyPartTrait, Trait
 from mewgenics_breeding import simulate_breeding, OffspringProbabilityMass
 
-from .compatibility import can_breed, is_mutual_lovers
-from .types import TraitRequirement
+from .types import TargetBuild, UniversalTrait
 
 DEFAULT_STIMULATION = 50.0
-
-_REPRESENTATIVE_SLOTS = [
-    CatBodySlot.TEXTURE,
-    CatBodySlot.BODY,
-    CatBodySlot.HEAD,
-    CatBodySlot.TAIL,
-    CatBodySlot.MOUTH,
-    CatBodySlot.LEFT_LEG,
-    CatBodySlot.LEFT_ARM,
-    CatBodySlot.LEFT_EYE,
-    CatBodySlot.LEFT_EYEBROW,
-    CatBodySlot.LEFT_EAR,
-]
-
-
-def _default_01(v: float | None) -> float:
-    """Normalize None to 0.5 (neutral)."""
-    return 0.5 if v is None else max(0.0, min(1.0, v))
-
-
-@dataclass
-class TraitInheritanceProbability:
-    """Probability of a specific trait being inherited."""
-
-    trait: TraitRequirement
-    probability: float
-    parent_source: str
 
 
 @dataclass
 class PairFactors:
-    """All factors for evaluating a breeding pair."""
-
-    can_breed: bool
-    hater_conflict: bool
-    lover_conflict: bool
-    mutual_lovers: bool
-
-    novel_disorder_chance: float
-    novel_part_defect_chance: float
-    inherited_disorder_chance: float
-    inherited_part_defect_chance: float
+    """All factors for evaluating a breeding pair (ENS architecture)."""
 
     expected_stats: list[float]
-    total_expected_stats: float
 
-    stat_variance: float
+    expected_disorders: float
+    expected_defects: float
 
-    aggression_factor: float
-    libido_factor: float
-    charisma_factor: float
-
-    trait_probabilities: list[TraitInheritanceProbability]
-
-    @property
-    def combined_disorder_chance(self) -> float:
-        """Combined novel + inherited disorder chance."""
-        return 1.0 - (1.0 - self.novel_disorder_chance) * (
-            1.0 - self.inherited_disorder_chance
-        )
-
-    @property
-    def combined_part_defect_chance(self) -> float:
-        """Combined novel + inherited part defect chance."""
-        return 1.0 - (1.0 - self.novel_part_defect_chance) * (
-            1.0 - self.inherited_part_defect_chance
-        )
-
-    @property
-    def combined_malady_chance(self) -> float:
-        """Probability of any birth malady (novel OR inherited, disorder OR part defect)."""
-        disorder_prob = 1.0 - (1.0 - self.novel_disorder_chance) * (
-            1.0 - self.inherited_disorder_chance
-        )
-        defect_prob = 1.0 - (1.0 - self.novel_part_defect_chance) * (
-            1.0 - self.inherited_part_defect_chance
-        )
-        return 1.0 - (1.0 - disorder_prob) * (1.0 - defect_prob)
-
-
-def _stat_variance(a: Cat, b: Cat) -> float:
-    """Sum of absolute differences across all base stats."""
-    return sum(abs(a.stat_base[i] - b.stat_base[i]) for i in range(7))
-
-
-def _aggression_factor(a: Cat, b: Cat) -> float:
-    """Lower is better: (1 - agg_a + 1 - agg_b) / 2."""
-    return (2.0 - _default_01(a.aggression) - _default_01(b.aggression)) / 2.0
-
-
-def _libido_factor(a: Cat, b: Cat) -> float:
-    """Higher is better: (libido_a + libido_b) / 2."""
-    return (_default_01(a.libido) + _default_01(b.libido)) / 2.0
-
-
-def _charisma_factor(a: Cat, b: Cat) -> float:
-    """Higher is better: (charisma_a + charisma_b) / 2, normalized to 0-1."""
-    cha_a = a.stat_base[5] / 10.0 if len(a.stat_base) > 5 else 0.5
-    cha_b = b.stat_base[5] / 10.0 if len(b.stat_base) > 5 else 0.5
-    return (cha_a + cha_b) / 2.0
+    universal_ev: float
+    build_yields: dict[str, float]
 
 
 def _calc_expected_stats(pmf: OffspringProbabilityMass) -> list[float]:
@@ -132,76 +42,55 @@ def _calc_expected_stats(pmf: OffspringProbabilityMass) -> list[float]:
     return result
 
 
-def _get_trait_probability(
-    pmf: OffspringProbabilityMass,
-    req: TraitRequirement,
-    parent_a: Cat,
-    parent_b: Cat,
-) -> TraitInheritanceProbability:
-    """Extract trait probability from PMF for a TraitRequirement."""
-    trait = req.trait
+def _get_marginal_prob(pmf: OffspringProbabilityMass, trait: Trait) -> float:
+    """Extract the marginal probability of a trait from the PMF.
+
+    For BODY_PART traits, only checks slots[0] to avoid double-counting
+    from symmetrization (left/right pairs share the same probability).
+    """
     category = trait.category
 
     if category == TraitCategory.BODY_PART:
         assert isinstance(trait, BodyPartTrait)
         slots = get_slots_for_category(trait.body_part_category)
-        slot = slots[0]
-        slot_probs = pmf.body_parts.get(slot, {})
-        probability = slot_probs.get(trait.part_id, 0.0)
+        if slots:
+            slot = slots[0]
+            slot_probs = pmf.body_parts.get(slot, {})
+            return slot_probs.get(trait.part_id, 0.0)
+        return 0.0
     elif category == TraitCategory.ACTIVE_ABILITY:
-        probability = pmf.active_abilities.get(trait.key, 0.0)
+        return pmf.active_abilities.get(trait.key, 0.0)
     elif category == TraitCategory.PASSIVE_ABILITY:
-        probability = pmf.passive_abilities.get(trait.key, 0.0)
+        return pmf.passive_abilities.get(trait.key, 0.0)
     elif category == TraitCategory.DISORDER:
-        probability = pmf.inherited_disorders.get(trait.key, 0.0)
+        return pmf.inherited_disorders.get(trait.key, 0.0)
     else:
-        probability = 0.0
+        return 0.0
 
-    a_has = trait.is_possessed_by(parent_a)
-    b_has = trait.is_possessed_by(parent_b)
 
-    if a_has and b_has:
-        parent_source = f"{parent_a.name} or {parent_b.name}"
-    elif a_has:
-        parent_source = parent_a.name
-    elif b_has:
-        parent_source = parent_b.name
-    else:
-        parent_source = "Neither"
+def _evaluate_build(pmf: OffspringProbabilityMass, build: TargetBuild) -> float:
+    """Evaluate the expected yield of a build from a PMF.
 
-    return TraitInheritanceProbability(
-        trait=req,
-        probability=probability,
-        parent_source=parent_source,
+    Yield = (Sum of requirement EVs) + (Joint probability of requirements * Synergy Bonus)
+            - (Sum of anti-synergy EVs)
+
+    Returns max(0.0, yield) to prevent negative yields.
+    """
+    req_ev = sum(
+        _get_marginal_prob(pmf, tw.trait) * tw.weight_ens for tw in build.requirements
+    )
+    anti_ev = sum(
+        _get_marginal_prob(pmf, tw.trait) * tw.weight_ens for tw in build.anti_synergies
     )
 
+    joint_prob = 1.0 if build.requirements else 0.0
+    for tw in build.requirements:
+        marginal = _get_marginal_prob(pmf, tw.trait)
+        joint_prob *= marginal
+    joint_prob = max(0.0, min(1.0, joint_prob))
 
-def _calc_inherited_part_defect_chance(pmf: OffspringProbabilityMass) -> float:
-    """Calculate probability of inheriting at least one part defect.
-
-    Uses representative slots (one per part-set) to avoid double-counting paired slots.
-    """
-    defect_probs = []
-    for slot in _REPRESENTATIVE_SLOTS:
-        slot_probs = pmf.body_parts.get(slot, {})
-        defect_prob = sum(
-            prob
-            for part_id, prob in slot_probs.items()
-            if part_id < 0 or part_id >= 700
-        )
-        defect_probs.append(defect_prob)
-
-    if not defect_probs:
-        return 0.0
-    return 1.0 - math.prod(1.0 - p for p in defect_probs)
-
-
-def _calc_inherited_disorder_chance(a: Cat, b: Cat) -> float:
-    """Calculate probability of inheriting at least one disorder from parents.
-
-    15% chance per parent with disorders, flat (no pool dilution).
-    """
-    return 1.0 - (1.0 - (0.15 if a.disorders else 0.0)) * (1.0 - (0.15 if b.disorders else 0.0))
+    yield_value = req_ev + joint_prob * build.synergy_bonus_ens - anti_ev
+    return max(0.0, yield_value)
 
 
 def calculate_pair_factors(
@@ -209,56 +98,44 @@ def calculate_pair_factors(
     a: Cat,
     b: Cat,
     stimulation: float = DEFAULT_STIMULATION,
-    trait_requirements: list[TraitRequirement] | None = None,
+    universals: list[UniversalTrait] | None = None,
+    target_builds: list[TargetBuild] | None = None,
 ) -> PairFactors:
-    """Calculate all factors for a breeding pair."""
+    """Calculate all factors for a breeding pair using ENS architecture."""
     coi = save_data.get_offspring_coi(a, b)
     pmf = simulate_breeding(a, b, stimulation, coi)
 
-    exp_stats = _calc_expected_stats(pmf)
+    expected_stats = _calc_expected_stats(pmf)
 
-    trait_probs = [
-        _get_trait_probability(pmf, req, a, b) for req in (trait_requirements or [])
-    ]
+    expected_disorders = pmf.expected_inherited_disorders + pmf.novel_disorder
+    expected_defects = pmf.expected_inherited_defects + pmf.novel_birth_defect
+
+    universal_ev = 0.0
+    if universals:
+        universal_ev = sum(
+            _get_marginal_prob(pmf, u.trait) * u.weight_ens for u in universals
+        )
+
+    build_yields: dict[str, float] = {}
+    if target_builds:
+        build_yields = {
+            build.name: _evaluate_build(pmf, build) for build in target_builds
+        }
 
     return PairFactors(
-        can_breed=can_breed(a, b),
-        hater_conflict=False,
-        lover_conflict=False,
-        mutual_lovers=is_mutual_lovers(a, b),
-        novel_disorder_chance=pmf.novel_disorder,
-        novel_part_defect_chance=pmf.novel_birth_defect,
-        inherited_disorder_chance=_calc_inherited_disorder_chance(a, b),
-        inherited_part_defect_chance=_calc_inherited_part_defect_chance(pmf),
-        expected_stats=exp_stats,
-        total_expected_stats=sum(exp_stats),
-        stat_variance=_stat_variance(a, b),
-        aggression_factor=_aggression_factor(a, b),
-        libido_factor=_libido_factor(a, b),
-        charisma_factor=_charisma_factor(a, b),
-        trait_probabilities=trait_probs,
+        expected_stats=expected_stats,
+        expected_disorders=expected_disorders,
+        expected_defects=expected_defects,
+        universal_ev=universal_ev,
+        build_yields=build_yields,
     )
 
 
 def calculate_pair_quality(factors: PairFactors) -> float:
-    """Calculate quality score from pair factors using Expected Value math."""
-    avg_stats = factors.total_expected_stats / 7.0
-    risk_factor = 1.0 - factors.combined_malady_chance / 2.0
+    """Calculate baseline quality score from pair factors.
 
-    variance_penalty = 0.0
-
-    personality_bonus = 0.0
-    personality_bonus += factors.aggression_factor * 2.5
-    personality_bonus += factors.libido_factor * 2.5
-    personality_bonus += factors.charisma_factor * 2.5
-
-    trait_bonus = (
-        sum(p.probability * p.trait.weight for p in factors.trait_probabilities) * 5.0
-    )
-
-    return (
-        (avg_stats + risk_factor * 10)
-        - variance_penalty
-        + personality_bonus
-        + trait_bonus
-    )
+    This is the baseline value of a kitten in a vacuum.
+    Build yields are handled exclusively by house-level diversity math.
+    """
+    malady = factors.expected_disorders * 5.0 + factors.expected_defects * 1.0
+    return sum(factors.expected_stats) + factors.universal_ev - malady

@@ -7,7 +7,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    SkipValidation,
     field_validator,
     field_serializer,
 )
@@ -26,7 +25,7 @@ from mewgenics_room_optimizer import (
     RoomConfig,
 )
 from mewgenics_room_optimizer.types import ScoredPair
-from mewgenics_scorer import TraitRequirement
+from mewgenics_scorer.types import TargetBuild, TraitWeight, UniversalTrait
 
 CONFIG_DIR = platformdirs.user_config_path(
     "mewgenics_breeding_helper", appauthor="PurpleMyst"
@@ -55,14 +54,13 @@ class ConfigModel(BaseModel):
 
     version: int = 1
     rooms: list[RoomConfig] = Field(default_factory=lambda: list(DEFAULT_ROOM_CONFIGS))
-    trait_requirements: list[SkipValidation[TraitRequirement]] = Field(
-        default_factory=list
-    )
+    universals: list[Any] = Field(default_factory=list)
+    target_builds: list[Any] = Field(default_factory=list)
     last_save_path: str | None = None
 
-    @field_validator("trait_requirements", mode="before")
+    @field_validator("universals", mode="before")
     @classmethod
-    def parse_trait_requirements(cls, v: list[Any]) -> list[Any]:
+    def parse_universals(cls, v: list[Any]) -> list[Any]:
         if not isinstance(v, list):
             return v
         parsed = []
@@ -70,25 +68,88 @@ class ConfigModel(BaseModel):
             if isinstance(t, dict):
                 trait = create_trait(TraitCategory(t["category"]), t["key"])
                 parsed.append(
-                    TraitRequirement(trait=trait, weight=t.get("weight", 5.0))
+                    UniversalTrait(trait=trait, weight_ens=t.get("weight_ens", 1.0))
                 )
-            elif isinstance(t, TraitRequirement):
+            elif isinstance(t, UniversalTrait):
                 parsed.append(t)
             else:
                 parsed.append(t)
         return parsed
 
-    @field_serializer("trait_requirements")
-    def serialize_trait_requirements(self, v: list[TraitRequirement]) -> list[dict]:
+    @field_serializer("universals", mode="wrap")
+    def serialize_universals(self, v: list[Any], handler: Any) -> list[dict]:
         return [
             {
                 "category": t.trait.category.value
                 if hasattr(t.trait.category, "value")
                 else t.trait.category,
                 "key": t.trait.key,
-                "weight": t.weight,
+                "weight_ens": t.weight_ens,
             }
             for t in v
+        ]
+
+    @field_validator("target_builds", mode="before")
+    @classmethod
+    def parse_target_builds(cls, v: list[Any]) -> list[Any]:
+        if not isinstance(v, list):
+            return v
+        parsed = []
+        for t in v:
+            if isinstance(t, dict):
+                build = TargetBuild(
+                    name=t.get("name", "Unnamed Build"),
+                    requirements=[
+                        TraitWeight(
+                            trait=create_trait(TraitCategory(b["category"]), b["key"]),
+                            weight_ens=b.get("weight_ens", 1.0),
+                        )
+                        for b in t.get("requirements", [])
+                    ],
+                    anti_synergies=[
+                        TraitWeight(
+                            trait=create_trait(TraitCategory(b["category"]), b["key"]),
+                            weight_ens=b.get("weight_ens", 1.0),
+                        )
+                        for b in t.get("anti_synergies", [])
+                    ],
+                    synergy_bonus_ens=t.get("synergy_bonus_ens", 0.0),
+                )
+                parsed.append(build)
+            elif isinstance(t, TargetBuild):
+                parsed.append(t)
+            else:
+                parsed.append(t)
+        return parsed
+
+    @field_serializer("target_builds", mode="wrap")
+    def serialize_target_builds(self, v: list[Any], handler: Any) -> list[dict]:
+        return [
+            {
+                "name": b.name,
+                "requirements": [
+                    {
+                        "category": tw.trait.category.value
+                        if hasattr(tw.trait.category, "value")
+                        else tw.trait.category,
+                        "key": tw.trait.key,
+                        "weight_ens": tw.weight_ens,
+                    }
+                    for tw in b.requirements
+                ],
+                "anti_synergies": [
+                    {
+                        "category": tw.trait.category.value
+                        if hasattr(tw.trait.category, "value")
+                        else tw.trait.category,
+                        "key": tw.trait.key,
+                        "weight_ens": tw.weight_ens,
+                    }
+                    for tw in b.anti_synergies
+                ],
+                "synergy_bonus_ens": b.synergy_bonus_ens,
+            }
+            for b in v
         ]
 
     @classmethod
@@ -117,7 +178,8 @@ class AppState:
     last_save_path: str | None = None
     game_data: GameData
 
-    trait_requirements: list[TraitRequirement] = []
+    universals: list[UniversalTrait] = []
+    target_builds: list[TargetBuild] = []
 
     selected_pair: ScoredPair | None = None
     selected_pair_index: int | None = None
@@ -135,7 +197,8 @@ class AppState:
         config = ConfigModel.load()
         state = cls()
         state.room_configs = config.rooms
-        state.trait_requirements = config.trait_requirements
+        state.universals = config.universals
+        state.target_builds = config.target_builds
         state.last_save_path = config.last_save_path
         return state
 
@@ -143,7 +206,8 @@ class AppState:
         """Persist current state to disk."""
         config = ConfigModel(
             rooms=self.room_configs,
-            trait_requirements=self.trait_requirements,
+            universals=self.universals,
+            target_builds=self.target_builds,
             last_save_path=self.last_save_path,
         )
         config.save()

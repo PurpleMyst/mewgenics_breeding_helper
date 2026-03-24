@@ -111,6 +111,12 @@ class OffspringProbabilityMass:
     novel_birth_defect: float
     """The probability of the cat's offspring receiving novel birth defect parts. This is rolled independently of disorder inheritance, and is applied after part inheritance."""
 
+    expected_inherited_disorders: float
+    """The expected count of disorders inherited from parents (sum of disorder probabilities)."""
+
+    expected_inherited_defects: float
+    """The expected count of part defects inherited from parents, counted per representative slot (one per part-set)."""
+
 
 def _clamp_prob(prob: float) -> float:
     return max(0.0, min(1.0, prob))
@@ -296,9 +302,9 @@ def _body_part_inheritance(
             parent_a_part = parent_a.body_parts.get(slot, 0)
             parent_b_part = parent_b.body_parts.get(slot, 0)
 
-            # Assume part_id != 0 indicates a mutation/defect
-            parent_a_mutated = parent_a_part != 0
-            parent_b_mutated = parent_b_part != 0
+            # Mutations are >= 300, negative defects are < 0 (e.g., -2) or 700-710
+            parent_a_mutated = parent_a_part >= 300 or parent_a_part < 0
+            parent_b_mutated = parent_b_part >= 300 or parent_b_part < 0
 
             # Mutation favoring logic
             if parent_a_mutated and not parent_b_mutated:
@@ -359,6 +365,28 @@ def simulate_breeding(
     body_parts, novel_birth_defect = _body_part_inheritance(
         parent_a, parent_b, stimulation, coi
     )
+
+    expected_inherited_disorders = sum(inherited_disorders.values())
+
+    _REP_SLOTS = [
+        CatBodySlot.TEXTURE,
+        CatBodySlot.BODY,
+        CatBodySlot.HEAD,
+        CatBodySlot.TAIL,
+        CatBodySlot.MOUTH,
+        CatBodySlot.LEFT_LEG,
+        CatBodySlot.LEFT_ARM,
+        CatBodySlot.LEFT_EYE,
+        CatBodySlot.LEFT_EYEBROW,
+        CatBodySlot.LEFT_EAR,
+    ]
+    expected_inherited_defects = sum(
+        prob
+        for slot in _REP_SLOTS
+        for pid, prob in body_parts.get(slot, {}).items()
+        if pid < 0 or (700 <= pid <= 710)
+    )
+
     return OffspringProbabilityMass(
         stats,
         passive_abilities,
@@ -367,4 +395,6 @@ def simulate_breeding(
         novel_disorder,
         body_parts,
         novel_birth_defect,
+        expected_inherited_disorders,
+        expected_inherited_defects,
     )

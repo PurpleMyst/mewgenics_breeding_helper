@@ -206,7 +206,7 @@ class TestSAEvaluator:
         save_data = make_save_data(list(cats.values()))
 
         _score = _evaluate_state(
-            state, original_state, cats, [room], cache, save_data, []
+            state, original_state, cats, [room], cache, save_data, None, None
         )
 
         # Should have at least one pair scored
@@ -268,7 +268,8 @@ class TestSAEvaluator:
             room_configs,
             PairCache(),
             save_data,
-            [],
+            None,
+            None,
             sa_cats=cats,
             ey_assignments={},
             filtered_cats=cats,

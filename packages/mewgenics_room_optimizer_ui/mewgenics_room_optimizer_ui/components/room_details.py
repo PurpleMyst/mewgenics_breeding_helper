@@ -2,7 +2,7 @@ import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat
 from mewgenics_room_optimizer import RoomAssignment
 
-from ..colors import COLOR_DANGER, COLOR_MUTED, COLOR_SUCCESS, COLOR_WARNING
+from ..colors import COLOR_MUTED, COLOR_SUCCESS
 from ..components.cats_table import add_cat_table_cols, render_cat_table_rows
 from ..components.inspector.base import clear_inspector
 from ..components.inspector.cat import on_cat_selected
@@ -64,13 +64,10 @@ def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
     ):
         dpg.add_table_column(label="Names", width_fixed=True)
         dpg.add_table_column(label="Quality", width_fixed=True)
-        dpg.add_table_column(label="Risk", width_fixed=True)
-        dpg.add_table_column(label="Lovers", width_fixed=True)
-        dpg.add_table_column(label="Libido", width_fixed=True)
-        dpg.add_table_column(label="Aggr", width_fixed=True)
-        dpg.add_table_column(label="Char", width_fixed=True)
-        dpg.add_table_column(label="Var", width_fixed=True)
-        dpg.add_table_column(label="Trait EV", width_fixed=True)
+        dpg.add_table_column(label="Stats ENS", width_fixed=True)
+        dpg.add_table_column(label="Universal EV", width_fixed=True)
+        dpg.add_table_column(label="Disorders", width_fixed=True)
+        dpg.add_table_column(label="Defects", width_fixed=True)
 
         for i, pair in enumerate(selected_room.pairs):
             summary = get_pair_summary_data(pair, state)
@@ -83,43 +80,13 @@ def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
                     tag=f"pair_selectable_{i}",
                 )
                 dpg.add_text(f"{summary.quality:.1f}")
+                dpg.add_text(f"{summary.expected_stats_sum:.1f}")
                 dpg.add_text(
-                    f"D:{summary.disorder_pct:2.0f}% P:{summary.part_defect_pct:2.0f}% C:{summary.combined_pct:2.0f}%",
-                    color=summary.risk_color,
+                    f"{summary.universal_ev:.2f}",
+                    color=COLOR_SUCCESS if summary.universal_ev > 0 else COLOR_MUTED,
                 )
-                dpg.add_text(
-                    "Y" if summary.mutual_lovers else "N",
-                    color=COLOR_SUCCESS if summary.mutual_lovers else COLOR_MUTED,
-                )
-                dpg.add_text(
-                    f"{summary.libido_factor:.2f}",
-                    color=COLOR_SUCCESS
-                    if summary.libido_factor >= 0.6
-                    else COLOR_MUTED,
-                )
-                dpg.add_text(
-                    f"{summary.aggression_factor:.2f}",
-                    color=COLOR_SUCCESS
-                    if summary.aggression_factor <= 0.4
-                    else COLOR_DANGER,
-                )
-                dpg.add_text(
-                    f"{summary.charisma_factor:.2f}",
-                    color=COLOR_SUCCESS
-                    if summary.charisma_factor >= 0.4
-                    else COLOR_MUTED,
-                )
-                if summary.stat_variance <= 5.0:
-                    var_color = COLOR_SUCCESS
-                elif summary.stat_variance > 10.0:
-                    var_color = COLOR_DANGER
-                else:
-                    var_color = COLOR_WARNING
-                dpg.add_text(f"{summary.stat_variance:.1f}", color=var_color)
-                dpg.add_text(
-                    f"{summary.trait_ev:.2f}",
-                    color=COLOR_SUCCESS if summary.trait_ev > 0 else COLOR_MUTED,
-                )
+                dpg.add_text(f"{summary.expected_disorders:.2f}")
+                dpg.add_text(f"{summary.expected_defects:.2f}")
 
 
 def _build_cats_tab(selected_room: RoomAssignment, state: AppState) -> None:
