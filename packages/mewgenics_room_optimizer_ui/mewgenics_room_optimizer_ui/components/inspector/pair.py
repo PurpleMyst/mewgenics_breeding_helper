@@ -15,8 +15,6 @@ from .cat import on_cat_selected
 
 def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
     """Show pair details in the inspector panel with trait inheritance probabilities."""
-    from mewgenics_scorer import calculate_trait_probability
-
     container = "inspector_pair_container"
     if not dpg.does_item_exist(container):
         return
@@ -51,12 +49,6 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
         )
 
         if state.trait_requirements:
-            stimulation = 50.0
-            for rc in state.room_configs:
-                if rc.room_type.value == "breeding":
-                    stimulation = rc.base_stim
-                    break
-
             dpg.add_separator()
             dpg.add_text("Trait Inheritance Probabilities:")
 
@@ -75,11 +67,7 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
                 )
                 dpg.add_table_column(label="Source", width_stretch=True)
 
-                for trait_req in state.trait_requirements:
-                    prob_result = calculate_trait_probability(
-                        trait_req, pair.cat_a, pair.cat_b, stimulation
-                    )
-
+                for prob_result in pair.factors.trait_probabilities:
                     if prob_result.probability >= 0.5:
                         color = COLOR_SUCCESS
                     elif prob_result.probability >= 0.25:
@@ -88,8 +76,10 @@ def show_pair_detail_window(pair: ScoredPair, state: AppState) -> None:
                         color = COLOR_DANGER
 
                     with dpg.table_row():
-                        dpg.add_text(trait_req.trait.get_display_name(state.game_data))
-                        dpg.add_text(trait_req.trait.category.display_name)
+                        dpg.add_text(
+                            prob_result.trait.trait.get_display_name(state.game_data)
+                        )
+                        dpg.add_text(prob_result.trait.trait.category.display_name)
                         dpg.add_text(
                             f"{prob_result.probability * 100:.1f}%", color=color
                         )
