@@ -1,0 +1,15 @@
+[project]
+name = "mewgenics-breeding"
+version = "1.0.0"
+description = "Breeding simulation for Mewgenics."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "mewgenics_parser",
+]
+
+[tool.uv.sources]
+mewgenics_parser = { workspace = true }
+
+[tool.inline-snapshot]
+format-command="ruff format --stdin-filename {filename}"

@@ -429,9 +429,9 @@ class Cat:
         return self.hater
 
     @property
-    def inheritable_abilities(self) -> list[str]:
-        """Returns normalized abilities for inheritance math."""
-        return [normalize_ability_key(a) for a in self.active_abilities]
+    def inheritable_actives(self) -> list[str]:
+        """Returns normalized actives for inheritance math; default move abilities and basic attack can not be inherited."""
+        return [normalize_ability_key(a) for a in self.active_abilities[2:]]
 
     @property
     def inheritable_passives(self) -> list[str]:

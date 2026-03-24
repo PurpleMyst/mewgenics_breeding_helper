@@ -300,8 +300,8 @@ def _calc_ability_inheritance(
     """Ability inheritance with CORRECT class-favoring algebra and pool dilution."""
 
     # Use normalized abilities for pool
-    parent_a_spells = parent_a.inheritable_abilities
-    parent_b_spells = parent_b.inheritable_abilities
+    parent_a_spells = parent_a.inheritable_actives
+    parent_b_spells = parent_b.inheritable_actives
 
     parent_a_has = trait.trait.is_possessed_by(parent_a)
     parent_b_has = trait.trait.is_possessed_by(parent_b)

@@ -1,15 +1,13 @@
 Mewgenics breeding overview: // From analysis of glaiel::CatData::breed
-    1) All furniture effects are calculated.
-        * Most of these are unused, presumably due to simplified stats during development.
-    2) Stats are inherited. 
+    1) Stats are inherited. 
         * For each stat, either the mom or dad's is taken.
         * There is a (1.0 + 0.01*Stimulation) / (2.0 + 0.01*Stimulation) chance of the better of the two stats being inherited.
         * This means stimulation is surprisingly weak:
             * At 0 stimulation, it is a 50/50.
             * At 25 stimulation, there is a 5/9 chance of the better stat being inherited.
             * At 50 stimulation, there is a 3/5 chance of the better stat being inherited.
-    3) Apply passives due to Skill Share+ (which guarantees a cat's other passive is passed down when breeding).
-    4) Spells are inherited.
+    2) Apply passives due to Skill Share+ (which guarantees a cat's other passive is passed down when breeding).
+    3) Spells are inherited.
         * There is a 0.2+0.025*Stimulation chance of inheriting a spell from a cat's parents.
             * Thus, at 0 stimulation, there is a 20% chance, and at 32+, inheritance is guaranteed.
             * Ordinarily, there is a 50/50 chance of taking a random spell from the mom or dad.
@@ -19,7 +17,7 @@ Mewgenics breeding overview: // From analysis of glaiel::CatData::breed
             * Once a parent to inherit from is chosen, one of that parent's spells is inherited at random.
         * There is a 0.02+0.005*Stimulation chance of inheriting a second spell from a cat's parents.
             * If this check passes, the second spell is selected the same way as the first.
-    5) A passive is inherited.
+    4) A passive is inherited.
         * There is a 0.05+0.01*Stimulation chance of inheriting a passive from a cat's parents.
             * Thus at 0 stimulation, there is a 5% chance. At 95+, inheritance is guaranteed.
             * Ordinarily, there is a 50/50 chance of taking a random passive from the mom or dad.
@@ -28,29 +26,29 @@ Mewgenics breeding overview: // From analysis of glaiel::CatData::breed
                 * This works the same way as spell inheritance, where if only one parent has class spells, the other parent is never selected.
             * Once a parent to inherit from is chosen, one of that parent's passives is inherited at random.
                 * SkillShare is excluded from inheritance.
-    6) Disorders are inherited.
+    5) Disorders are inherited.
         * There is a flat 15% chance of inheriting a random disorder from a cat's mom, and 15% of inheriting a random disorder from a cat's dad.
         * This is unaffected by any furniture stat.
-    7) If fewer than 2 disorders were inherited, the cat rolls to receive a birth defect disorder.
+    6) If fewer than 2 disorders were inherited, the cat rolls to receive a birth defect disorder.
         * There is a 0.02 + 0.4 * (inbreeding_coefficient - 0.2) chance of receiving a disorder as a birth defect.
             * Technically, min(max(inbreeding_coefficient - 0.2, 0.0), 1.0) is multiplied by 0.4.
         * Thus, all cats with fewer than 2 inherited disorders have a 2% chance of getting one as a birth defect; inbreeding scales linearly once the coefficient gets above a threshold.
-    8) The cat rolls to decide if it should receive birth defect parts later.
+    7) The cat rolls to decide if it should receive birth defect parts later.
         * If rand() < (1.5*inbreeding_coefficient) and inbreeding_coefficient is >0.05, then a cat will receive birth defect parts later in the process.
-    9) A cat's parts are inherited (note: mutations are just specific part variants).
+    8) A cat's parts are inherited (note: mutations are just specific part variants).
         * There is an 80% chance that all parts are inherited. 
             * Otherwise, a random part-set (i.e. both legs, both eyebrows, the head, etc) is selected to not be inherited, and will be randomly assigned.
         * For each inherited part, either the mom's part or the dad's part is taken.
         * This works like stat inheritance for preferring mutations.
             * If only one of the two parents' parts is mutated, it is preferred with a (1.0 + 0.01*Stimulation) / (2.0 + 0.01*Stimulation) chance.
             * Otherwise, it's a straight 50/50.
-    10) Parts are symmetrized.
+    9) Parts are symmetrized.
         * For parts with a left/right which must be the same, there is a 50/50 chance of replacing the left with the right or vice-versa.
-    11) ...something is inherited.
+    10) ...something is inherited.
         * I am not sure what this is. There is a 98% chance of inheriting it from the parents, with an even 50/50 split.
-    12) Voice is inherited.
+    11) Voice is inherited.
         * I haven't fully worked out what this is doing, but it seems like a 2% chance of rerolling for a new voice, and a 98% chance of somehow inheriting voice from parents.
         * Note that this may be inaccurate.
-    13) If additional birth defects were rolled in step 8, they are now applied.
+    12) If additional birth defects were rolled in step 7, they are now applied.
         * If a cat's inbreeding coefficient is <= 0.9, it will perform one pass to apply birth defects.
         * Otherwise, it will perform two passes to apply birth defects.
