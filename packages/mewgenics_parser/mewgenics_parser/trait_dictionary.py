@@ -5,21 +5,11 @@ import re
 __all__ = [
     "is_class_active",
     "is_class_passive",
-    "is_disorder",
     "has_skillshare_plus",
 ]
 
-# Basic attacks (not inheritable as spells)
-_BASIC_ATTACK_TYPES = frozenset(
-    {
-        "Melee Attack",
-        "Short Shot",
-        "Short Lobbed Shot",
-    }
-)
-
 # Generic spells available to all cats (collarless/generic)
-_COLLARLESS_SPELLS = frozenset(
+_COLLARLESS_ACTIVES = frozenset(
     {
         "BBQ",
         "BarfBall",
@@ -203,138 +193,6 @@ _COLLARLESS_PASSIVES = frozenset(
     }
 )
 
-# Birth defects (NOT passives, NOT inheritable via passive mechanics)
-_DISORDERS = frozenset(
-    {
-        "ADHD",
-        "ASRFight",
-        "ASRFlight",
-        "AcidReflux",
-        "Albinism",
-        "Anemia",
-        "Anxiety",
-        "Autism",
-        "BadGas",
-        "Bipolar",
-        "BirdFlu",
-        "BlackFetin",
-        "BlessingOfGlorg",
-        "BloodFrenzy",
-        "Boils",
-        "BorrowedTime",
-        "BrainDamage",
-        "BrainDead",
-        "Brave",
-        "BrokenLimb",
-        "Cancer",
-        "Cannibal",
-        "Charred",
-        "Chungus",
-        "CommonCold",
-        "Covid",
-        "CrohnsDisease",
-        "DarkOne",
-        "Declawed",
-        "DeepCut",
-        "DejaVu",
-        "DejaVu3",
-        "Depression",
-        "Diabetes",
-        "Distemper",
-        "DownsSyndrome",
-        "Dwarfism",
-        "Dysentery",
-        "Dyskinesia",
-        "Dyslexia",
-        "EatingDisorder",
-        "Ebola",
-        "Elephantiasis",
-        "Empath",
-        "EternalYouth",
-        "FattyLiver",
-        "FelineAids",
-        "Fidgety",
-        "FlamingFists",
-        "Flu",
-        "Fossilized",
-        "FrozenKnee",
-        "GamblingAddict",
-        "Gargantuan",
-        "Gastritis",
-        "Gigachad",
-        "Gigantism",
-        "GlassBones",
-        "HeadTrauma",
-        "Hypersomnia",
-        "Hypomania",
-        "IBS",
-        "ImposterSyndrome",
-        "Incontinence",
-        "Infestation",
-        "Insomnia",
-        "IntestinalProlapse",
-        "Invincible",
-        "Kamikazee",
-        "KidneyStone",
-        "Leprosy",
-        "Lycanthropy",
-        "Narcolepsy",
-        "Necrosis",
-        "Nudist",
-        "OCD",
-        "OrangeFetin",
-        "PTSD",
-        "Pacifist",
-        "Paralyzed",
-        "Paranoia",
-        "Phony",
-        "Pica",
-        "PillPopper",
-        "Pox",
-        "Premonitions",
-        "PrimordialDwarf",
-        "Psychosis",
-        "PuncturedEye",
-        "PurpleFetin",
-        "Rabies",
-        "SavantSyndrome",
-        "ScalyScabs",
-        "Scatological",
-        "Schizophrenia",
-        "SchrodingerDisorder",
-        "Scleroderma",
-        "SensoryOverloadFace",
-        "SensoryOverloadHead",
-        "SensoryOverloadNeck",
-        "SensoryOverloadTrinket",
-        "SensoryOverloadWeapon",
-        "SeveredThumb",
-        "Shunned",
-        "Singleton",
-        "SkillShare_Disorder",
-        "SleepParalysis",
-        "Sociopathy",
-        "Soulless",
-        "SpinaBifida",
-        "SpontaneousCombustion",
-        "Stinky",
-        "StockholmSyndrome",
-        "Tachysensia",
-        "TamperedGenes",
-        "TheHunger",
-        "Touched",
-        "Tourettes",
-        "Toxoplasmosis",
-        "Traumatophobia",
-        "Triskaidekaphobia",
-        "Vegan",
-        "ViolentOutbursts",
-        "WilliamsSyndrome",
-        "WobblyCat",
-        "WrenchedNeck",
-    }
-)
-
 # Base SkillShare (cannot be inherited by offspring)
 SKILLSHARE_BASE_ID = "SkillShare"
 
@@ -349,19 +207,14 @@ def normalize_ability_key(ability_key: str) -> str:
 
 def is_class_active(spell_id: str) -> bool:
     """Returns True if active ability is class-specific (NOT generic/collarless)."""
-    return normalize_ability_key(spell_id) not in _COLLARLESS_SPELLS
+    return normalize_ability_key(spell_id) not in _COLLARLESS_ACTIVES
 
 
 def is_class_passive(passive_id: str) -> bool:
     """Returns True if passive ability is class-specific."""
     return normalize_ability_key(
         passive_id
-    ) not in _COLLARLESS_PASSIVES and not is_disorder(passive_id)
-
-
-def is_disorder(passive_id: str) -> bool:
-    """Returns True if passive is a birth defect (NOT inheritable via passive mechanics)."""
-    return normalize_ability_key(passive_id) in _DISORDERS
+    ) not in _COLLARLESS_PASSIVES
 
 
 def has_skillshare_plus(cat) -> bool:
