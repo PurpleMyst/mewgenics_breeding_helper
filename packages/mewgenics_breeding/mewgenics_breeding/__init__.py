@@ -60,7 +60,7 @@ from typing import NamedTuple
 
 from mewgenics_parser import Cat
 from mewgenics_parser.cat import CatBodySlot
-from mewgenics_parser.trait_dictionary import is_class_active
+from mewgenics_parser.trait_dictionary import is_class_active, is_class_passive
 
 PART_SETS = [
     [CatBodySlot.TEXTURE],
@@ -224,10 +224,10 @@ def _passive_ability_inheritance(
     else:
         inherit_passive_prob = _clamp_prob(0.05 + 0.01 * stimulation)
         parent_a_has_class_passive = any(
-            is_class_active(passive) for passive in parent_a.inheritable_passives
+            is_class_passive(passive) for passive in parent_a.inheritable_passives
         )
         parent_b_has_class_passive = any(
-            is_class_active(passive) for passive in parent_b.inheritable_passives
+            is_class_passive(passive) for passive in parent_b.inheritable_passives
         )
 
         if parent_a_has_class_passive and not parent_b_has_class_passive:

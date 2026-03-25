@@ -18,7 +18,6 @@ from mewgenics_scorer.factors import (
 from mewgenics_scorer.types import (
     TraitWeight,
     TargetBuild,
-    UniversalTrait,
 )
 from mewgenics_breeding import simulate_breeding
 
@@ -149,7 +148,7 @@ class TestCalculatePairFactors:
         save_data = make_save_data([a, b])
 
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
-        universals = [UniversalTrait(trait=sturdy, weight_ens=2.0)]
+        universals = [TraitWeight(trait=sturdy, weight_ens=2.0)]
 
         result = calculate_pair_factors(save_data, a, b, universals=universals)
 

@@ -12,7 +12,7 @@ from mewgenics_parser.traits import (
 )
 from mewgenics_breeding import simulate_breeding, OffspringProbabilityMass
 
-from .types import TargetBuild, UniversalTrait
+from .types import TargetBuild, TraitWeight
 
 DEFAULT_STIMULATION = 50.0
 
@@ -32,20 +32,7 @@ class PairFactors:
 
 def _calc_expected_stats(pmf: OffspringProbabilityMass) -> list[float]:
     """Calculate expected stat values from PMF as a flat list of 7 floats."""
-    stats = [
-        pmf.stats.strength,
-        pmf.stats.dexterity,
-        pmf.stats.constitution,
-        pmf.stats.intelligence,
-        pmf.stats.speed,
-        pmf.stats.charisma,
-        pmf.stats.luck,
-    ]
-    result = []
-    for stat_list in stats:
-        expected = sum(value * prob for value, prob in stat_list)
-        result.append(expected)
-    return result
+    return [sum(value * prob for value, prob in stat_list) for stat_list in pmf.stats]
 
 
 def _get_marginal_prob(pmf: OffspringProbabilityMass, trait: Trait) -> float:
@@ -142,7 +129,7 @@ def calculate_pair_factors(
     a: Cat,
     b: Cat,
     stimulation: float = DEFAULT_STIMULATION,
-    universals: list[UniversalTrait] | None = None,
+    universals: list[TraitWeight] | None = None,
     target_builds: list[TargetBuild] | None = None,
 ) -> PairFactors:
     """Calculate all factors for a breeding pair using ENS architecture."""

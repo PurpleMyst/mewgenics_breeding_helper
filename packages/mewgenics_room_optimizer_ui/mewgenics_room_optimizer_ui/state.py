@@ -25,7 +25,7 @@ from mewgenics_room_optimizer import (
     RoomConfig,
 )
 from mewgenics_room_optimizer.types import ScoredPair
-from mewgenics_scorer.types import TargetBuild, TraitWeight, UniversalTrait
+from mewgenics_scorer.types import TargetBuild, TraitWeight
 
 CONFIG_DIR = platformdirs.user_config_path(
     "mewgenics_breeding_helper", appauthor="PurpleMyst"
@@ -68,16 +68,16 @@ class ConfigModel(BaseModel):
             if isinstance(t, dict):
                 trait = create_trait(TraitCategory(t["category"]), t["key"])
                 parsed.append(
-                    UniversalTrait(trait=trait, weight_ens=t.get("weight_ens", 1.0))
+                    TraitWeight(trait=trait, weight_ens=t.get("weight_ens", 1.0))
                 )
-            elif isinstance(t, UniversalTrait):
+            elif isinstance(t, TraitWeight):
                 parsed.append(t)
             else:
                 parsed.append(t)
         return parsed
 
-    @field_serializer("universals", mode="wrap")
-    def serialize_universals(self, v: list[Any], handler: Any) -> list[dict]:
+    @field_serializer("universals", mode="plain")
+    def serialize_universals(self, v: list[Any]) -> list[dict]:
         return [
             {
                 "category": t.trait.category.value
@@ -178,7 +178,7 @@ class AppState:
     last_save_path: str | None = None
     game_data: GameData
 
-    universals: list[UniversalTrait] = []
+    universals: list[TraitWeight] = []
     target_builds: list[TargetBuild] = []
 
     selected_pair: ScoredPair | None = None

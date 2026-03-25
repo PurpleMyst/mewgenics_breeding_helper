@@ -9,7 +9,7 @@ from typing import Callable
 from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatGender
 from mewgenics_scorer import (
-    UniversalTrait,
+    TraitWeight,
     TargetBuild,
     calculate_pair_factors,
     calculate_pair_quality,
@@ -141,7 +141,7 @@ def score_pair(
     save_data: SaveData,
     cat_a: Cat,
     cat_b: Cat,
-    universals: list[UniversalTrait] | None,
+    universals: list[TraitWeight] | None,
     target_builds: list[TargetBuild] | None,
     stimulation: float,
 ) -> ScoredPair | None:
@@ -149,14 +149,17 @@ def score_pair(
     if not can_breed(cat_a, cat_b):
         return None
 
-    factors = calculate_pair_factors(
-        save_data,
-        cat_a,
-        cat_b,
-        stimulation=stimulation,
-        universals=universals,
-        target_builds=target_builds,
-    )
+    try:
+        factors = calculate_pair_factors(
+            save_data,
+            cat_a,
+            cat_b,
+            stimulation=stimulation,
+            universals=universals,
+            target_builds=target_builds,
+        )
+    except KeyError:
+        return None
 
     quality = calculate_pair_quality(factors)
 
@@ -202,7 +205,7 @@ def _evaluate_state(
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
     save_data: SaveData,
-    universals: list[UniversalTrait] | None,
+    universals: list[TraitWeight] | None,
     target_builds: list[TargetBuild] | None,
 ) -> tuple[float, dict[str, float]]:
     """Evaluate total quality for a room assignment state using ENS math.
@@ -360,7 +363,7 @@ def _run_sa_worker(
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
     save_data: SaveData,
-    universals: list[UniversalTrait] | None,
+    universals: list[TraitWeight] | None,
     target_builds: list[TargetBuild] | None,
     seed: int | None = None,
 ) -> tuple[dict[int, str], float]:
@@ -478,7 +481,7 @@ def _generate_random_valid_state(
 def optimize_sa(
     save_data: SaveData,
     room_configs: list[RoomConfig],
-    universals: list[UniversalTrait] | None = None,
+    universals: list[TraitWeight] | None = None,
     target_builds: list[TargetBuild] | None = None,
 ) -> OptimizationResult:
     """Optimize using Parallel Simulated Annealing."""
@@ -584,7 +587,7 @@ def _build_results_from_state_dict(
     room_configs: list[RoomConfig],
     pair_cache: PairCache,
     save_data: SaveData,
-    universals: list[UniversalTrait] | None,
+    universals: list[TraitWeight] | None,
     target_builds: list[TargetBuild] | None,
     sa_cats: list[Cat],
     ey_assignments: dict[str, list[Cat]],

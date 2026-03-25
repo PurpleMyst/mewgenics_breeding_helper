@@ -23,9 +23,4 @@ class TargetBuild:
     synergy_bonus_ens: float
 
 
-@dataclass(slots=True)
-class UniversalTrait:
-    """A universal trait that applies to all kittens with an ENS weight."""
-
-    trait: Trait
-    weight_ens: float
+UniversalTrait = TraitWeight

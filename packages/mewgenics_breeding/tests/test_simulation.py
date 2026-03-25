@@ -428,6 +428,30 @@ class TestBreedingSimulation:
         assert result.active_abilities.get("Swat", 0.0) == approx(0.0)
         assert result.active_abilities.get("FistOfFate", 0.0) > 0.0
 
+    def test_class_passive_favoring_regression(self) -> None:
+        """Regression test: is_class_passive must be used, not is_class_active.
+
+        "Lucky" is in _COLLARLESS_PASSIVES (generic), so is_class_passive returns False.
+        But is_class_active checks _COLLARLESS_ACTIVES, not _COLLARLESS_PASSIVES,
+        so is_class_active("Lucky") incorrectly returns True.
+
+        At high stim, the bug causes no class favoring to be applied when one parent
+        has a class-specific passive and the other has a generic passive.
+        """
+        cat_a = replace(PARENT_A, passive_abilities=["SkullSmash"])
+        cat_b = replace(PARENT_B, passive_abilities=["Lucky"])
+
+        result = simulate_breeding(cat_a, cat_b, stimulation=100.0, coi=0.0)
+
+        # At 100 stim, inherit_passive_prob = 1.0 and favor_class_prob = 1.0.
+        # Only Parent A has a class-specific passive (SkullSmash), so:
+        # - Parent A select prob = 1.0 (forced by class favoring)
+        # - Parent B select prob = 0.0
+        # SkullSmash should be inherited with probability 1.0.
+        # Lucky (generic) should have 0 probability since Parent B is never selected.
+        assert result.passive_abilities.get("SkullSmash", 0.0) == approx(1.0)
+        assert result.passive_abilities.get("Lucky", 0.0) == approx(0.0)
+
     def test_independent_union_overlap(self) -> None:
         """If both parents have the exact same disorder, it should use independent union math."""
         cat_a = replace(PARENT_A, disorders=["Blind"])

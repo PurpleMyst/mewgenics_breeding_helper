@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 
 from mewgenics_parser.traits import TraitCategory, create_trait
-from mewgenics_scorer.types import TargetBuild, TraitWeight, UniversalTrait
+from mewgenics_scorer.types import TargetBuild, TraitWeight
 
 from mewgenics_room_optimizer_ui.state import ConfigModel
 
@@ -44,8 +44,8 @@ class TestConfigModelUniversals:
         trait2 = create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
         config = ConfigModel(
             universals=[
-                UniversalTrait(trait=trait1, weight_ens=7.0),
-                UniversalTrait(trait=trait2, weight_ens=3.0),
+                TraitWeight(trait=trait1, weight_ens=7.0),
+                TraitWeight(trait=trait2, weight_ens=3.0),
             ],
             target_builds=[],
         )
@@ -69,8 +69,8 @@ class TestConfigModelUniversals:
         trait2 = create_trait(TraitCategory.BODY_PART, "Eyes300")
         original = ConfigModel(
             universals=[
-                UniversalTrait(trait=trait1, weight_ens=7.0),
-                UniversalTrait(trait=trait2, weight_ens=2.5),
+                TraitWeight(trait=trait1, weight_ens=7.0),
+                TraitWeight(trait=trait2, weight_ens=2.5),
             ],
             target_builds=[],
         )
@@ -219,7 +219,7 @@ class TestConfigModelFullRoundtrip:
             version=1,
             rooms=list(DEFAULT_ROOM_CONFIGS),
             universals=[
-                UniversalTrait(trait=trait1, weight_ens=8.0),
+                TraitWeight(trait=trait1, weight_ens=8.0),
             ],
             target_builds=[
                 TargetBuild(

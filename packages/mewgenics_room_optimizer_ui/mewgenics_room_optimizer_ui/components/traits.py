@@ -1,10 +1,11 @@
+import functools
 from typing import Any
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import TraitCategory
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import Trait, create_trait
-from mewgenics_scorer.types import TargetBuild, TraitWeight, UniversalTrait
+from mewgenics_scorer.types import TargetBuild, TraitWeight
 
 from ..helpers import trait_substring_match
 from ..state import AppState
@@ -270,7 +271,7 @@ def on_add_universal(sender: int | None, app_data: Any, user_data: AppState) -> 
 
     if category and trait_key:
         state.universals.append(
-            UniversalTrait(trait=create_trait(category, trait_key), weight_ens=1.0)
+            TraitWeight(trait=create_trait(category, trait_key), weight_ens=1.0)
         )
         state.save()
         update_traits_display(state)
@@ -293,28 +294,20 @@ def on_clear_universals(sender: int, app_data: Any, user_data: AppState) -> None
     update_traits_display(user_data)
 
 
-def on_increment_universal_weight(
-    sender: int, app_data: Any, user_data: tuple[int, AppState]
+def _modify_universal_weight(
+    sender: int, app_data: Any, user_data: tuple[int, AppState], *, delta: float
 ) -> None:
-    """Increment universal weight."""
-    index, state = user_data
-    state.universals[index].weight_ens = min(
-        10.0, state.universals[index].weight_ens + 0.5
-    )
-    state.save()
-    update_traits_display(state)
-
-
-def on_decrement_universal_weight(
-    sender: int, app_data: Any, user_data: tuple[int, AppState]
-) -> None:
-    """Decrement universal weight."""
+    """Modify a universal trait's weight by delta."""
     index, state = user_data
     state.universals[index].weight_ens = max(
-        0.5, state.universals[index].weight_ens - 0.5
+        0.5, min(10.0, state.universals[index].weight_ens + delta)
     )
     state.save()
     update_traits_display(state)
+
+
+on_increment_universal_weight = functools.partial(_modify_universal_weight, delta=0.5)
+on_decrement_universal_weight = functools.partial(_modify_universal_weight, delta=-0.5)
 
 
 def on_add_build(sender: int, app_data: Any, user_data: AppState) -> None:
@@ -379,6 +372,7 @@ def on_build_name_edited(
     if new_name:
         state.target_builds[build_index].name = new_name
         state.save()
+        update_traits_display(state)
 
 
 def on_build_synergy_edited(
@@ -388,6 +382,7 @@ def on_build_synergy_edited(
     build_index, state = user_data
     state.target_builds[build_index].synergy_bonus_ens = app_data
     state.save()
+    update_traits_display(state)
 
 
 def on_add_build_requirement(
@@ -434,28 +429,14 @@ def on_remove_build_trait(
         update_traits_display(state)
 
 
-def on_increment_build_trait_weight(
-    sender: int, app_data: Any, user_data: tuple[int, int, str, AppState]
+def _modify_build_trait_weight(
+    sender: int,
+    app_data: Any,
+    user_data: tuple[int, int, str, AppState],
+    *,
+    delta: float,
 ) -> None:
-    """Increment a trait's weight in a build."""
-    build_index, trait_index, list_type, state = user_data
-    target_list = (
-        state.target_builds[build_index].requirements
-        if list_type == "requirements"
-        else state.target_builds[build_index].anti_synergies
-    )
-    if 0 <= trait_index < len(target_list):
-        target_list[trait_index].weight_ens = min(
-            10.0, target_list[trait_index].weight_ens + 0.5
-        )
-        state.save()
-        update_traits_display(state)
-
-
-def on_decrement_build_trait_weight(
-    sender: int, app_data: Any, user_data: tuple[int, int, str, AppState]
-) -> None:
-    """Decrement a trait's weight in a build."""
+    """Modify a build trait's weight by delta."""
     build_index, trait_index, list_type, state = user_data
     target_list = (
         state.target_builds[build_index].requirements
@@ -464,10 +445,18 @@ def on_decrement_build_trait_weight(
     )
     if 0 <= trait_index < len(target_list):
         target_list[trait_index].weight_ens = max(
-            0.5, target_list[trait_index].weight_ens - 0.5
+            0.5, min(10.0, target_list[trait_index].weight_ens + delta)
         )
         state.save()
         update_traits_display(state)
+
+
+on_increment_build_trait_weight = functools.partial(
+    _modify_build_trait_weight, delta=0.5
+)
+on_decrement_build_trait_weight = functools.partial(
+    _modify_build_trait_weight, delta=-0.5
+)
 
 
 def _format_trait_for_listbox(trait: Trait, game_data: GameData) -> str:
