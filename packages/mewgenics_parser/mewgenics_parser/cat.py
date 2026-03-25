@@ -139,10 +139,10 @@ class Cat:
     room: str | None
     """Current room if In House, or None if on Adventure or Gone. Decoded from save data context."""
 
-    stat_base: Stats
+    base_stats: Stats
     """Base heritable stats tuple (HP, STR, DEX, INT, WIS, LUK, CHA) directly from the blob."""
 
-    stat_total: Stats
+    total_stats: Stats
     """Total stats tuple calculated from the blob's base, levelling deltas, and injury deltas."""
 
     age: int | None
@@ -282,11 +282,11 @@ class Cat:
         def _read_stats() -> Stats:
             return Stats(r.i32(), r.i32(), r.i32(), r.i32(), r.i32(), r.i32(), r.i32())
 
-        stat_base = _read_stats()
+        base_stats = _read_stats()
         stat_mod1 = _read_stats()
         stat_mod2 = _read_stats()
-        stat_total = Stats(
-            *(b + m + s for b, m, s in zip(stat_base, stat_mod1, stat_mod2))
+        total_stats = Stats(
+            *(b + m + s for b, m, s in zip(base_stats, stat_mod1, stat_mod2))
         )
         r.str()
         r.i32()
@@ -296,7 +296,7 @@ class Cat:
         for _ in range(r.u32()):
             r.str()
             r.u32()
-        return stat_base, stat_mod1, stat_total
+        return base_stats, stat_mod1, total_stats
 
     @classmethod
     def _parse_abilities(
@@ -363,7 +363,7 @@ class Cat:
             cls._parse_personality(r, cat_key)
         )
         body_parts = cls._parse_body_parts(r, cat_key)
-        stat_base, _stat_mod1, stat_total = cls._parse_stats(r)
+        base_stats, _stat_mod1, total_stats = cls._parse_stats(r)
         actives, passives, disorders = cls._parse_abilities(r)
         cls._skip_equipment(r, cat_key)
         collar = r.str()
@@ -384,8 +384,8 @@ class Cat:
             gender=gender,
             status=status,
             room=room,
-            stat_base=stat_base,
-            stat_total=stat_total,
+            base_stats=base_stats,
+            total_stats=total_stats,
             age=age,
             aggression=aggression,
             libido=libido,
@@ -445,3 +445,10 @@ class Cat:
     def has_eternal_youth(self) -> bool:
         """Check if cat has EternalYouth disorder."""
         return any(p.lower() == "eternalyouth" for p in (self.disorders or []))
+
+    def has_birth_defects(self) -> bool:
+        """Check if cat has any birth defect body parts."""
+        return any(
+            part_id < 0 or (700 <= part_id <= 710)
+            for part_id in self.body_parts.values()
+        )

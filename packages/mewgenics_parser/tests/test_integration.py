@@ -26,7 +26,7 @@ class TestParseSaveIntegration:
         assert cat.fertility == snapshot(0.2630632950000001)
         assert cat.status == snapshot(CatStatus.GONE)
         assert cat.room == snapshot(None)
-        assert cat.stat_base == snapshot(
+        assert cat.base_stats == snapshot(
             Stats(
                 strength=7,
                 dexterity=7,
@@ -37,7 +37,7 @@ class TestParseSaveIntegration:
                 luck=6,
             )
         )
-        assert cat.stat_total == snapshot(
+        assert cat.total_stats == snapshot(
             Stats(
                 strength=12,
                 dexterity=9,

@@ -14,7 +14,6 @@ from .compatibility import (
 from .types import (
     TraitWeight,
     TargetBuild,
-    UniversalTrait,
 )
 
 __all__ = [
@@ -27,5 +26,4 @@ __all__ = [
     "is_mutual_lovers",
     "TraitWeight",
     "TargetBuild",
-    "UniversalTrait",
 ]

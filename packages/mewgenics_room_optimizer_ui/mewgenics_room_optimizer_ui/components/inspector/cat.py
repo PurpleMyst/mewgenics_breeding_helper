@@ -81,7 +81,7 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
                 dpg.add_text(f"Hater: {haters_str}", color=COLOR_DANGER)
 
             with dpg.table_row():
-                for i, stat in enumerate(cat.stat_base):
+                for i, stat in enumerate(cat.base_stats):
                     dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
 
         sexuality = cat.sexuality

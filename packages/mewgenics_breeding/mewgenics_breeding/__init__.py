@@ -130,7 +130,7 @@ def _stats_inheritance(
         (1.0 + 0.01 * stimulation) / (2.0 + 0.01 * stimulation)
     )
     stats_list = []
-    for parent_a_stat, parent_b_stat in zip(parent_a.stat_base, parent_b.stat_base):
+    for parent_a_stat, parent_b_stat in zip(parent_a.base_stats, parent_b.base_stats):
         better_stat = max(parent_a_stat, parent_b_stat)
         worse_stat = min(parent_a_stat, parent_b_stat)
         if better_stat == worse_stat:

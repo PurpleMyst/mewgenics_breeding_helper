@@ -140,7 +140,7 @@ def build_room_config_section(state: AppState) -> None:
                         user_data=state,
                     )
                     dpg.add_input_text(
-                        default_value=str(room.base_stim),
+                        default_value=str(room.stimulation),
                         tag=f"room_stim_{room.key}",
                         width=80,
                         callback=on_room_config_changed,
@@ -315,7 +315,7 @@ def on_room_config_changed(sender: int, app_data: Any, user_data: AppState) -> N
                 key=room.key,
                 room_type=RoomType(new_type_str),
                 max_cats=new_max,
-                base_stim=new_stim,
+                stimulation=new_stim,
             )
         )
 

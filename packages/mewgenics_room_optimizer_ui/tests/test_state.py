@@ -152,8 +152,8 @@ class TestConfigModelTargetBuilds:
             target_builds=[
                 TargetBuild(
                     name="Tank Build",
-                    requirements=[TraitWeight(trait=trait1, weight_ens=3.0)],
-                    anti_synergies=[TraitWeight(trait=trait2, weight_ens=5.0)],
+                    requirements=(TraitWeight(trait=trait1, weight_ens=3.0),),
+                    anti_synergies=(TraitWeight(trait=trait2, weight_ens=5.0),),
                     synergy_bonus_ens=2.0,
                 ),
             ],
@@ -182,8 +182,8 @@ class TestConfigModelTargetBuilds:
             target_builds=[
                 TargetBuild(
                     name="Tank Build",
-                    requirements=[TraitWeight(trait=trait1, weight_ens=3.0)],
-                    anti_synergies=[],
+                    requirements=(TraitWeight(trait=trait1, weight_ens=3.0),),
+                    anti_synergies=(),
                     synergy_bonus_ens=2.0,
                 ),
             ],
@@ -224,8 +224,8 @@ class TestConfigModelFullRoundtrip:
             target_builds=[
                 TargetBuild(
                     name="Build 1",
-                    requirements=[TraitWeight(trait=trait2, weight_ens=2.0)],
-                    anti_synergies=[],
+                    requirements=(TraitWeight(trait=trait2, weight_ens=2.0),),
+                    anti_synergies=(),
                     synergy_bonus_ens=1.0,
                 ),
             ],

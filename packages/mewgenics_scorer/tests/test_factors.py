@@ -1,25 +1,19 @@
 """Tests for mewgenics_scorer factors module with ENS architecture."""
 
 import pytest
+from mewgenics_breeding import simulate_breeding
 from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatBodySlot, CatGender, CatStatus, Stats
-from mewgenics_parser.traits import (
-    BodyPartTrait,
-    TraitCategory,
-    create_trait,
-)
+from mewgenics_parser.traits import BodyPartTrait, TraitCategory, create_trait
+
 from mewgenics_scorer.factors import (
     PairFactors,
+    _evaluate_build,
+    _get_marginal_prob,
     calculate_pair_factors,
     calculate_pair_quality,
-    _get_marginal_prob,
-    _evaluate_build,
 )
-from mewgenics_scorer.types import (
-    TraitWeight,
-    TargetBuild,
-)
-from mewgenics_breeding import simulate_breeding
+from mewgenics_scorer.types import TargetBuild, TraitWeight
 
 
 def _default_body_parts() -> dict[CatBodySlot, int]:
@@ -45,7 +39,7 @@ def _default_body_parts() -> dict[CatBodySlot, int]:
 def make_cat(
     db_key: int,
     gender: CatGender = CatGender.MALE,
-    stat_base: list[int] | None = None,
+    base_stats: list[int] | None = None,
     passives: list | None = None,
     abilities: list | None = None,
     disorders: list | None = None,
@@ -57,8 +51,8 @@ def make_cat(
         name_tag="",
         status=CatStatus.IN_HOUSE,
         gender=gender,
-        stat_base=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
-        stat_total=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
+        base_stats=Stats(*base_stats or [5, 5, 5, 5, 5, 5, 5]),
+        total_stats=Stats(*base_stats or [5, 5, 5, 5, 5, 5, 5]),
         aggression=None,
         libido=None,
         sexuality=None,
@@ -101,8 +95,8 @@ class TestCalculatePairFactors:
     """Tests for calculate_pair_factors function with ENS architecture."""
 
     def test_basic_calculation(self):
-        a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        a = make_cat(1, CatGender.MALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
         save_data = make_save_data([a, b])
 
         result = calculate_pair_factors(save_data, a, b)
@@ -133,8 +127,8 @@ class TestCalculatePairFactors:
         assert result.expected_disorders > 0
 
     def test_expected_stats_sum(self):
-        a = make_cat(1, CatGender.MALE, stat_base=[10, 0, 0, 0, 0, 0, 0])
-        b = make_cat(2, CatGender.FEMALE, stat_base=[0, 10, 0, 0, 0, 0, 0])
+        a = make_cat(1, CatGender.MALE, base_stats=[10, 0, 0, 0, 0, 0, 0])
+        b = make_cat(2, CatGender.FEMALE, base_stats=[0, 10, 0, 0, 0, 0, 0])
         save_data = make_save_data([a, b])
 
         result = calculate_pair_factors(save_data, a, b)
@@ -143,8 +137,8 @@ class TestCalculatePairFactors:
         assert sum(result.expected_stats) > 0
 
     def test_universal_ev_with_universal_trait(self):
-        a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        a = make_cat(1, CatGender.MALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
         save_data = make_save_data([a, b])
 
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
@@ -155,16 +149,16 @@ class TestCalculatePairFactors:
         assert result.universal_ev >= 0
 
     def test_build_yields_with_target_build(self):
-        a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
+        a = make_cat(1, CatGender.MALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
         save_data = make_save_data([a, b])
 
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         target_builds = [
             TargetBuild(
                 name="Tank Build",
-                requirements=[TraitWeight(trait=sturdy, weight_ens=3.0)],
-                anti_synergies=[],
+                requirements=(TraitWeight(trait=sturdy, weight_ens=3.0),),
+                anti_synergies=(),
                 synergy_bonus_ens=1.0,
             )
         ]
@@ -275,8 +269,8 @@ class TestEvaluateBuild:
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         build = TargetBuild(
             name="Test Build",
-            requirements=[TraitWeight(trait=sturdy, weight_ens=2.0)],
-            anti_synergies=[],
+            requirements=(TraitWeight(trait=sturdy, weight_ens=2.0),),
+            anti_synergies=(),
             synergy_bonus_ens=0.0,
         )
 
@@ -293,8 +287,8 @@ class TestEvaluateBuild:
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         build = TargetBuild(
             name="Anti Build",
-            requirements=[TraitWeight(trait=sturdy, weight_ens=2.0)],
-            anti_synergies=[TraitWeight(trait=sturdy, weight_ens=10.0)],
+            requirements=(TraitWeight(trait=sturdy, weight_ens=2.0),),
+            anti_synergies=(TraitWeight(trait=sturdy, weight_ens=10.0),),
             synergy_bonus_ens=0.0,
         )
 
@@ -312,11 +306,11 @@ class TestEvaluateBuild:
         hunter = create_trait(TraitCategory.PASSIVE_ABILITY, "Hunter")
         build = TargetBuild(
             name="Multi Passive Build",
-            requirements=[
+            requirements=(
                 TraitWeight(trait=sturdy, weight_ens=1.0),
                 TraitWeight(trait=hunter, weight_ens=1.0),
-            ],
-            anti_synergies=[],
+            ),
+            anti_synergies=(),
             synergy_bonus_ens=2.0,
         )
 
@@ -342,11 +336,11 @@ class TestEvaluateBuild:
         ear_400 = create_trait(TraitCategory.BODY_PART, "Ears400")
         build = TargetBuild(
             name="Same Category Build",
-            requirements=[
+            requirements=(
                 TraitWeight(trait=ear_300, weight_ens=1.0),
                 TraitWeight(trait=ear_400, weight_ens=1.0),
-            ],
-            anti_synergies=[],
+            ),
+            anti_synergies=(),
             synergy_bonus_ens=1.0,
         )
 
@@ -371,11 +365,11 @@ class TestEvaluateBuild:
         tail_trait = create_trait(TraitCategory.BODY_PART, "Tail300")
         build = TargetBuild(
             name="Different Category Build",
-            requirements=[
+            requirements=(
                 TraitWeight(trait=ear_trait, weight_ens=1.0),
                 TraitWeight(trait=tail_trait, weight_ens=1.0),
-            ],
-            anti_synergies=[],
+            ),
+            anti_synergies=(),
             synergy_bonus_ens=1.0,
         )
 

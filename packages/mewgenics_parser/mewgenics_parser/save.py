@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass, field
+from functools import cached_property
 
 from .cat import Cat, CatStatus
 from .constants import APPDATA_SAVE_DIR
@@ -20,6 +21,10 @@ class SaveData:
     adventure_count: int
     gone_count: int
     _parents_coi_memo: dict[tuple[int, int], float] = field(default_factory=dict)
+
+    @cached_property
+    def cats_by_id(self) -> dict[int, Cat]:
+        return {c.db_key: c for c in self.cats}
 
     def get_offspring_coi(self, cat_a: Cat, cat_b: Cat) -> float:
         """Look up pre-computed CoI for offspring of cat_a and cat_b.

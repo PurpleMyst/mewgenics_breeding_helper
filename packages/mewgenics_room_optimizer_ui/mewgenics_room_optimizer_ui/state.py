@@ -1,16 +1,9 @@
 """Application state for room optimizer UI."""
 
-import platformdirs
 from typing import Any, Self
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_validator,
-    field_serializer,
-)
-
+import platformdirs
+import traceback
 from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import (
@@ -26,6 +19,7 @@ from mewgenics_room_optimizer import (
 )
 from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer.types import TargetBuild, TraitWeight
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 CONFIG_DIR = platformdirs.user_config_path(
     "mewgenics_breeding_helper", appauthor="PurpleMyst"
@@ -58,6 +52,18 @@ class ConfigModel(BaseModel):
     target_builds: list[Any] = Field(default_factory=list)
     last_save_path: str | None = None
 
+    @field_validator("rooms", mode="before")
+    @classmethod
+    def rename_rooms_stim(cls, v: list[Any]) -> list[Any]:
+        if not isinstance(v, list):
+            return v
+        renamed = []
+        for r in v:
+            if isinstance(r, dict) and "base_stim" in r:
+                r["stimulation"] = r.pop("base_stim")
+            renamed.append(r)
+        return renamed
+
     @field_validator("universals", mode="before")
     @classmethod
     def parse_universals(cls, v: list[Any]) -> list[Any]:
@@ -70,8 +76,6 @@ class ConfigModel(BaseModel):
                 parsed.append(
                     TraitWeight(trait=trait, weight_ens=t.get("weight_ens", 1.0))
                 )
-            elif isinstance(t, TraitWeight):
-                parsed.append(t)
             else:
                 parsed.append(t)
         return parsed
@@ -99,25 +103,23 @@ class ConfigModel(BaseModel):
             if isinstance(t, dict):
                 build = TargetBuild(
                     name=t.get("name", "Unnamed Build"),
-                    requirements=[
+                    requirements=tuple(
                         TraitWeight(
                             trait=create_trait(TraitCategory(b["category"]), b["key"]),
                             weight_ens=b.get("weight_ens", 1.0),
                         )
                         for b in t.get("requirements", [])
-                    ],
-                    anti_synergies=[
+                    ),
+                    anti_synergies=tuple(
                         TraitWeight(
                             trait=create_trait(TraitCategory(b["category"]), b["key"]),
                             weight_ens=b.get("weight_ens", 1.0),
                         )
                         for b in t.get("anti_synergies", [])
-                    ],
+                    ),
                     synergy_bonus_ens=t.get("synergy_bonus_ens", 0.0),
                 )
                 parsed.append(build)
-            elif isinstance(t, TargetBuild):
-                parsed.append(t)
             else:
                 parsed.append(t)
         return parsed
@@ -159,6 +161,7 @@ class ConfigModel(BaseModel):
             try:
                 return cls.model_validate_json(CONFIG_FILE.read_text())
             except (ValueError, OSError):
+                traceback.print_exc()
                 pass
         return cls()
 

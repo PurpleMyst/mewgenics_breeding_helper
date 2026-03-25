@@ -6,10 +6,9 @@ from .types import (
     RoomAssignment,
     ScoredPair,
     OptimizationResult,
-    OptimizationStats,
     DEFAULT_ROOM_CONFIGS,
 )
-from .optimizer import optimize_sa, score_pair
+from .optimizer import optimize_sa
 
 __all__ = [
     "RoomType",
@@ -17,8 +16,6 @@ __all__ = [
     "RoomAssignment",
     "ScoredPair",
     "OptimizationResult",
-    "OptimizationStats",
     "DEFAULT_ROOM_CONFIGS",
     "optimize_sa",
-    "score_pair",
 ]

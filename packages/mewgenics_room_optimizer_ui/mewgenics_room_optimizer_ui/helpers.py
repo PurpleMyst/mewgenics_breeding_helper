@@ -5,12 +5,15 @@ from dataclasses import dataclass
 from mewgenics_parser import GameData
 from mewgenics_parser.traits import Trait
 from mewgenics_room_optimizer import ScoredPair, OptimizationResult
+from typing import TypeVar
 
 from mewgenics_room_optimizer_ui.state import AppState
 
 from .colors import COLOR_DANGER, COLOR_SUCCESS
 
 LOCATION_COL_WIDTH = 125
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -98,3 +101,8 @@ def get_all_favorable_keys(state: AppState) -> set[str]:
         for tw in build.requirements:
             keys.add(tw.trait.key)
     return keys
+
+
+def tuple_replace(tup: tuple[T, ...], index: int, new_value: T) -> tuple[T, ...]:
+    """Returns a new tuple with the value at the specified index replaced."""
+    return tup[:index] + (new_value,) + tup[index + 1 :]

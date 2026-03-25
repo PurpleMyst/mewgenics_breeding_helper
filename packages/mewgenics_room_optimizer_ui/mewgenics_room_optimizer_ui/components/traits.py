@@ -1,5 +1,6 @@
 import functools
 from typing import Any
+from dataclasses import replace
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import TraitCategory
@@ -299,9 +300,10 @@ def _modify_universal_weight(
 ) -> None:
     """Modify a universal trait's weight by delta."""
     index, state = user_data
-    state.universals[index].weight_ens = max(
-        0.5, min(10.0, state.universals[index].weight_ens + delta)
-    )
+    # state.universals[index].weight_ens = max(
+    #     0.5, min(10.0, state.universals[index].weight_ens + delta)
+    # )
+    state.universals
     state.save()
     update_traits_display(state)
 
@@ -315,8 +317,8 @@ def on_add_build(sender: int, app_data: Any, user_data: AppState) -> None:
     state = user_data
     new_build = TargetBuild(
         name=f"Build {len(state.target_builds) + 1}",
-        requirements=[],
-        anti_synergies=[],
+        requirements=(),
+        anti_synergies=(),
         synergy_bonus_ens=0.0,
     )
     state.target_builds.append(new_build)
@@ -370,7 +372,9 @@ def on_build_name_edited(
     build_index, state = user_data
     new_name = app_data.strip()
     if new_name:
-        state.target_builds[build_index].name = new_name
+        state.target_builds[build_index] = replace(
+            state.target_builds[build_index], name=new_name
+        )
         state.save()
         update_traits_display(state)
 
@@ -380,7 +384,9 @@ def on_build_synergy_edited(
 ) -> None:
     """Handle build synergy bonus input - save when editing ends."""
     build_index, state = user_data
-    state.target_builds[build_index].synergy_bonus_ens = app_data
+    state.target_builds[build_index] = replace(
+        state.target_builds[build_index], synergy_bonus_ens=app_data
+    )
     state.save()
     update_traits_display(state)
 
@@ -394,7 +400,10 @@ def on_add_build_requirement(
     if category and trait_key:
         trait = create_trait(category, trait_key)
         tw = TraitWeight(trait=trait, weight_ens=1.0)
-        state.target_builds[build_index].requirements.append(tw)
+        state.target_builds[build_index] = replace(
+            state.target_builds[build_index],
+            requirements=state.target_builds[build_index].requirements + (tw,),
+        )
         state.save()
         update_traits_display(state)
 
@@ -408,7 +417,10 @@ def on_add_build_anti_synergy(
     if category and trait_key:
         trait = create_trait(category, trait_key)
         tw = TraitWeight(trait=trait, weight_ens=1.0)
-        state.target_builds[build_index].anti_synergies.append(tw)
+        state.target_builds[build_index] = replace(
+            state.target_builds[build_index],
+            anti_synergies=state.target_builds[build_index].anti_synergies + (tw,),
+        )
         state.save()
         update_traits_display(state)
 
@@ -424,7 +436,20 @@ def on_remove_build_trait(
         else state.target_builds[build_index].anti_synergies
     )
     if 0 <= trait_index < len(target_list):
-        target_list.pop(trait_index)
+        if list_type == "requirements":
+            state.target_builds[build_index] = replace(
+                state.target_builds[build_index],
+                requirements=state.target_builds[build_index].requirements[:trait_index]
+                + state.target_builds[build_index].requirements[trait_index + 1 :],
+            )
+        else:
+            state.target_builds[build_index] = replace(
+                state.target_builds[build_index],
+                anti_synergies=state.target_builds[build_index].anti_synergies[
+                    :trait_index
+                ]
+                + state.target_builds[build_index].anti_synergies[trait_index + 1 :],
+            )
         state.save()
         update_traits_display(state)
 
@@ -444,9 +469,26 @@ def _modify_build_trait_weight(
         else state.target_builds[build_index].anti_synergies
     )
     if 0 <= trait_index < len(target_list):
-        target_list[trait_index].weight_ens = max(
-            0.5, min(10.0, target_list[trait_index].weight_ens + delta)
+        updated_trait = replace(
+            target_list[trait_index],
+            weight_ens=max(0.5, min(10.0, target_list[trait_index].weight_ens + delta)),
         )
+        if list_type == "requirements":
+            state.target_builds[build_index] = replace(
+                state.target_builds[build_index],
+                requirements=state.target_builds[build_index].requirements[:trait_index]
+                + (updated_trait,)
+                + state.target_builds[build_index].requirements[trait_index + 1 :],
+            )
+        else:
+            state.target_builds[build_index] = replace(
+                state.target_builds[build_index],
+                anti_synergies=state.target_builds[build_index].anti_synergies[
+                    :trait_index
+                ]
+                + (updated_trait,)
+                + state.target_builds[build_index].anti_synergies[trait_index + 1 :],
+            )
         state.save()
         update_traits_display(state)
 
@@ -520,5 +562,5 @@ def on_trait_weight_changed(
     """Legacy callback - redirects to universal weight changed."""
     index, state = user_data
     new_weight = max(0.5, min(10.0, float(app_data) * 0.5))
-    state.universals[index].weight_ens = new_weight
+    state.universals[index] = replace(state.universals[index], weight_ens=new_weight)
     state.save()

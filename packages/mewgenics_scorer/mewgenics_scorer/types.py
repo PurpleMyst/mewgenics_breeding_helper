@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from mewgenics_parser.traits import Trait
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class TraitWeight:
     """A trait with an ENS weight for build evaluation."""
 
@@ -13,14 +13,11 @@ class TraitWeight:
     weight_ens: float
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class TargetBuild:
     """A named build with requirements, anti-synergies, and synergy bonus."""
 
     name: str
-    requirements: list[TraitWeight]
-    anti_synergies: list[TraitWeight]
+    requirements: tuple[TraitWeight, ...]
+    anti_synergies: tuple[TraitWeight, ...]
     synergy_bonus_ens: float
-
-
-UniversalTrait = TraitWeight

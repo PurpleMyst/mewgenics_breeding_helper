@@ -1,7 +1,7 @@
 """Pair factors calculation for breeding optimization using ENS architecture."""
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mewgenics_parser import Cat, SaveData, TraitCategory
 from mewgenics_parser.traits import (
@@ -28,6 +28,8 @@ class PairFactors:
 
     universal_ev: float
     build_yields: dict[str, float]
+
+    breeding_prob: float = field(default=1.0)
 
 
 def _calc_expected_stats(pmf: OffspringProbabilityMass) -> list[float]:
@@ -159,6 +161,7 @@ def calculate_pair_factors(
         expected_defects=expected_defects,
         universal_ev=universal_ev,
         build_yields=build_yields,
+        breeding_prob=(1 - (a.sexuality or 0.0)) * (1 - (b.sexuality or 0.0)),
     )
 
 
@@ -169,4 +172,5 @@ def calculate_pair_quality(factors: PairFactors) -> float:
     Build yields are handled exclusively by house-level diversity math.
     """
     malady = factors.expected_disorders * 5.0 + factors.expected_defects * 1.0
-    return sum(factors.expected_stats) + factors.universal_ev - malady
+    base_quality = sum(factors.expected_stats) + factors.universal_ev - malady
+    return base_quality * factors.breeding_prob

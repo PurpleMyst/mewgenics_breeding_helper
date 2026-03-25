@@ -62,7 +62,7 @@ def render_cat_table_rows(
         else:
             loc_color = COLOR_DANGER
 
-        stat_values = cat.stat_total
+        stat_values = cat.total_stats
         total = sum(stat_values)
 
         all_traits = extract_traits_from_cat(cat)
