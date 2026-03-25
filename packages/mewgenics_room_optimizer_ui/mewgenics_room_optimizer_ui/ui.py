@@ -106,10 +106,10 @@ def build_room_config_section(state: AppState) -> None:
                 borders_innerH=True,
                 row_background=True,
             ):
-                dpg.add_table_column(label="Room Key")
+                dpg.add_table_column(label="Room Name")
                 dpg.add_table_column(label="Type")
                 dpg.add_table_column(label="Max Cats")
-                dpg.add_table_column(label="Base Stim")
+                dpg.add_table_column(label="Stimulation")
 
             room_types = [
                 "breeding",
@@ -121,7 +121,9 @@ def build_room_config_section(state: AppState) -> None:
             ]
             for room in state.room_configs:
                 with dpg.table_row(parent="room_config_table"):
-                    dpg.add_text(room.display_name, tag=f"room_name_{room.key}")
+                    dpg.add_text(
+                        room.display_name, tag=f"room_name_{room.key}", width=150
+                    )
                     dpg.add_combo(
                         room_types,
                         default_value=room.room_type.value,
@@ -134,15 +136,16 @@ def build_room_config_section(state: AppState) -> None:
                     dpg.add_input_text(
                         default_value=max_cats_val,
                         tag=f"room_max_{room.key}",
-                        width=80,
+                        width=120,
                         hint="empty=unlimited",
                         callback=on_room_config_changed,
                         user_data=state,
                     )
-                    dpg.add_input_text(
-                        default_value=str(room.stimulation),
+                    dpg.add_input_float(
+                        default_value=room.stimulation,
                         tag=f"room_stim_{room.key}",
-                        width=80,
+                        width=100,
+                        format="%.0f",
                         callback=on_room_config_changed,
                         user_data=state,
                     )

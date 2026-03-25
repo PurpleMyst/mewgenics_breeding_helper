@@ -69,23 +69,22 @@ def _build_shared_trait_selector(state: AppState) -> None:
 
 def _build_universals_tab(state: AppState) -> None:
     """Build the universals tab."""
-    with dpg.group():
-        dpg.add_button(
-            label="Add Universal",
-            callback=on_add_universal,
-            user_data=state,
-        )
-        dpg.add_separator()
-        with dpg.table(header_row=False, borders_innerV=False, borders_outerV=False):
-            dpg.add_table_column(width_stretch=True)
-            dpg.add_table_column(width_fixed=True, init_width_or_weight=80)
-            with dpg.table_row():
-                dpg.add_text("Selected Universals:")
-                dpg.add_button(
-                    label="Clear All", callback=on_clear_universals, user_data=state
-                )
+    with dpg.table(header_row=False, borders_innerV=False, borders_outerV=False):
+        dpg.add_table_column(width_stretch=True)
+        dpg.add_table_column(width_fixed=True)
+        dpg.add_table_column(width_fixed=True)
+        with dpg.table_row():
+            dpg.add_text("Selected Universals:")
+            dpg.add_button(
+                label="Add Universal",
+                callback=on_add_universal,
+                user_data=state,
+            )
+            dpg.add_button(
+                label="Clear All", callback=on_clear_universals, user_data=state
+            )
 
-        dpg.add_group(tag="selected_universals_container")
+    dpg.add_group(tag="selected_universals_container")
 
 
 def _build_target_builds_tab(state: AppState) -> None:
@@ -194,7 +193,7 @@ def _update_builds_display(state: AppState) -> None:
             label=_build_header_label(build),
             tag=header_tag,
             parent=container,
-            default_open=open_states.get(bid_hex, True),
+            default_open=open_states.get(bid_hex, False),
         ):
             with dpg.group(horizontal=True):
                 dpg.add_input_text(
