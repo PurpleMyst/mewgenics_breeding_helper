@@ -1,15 +1,34 @@
-import functools
 from typing import Any
 from dataclasses import replace
+from uuid import UUID
 
 import dearpygui.dearpygui as dpg
 from mewgenics_parser import TraitCategory
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import Trait, create_trait
 from mewgenics_scorer.types import TargetBuild, TraitWeight
+from uuid import uuid4
 
 from ..helpers import trait_substring_match
 from ..state import AppState
+
+
+def _build_header_label(build: TargetBuild) -> str:
+    """Build the collapsing header label from a build."""
+    return build.name
+
+
+def _configure_build_header_label(build_id_hex: str, build: TargetBuild) -> None:
+    """Update the header label for a build without rebuilding."""
+    dpg.configure_item(f"build_{build_id_hex}_header", label=_build_header_label(build))
+
+
+def _find_build_index(state: AppState, build_id: UUID) -> int | None:
+    """Find the index of a build by its UUID."""
+    for i, b in enumerate(state.target_builds):
+        if b.id == build_id:
+            return i
+    return None
 
 
 def build_traits_section(state: AppState) -> None:
@@ -95,40 +114,55 @@ def _update_universals_display(state: AppState) -> None:
 
     dpg.delete_item(container, children_only=True)
 
+    dpg.add_table(
+        tag="universals_table",
+        parent=container,
+        borders_innerH=False,
+        borders_innerV=False,
+        borders_outerV=False,
+        header_row=False,
+    )
+    dpg.add_table_column(width_stretch=True, parent="universals_table")
+    dpg.add_table_column(
+        width_fixed=True, init_width_or_weight=120, parent="universals_table"
+    )
+    dpg.add_table_column(
+        width_fixed=True, init_width_or_weight=80, parent="universals_table"
+    )
+    dpg.add_table_column(
+        width_fixed=True, init_width_or_weight=25, parent="universals_table"
+    )
+
     for i, universal in enumerate(state.universals):
-        with dpg.group(horizontal=True, parent=container):
-            trait = universal.trait
+        trait = universal.trait
+        display_name = trait.get_display_name(state.game_data)
+        description = trait.get_description(state.game_data)
+        upgraded_desc = trait.get_upgraded_description(state.game_data)
 
-            display_name = trait.get_display_name(state.game_data)
-            description = trait.get_description(state.game_data)
-            upgraded_desc = trait.get_upgraded_description(state.game_data)
-
-            trait_text = dpg.add_text(
-                f"[{universal.weight_ens:.1f}] {trait.category.display_name}: {display_name}"
-            )
-
-            tooltip_lines = []
-            if description:
-                tooltip_lines.append(f"Base: {description}")
+        tooltip_lines = []
+        if description:
             if upgraded_desc:
-                tooltip_lines.append(f"Upgraded: {upgraded_desc}")
+                tooltip_lines.append(f"Base: {description}")
+            else:
+                tooltip_lines.append(description)
+        if upgraded_desc:
+            tooltip_lines.append(f"Upgraded: {upgraded_desc}")
+        tooltip_text = "\n".join(tooltip_lines) if tooltip_lines else "No description"
 
-            tooltip_text = (
-                "\n".join(tooltip_lines) if tooltip_lines else "No description"
-            )
-
+        with dpg.table_row(parent="universals_table"):
+            trait_text = dpg.add_text(display_name)
             with dpg.tooltip(trait_text):
                 dpg.add_text(tooltip_text)
-            dpg.add_button(
-                label="-",
-                width=25,
-                callback=on_decrement_universal_weight,
-                user_data=(i, state),
-            )
-            dpg.add_button(
-                label="+",
-                width=25,
-                callback=on_increment_universal_weight,
+            dpg.add_text(trait.category.display_name, color=(150, 150, 150))
+            dpg.add_input_float(
+                tag=f"universal_{i}_weight",
+                default_value=universal.weight_ens,
+                min_value=0.5,
+                max_value=10.0,
+                step=1.0,
+                format="%.0f",
+                width=80,
+                callback=on_universal_weight_changed,
                 user_data=(i, state),
             )
             dpg.add_button(
@@ -145,98 +179,180 @@ def _update_builds_display(state: AppState) -> None:
     if not dpg.does_item_exist(container):
         return
 
+    open_states = {
+        build.id.hex: dpg.get_value(f"build_{build.id.hex}_header")
+        for build in state.target_builds
+        if dpg.does_item_exist(f"build_{build.id.hex}_header")
+    }
+
     dpg.delete_item(container, children_only=True)
 
-    for i, build in enumerate(state.target_builds):
-        with dpg.group(parent=container, tag=f"build_{i}"):
+    for build in state.target_builds:
+        bid_hex = build.id.hex
+        header_tag = f"build_{bid_hex}_header"
+        with dpg.collapsing_header(
+            label=_build_header_label(build),
+            tag=header_tag,
+            parent=container,
+            default_open=open_states.get(bid_hex, True),
+        ):
             with dpg.group(horizontal=True):
                 dpg.add_input_text(
-                    tag=f"build_{i}_name",
+                    tag=f"build_{bid_hex}_name",
                     default_value=build.name,
                     width=150,
                     callback=on_build_name_edited,
-                    user_data=(i, state),
+                    user_data=(build.id, state),
                 )
                 dpg.add_input_float(
-                    tag=f"build_{i}_synergy",
+                    tag=f"build_{bid_hex}_synergy",
                     default_value=build.synergy_bonus_ens,
-                    step=0.5,
+                    step=1.0,
                     min_value=0.0,
                     max_value=100.0,
                     width=80,
+                    format="%.0f",
                     callback=on_build_synergy_edited,
-                    user_data=(i, state),
+                    user_data=(build.id, state),
                 )
                 dpg.add_button(
                     label="X",
                     width=25,
                     callback=on_remove_build,
-                    user_data=(i, state),
+                    user_data=(build.id, state),
                 )
 
-            with dpg.group():
-                dpg.add_text("Requirements:", color=(150, 150, 150))
-                for j, tw in enumerate(build.requirements):
-                    with dpg.group(horizontal=True):
-                        display_name = tw.trait.get_display_name(state.game_data)
-                        dpg.add_text(
-                            f"  {display_name}({tw.weight_ens:.1f})",
-                        )
-                        dpg.add_button(
-                            label="-",
-                            width=25,
-                            callback=on_decrement_build_trait_weight,
-                            user_data=(i, j, "requirements", state),
-                        )
-                        dpg.add_button(
-                            label="+",
-                            width=25,
-                            callback=on_increment_build_trait_weight,
-                            user_data=(i, j, "requirements", state),
-                        )
-                        dpg.add_button(
-                            label="X",
-                            width=25,
-                            callback=on_remove_build_trait,
-                            user_data=(i, j, "requirements", state),
-                        )
-                dpg.add_button(
-                    label="[+] Add Requirement",
-                    callback=on_add_build_requirement,
-                    user_data=(i, state),
-                )
+            dpg.add_spacer(height=5)
 
-            with dpg.group():
-                dpg.add_text("Anti-Synergies:", color=(150, 150, 150))
-                for j, tw in enumerate(build.anti_synergies):
-                    with dpg.group(horizontal=True):
-                        display_name = tw.trait.get_display_name(state.game_data)
-                        dpg.add_text(
-                            f"  {display_name}({tw.weight_ens:.1f})",
-                        )
-                        dpg.add_button(
-                            label="-",
-                            width=25,
-                            callback=on_decrement_build_trait_weight,
-                            user_data=(i, j, "anti_synergies", state),
-                        )
-                        dpg.add_button(
-                            label="+",
-                            width=25,
-                            callback=on_increment_build_trait_weight,
-                            user_data=(i, j, "anti_synergies", state),
-                        )
-                        dpg.add_button(
-                            label="X",
-                            width=25,
-                            callback=on_remove_build_trait,
-                            user_data=(i, j, "anti_synergies", state),
-                        )
-                dpg.add_button(
-                    label="[+] Add Anti-Synergy",
-                    callback=on_add_build_anti_synergy,
-                    user_data=(i, state),
+            dpg.add_text("Requirements:", color=(150, 150, 150))
+
+            req_table = f"build_{bid_hex}_req_table"
+            dpg.add_table(
+                tag=req_table,
+                borders_innerH=False,
+                borders_innerV=False,
+                borders_outerV=False,
+                header_row=False,
+            )
+            dpg.add_table_column(width_stretch=True, parent=req_table)
+            dpg.add_table_column(
+                width_fixed=True, init_width_or_weight=120, parent=req_table
+            )
+            dpg.add_table_column(
+                width_fixed=True, init_width_or_weight=80, parent=req_table
+            )
+            dpg.add_table_column(
+                width_fixed=True, init_width_or_weight=25, parent=req_table
+            )
+
+            for j, tw in enumerate(build.requirements):
+                display_name = tw.trait.get_display_name(state.game_data)
+                description = tw.trait.get_description(state.game_data)
+                upgraded_desc = tw.trait.get_upgraded_description(state.game_data)
+                tooltip_lines = []
+                if description:
+                    if upgraded_desc:
+                        tooltip_lines.append(f"Base: {description}")
+                    else:
+                        tooltip_lines.append(description)
+                if upgraded_desc:
+                    tooltip_lines.append(f"Upgraded: {upgraded_desc}")
+                tooltip_text = (
+                    "\n".join(tooltip_lines) if tooltip_lines else "No description"
                 )
+                with dpg.table_row(parent=req_table):
+                    trait_text = dpg.add_text(f"  {display_name}")
+                    with dpg.tooltip(trait_text):
+                        dpg.add_text(tooltip_text)
+                    dpg.add_text(tw.trait.category.display_name, color=(150, 150, 150))
+                    dpg.add_input_float(
+                        tag=f"build_{bid_hex}_req_{j}_weight",
+                        default_value=tw.weight_ens,
+                        min_value=0.5,
+                        max_value=10.0,
+                        step=1.0,
+                        format="%.0f",
+                        width=80,
+                        callback=on_build_trait_weight_changed,
+                        user_data=(build.id, j, "requirements", state),
+                    )
+                    dpg.add_button(
+                        label="X",
+                        width=25,
+                        callback=on_remove_build_trait,
+                        user_data=(build.id, j, "requirements", state),
+                    )
+            dpg.add_button(
+                label="[+] Add Requirement",
+                callback=on_add_build_requirement,
+                user_data=(build.id, state),
+            )
+
+            dpg.add_spacer(height=5)
+
+            dpg.add_text("Anti-Synergies:", color=(150, 150, 150))
+
+            anti_table = f"build_{bid_hex}_anti_table"
+            dpg.add_table(
+                tag=anti_table,
+                borders_innerH=False,
+                borders_innerV=False,
+                borders_outerV=False,
+                header_row=False,
+            )
+            dpg.add_table_column(width_stretch=True, parent=anti_table)
+            dpg.add_table_column(
+                width_fixed=True, init_width_or_weight=120, parent=anti_table
+            )
+            dpg.add_table_column(
+                width_fixed=True, init_width_or_weight=80, parent=anti_table
+            )
+            dpg.add_table_column(
+                width_fixed=True, init_width_or_weight=25, parent=anti_table
+            )
+
+            for j, tw in enumerate(build.anti_synergies):
+                display_name = tw.trait.get_display_name(state.game_data)
+                description = tw.trait.get_description(state.game_data)
+                upgraded_desc = tw.trait.get_upgraded_description(state.game_data)
+                tooltip_lines = []
+                if description:
+                    if upgraded_desc:
+                        tooltip_lines.append(f"Base: {description}")
+                    else:
+                        tooltip_lines.append(description)
+                if upgraded_desc:
+                    tooltip_lines.append(f"Upgraded: {upgraded_desc}")
+                tooltip_text = (
+                    "\n".join(tooltip_lines) if tooltip_lines else "No description"
+                )
+                with dpg.table_row(parent=anti_table):
+                    trait_text = dpg.add_text(f"  {display_name}")
+                    with dpg.tooltip(trait_text):
+                        dpg.add_text(tooltip_text)
+                    dpg.add_text(tw.trait.category.display_name, color=(150, 150, 150))
+                    dpg.add_input_float(
+                        tag=f"build_{bid_hex}_anti_{j}_weight",
+                        default_value=tw.weight_ens,
+                        min_value=0.5,
+                        max_value=10.0,
+                        step=1.0,
+                        format="%.0f",
+                        width=80,
+                        callback=on_build_trait_weight_changed,
+                        user_data=(build.id, j, "anti_synergies", state),
+                    )
+                    dpg.add_button(
+                        label="X",
+                        width=25,
+                        callback=on_remove_build_trait,
+                        user_data=(build.id, j, "anti_synergies", state),
+                    )
+            dpg.add_button(
+                label="[+] Add Anti-Synergy",
+                callback=on_add_build_anti_synergy,
+                user_data=(build.id, state),
+            )
 
 
 def init_traits_lists(state: AppState) -> None:
@@ -295,27 +411,20 @@ def on_clear_universals(sender: int, app_data: Any, user_data: AppState) -> None
     update_traits_display(user_data)
 
 
-def _modify_universal_weight(
-    sender: int, app_data: Any, user_data: tuple[int, AppState], *, delta: float
+def on_universal_weight_changed(
+    sender: int, app_data: float, user_data: tuple[int, AppState]
 ) -> None:
-    """Modify a universal trait's weight by delta."""
+    """Handle input_float change for universal trait weight."""
     index, state = user_data
-    # state.universals[index].weight_ens = max(
-    #     0.5, min(10.0, state.universals[index].weight_ens + delta)
-    # )
-    state.universals
+    state.universals[index] = replace(state.universals[index], weight_ens=app_data)
     state.save()
-    update_traits_display(state)
-
-
-on_increment_universal_weight = functools.partial(_modify_universal_weight, delta=0.5)
-on_decrement_universal_weight = functools.partial(_modify_universal_weight, delta=-0.5)
 
 
 def on_add_build(sender: int, app_data: Any, user_data: AppState) -> None:
     """Add a new target build."""
     state = user_data
     new_build = TargetBuild(
+        id=uuid4(),
         name=f"Build {len(state.target_builds) + 1}",
         requirements=(),
         anti_synergies=(),
@@ -327,11 +436,11 @@ def on_add_build(sender: int, app_data: Any, user_data: AppState) -> None:
 
 
 def on_remove_build(
-    sender: int, app_data: Any, user_data: tuple[int, AppState]
+    sender: int, app_data: Any, user_data: tuple[UUID, AppState]
 ) -> None:
     """Remove a target build."""
-    index, state = user_data
-    state.target_builds.pop(index)
+    build_id, state = user_data
+    state.target_builds = [b for b in state.target_builds if b.id != build_id]
     state.save()
     update_traits_display(state)
 
@@ -366,139 +475,138 @@ def _get_active_listbox_selection() -> tuple[TraitCategory | None, str | None]:
 
 
 def on_build_name_edited(
-    sender: int, app_data: str, user_data: tuple[int, AppState]
+    sender: int, app_data: str, user_data: tuple[UUID, AppState]
 ) -> None:
-    """Handle build name input - save when editing ends."""
-    build_index, state = user_data
+    """Handle build name input - update label directly without rebuild."""
+    build_id, state = user_data
     new_name = app_data.strip()
-    if new_name:
-        state.target_builds[build_index] = replace(
-            state.target_builds[build_index], name=new_name
-        )
-        state.save()
-        update_traits_display(state)
+    if not new_name:
+        return
+    idx = _find_build_index(state, build_id)
+    if idx is None:
+        return
+    state.target_builds[idx] = replace(state.target_builds[idx], name=new_name)
+    state.save()
+    _configure_build_header_label(build_id.hex, state.target_builds[idx])
 
 
 def on_build_synergy_edited(
-    sender: int, app_data: float, user_data: tuple[int, AppState]
+    sender: int, app_data: float, user_data: tuple[UUID, AppState]
 ) -> None:
-    """Handle build synergy bonus input - save when editing ends."""
-    build_index, state = user_data
-    state.target_builds[build_index] = replace(
-        state.target_builds[build_index], synergy_bonus_ens=app_data
+    """Handle build synergy bonus input - update label directly without rebuild."""
+    build_id, state = user_data
+    idx = _find_build_index(state, build_id)
+    if idx is None:
+        return
+    state.target_builds[idx] = replace(
+        state.target_builds[idx], synergy_bonus_ens=app_data
+    )
+    state.save()
+    _configure_build_header_label(build_id.hex, state.target_builds[idx])
+
+
+def on_add_build_requirement(
+    sender: int, app_data: Any, user_data: tuple[UUID, AppState]
+) -> None:
+    """Add selected trait as a requirement to the build."""
+    build_id, state = user_data
+    category, trait_key = _get_active_listbox_selection()
+    if not category or not trait_key:
+        return
+    idx = _find_build_index(state, build_id)
+    if idx is None:
+        return
+    trait = create_trait(category, trait_key)
+    tw = TraitWeight(trait=trait, weight_ens=1.0)
+    state.target_builds[idx] = replace(
+        state.target_builds[idx],
+        requirements=state.target_builds[idx].requirements + (tw,),
     )
     state.save()
     update_traits_display(state)
 
 
-def on_add_build_requirement(
-    sender: int, app_data: Any, user_data: tuple[int, AppState]
-) -> None:
-    """Add selected trait as a requirement to the build."""
-    build_index, state = user_data
-    category, trait_key = _get_active_listbox_selection()
-    if category and trait_key:
-        trait = create_trait(category, trait_key)
-        tw = TraitWeight(trait=trait, weight_ens=1.0)
-        state.target_builds[build_index] = replace(
-            state.target_builds[build_index],
-            requirements=state.target_builds[build_index].requirements + (tw,),
-        )
-        state.save()
-        update_traits_display(state)
-
-
 def on_add_build_anti_synergy(
-    sender: int, app_data: Any, user_data: tuple[int, AppState]
+    sender: int, app_data: Any, user_data: tuple[UUID, AppState]
 ) -> None:
     """Add selected trait as an anti-synergy to the build."""
-    build_index, state = user_data
+    build_id, state = user_data
     category, trait_key = _get_active_listbox_selection()
-    if category and trait_key:
-        trait = create_trait(category, trait_key)
-        tw = TraitWeight(trait=trait, weight_ens=1.0)
-        state.target_builds[build_index] = replace(
-            state.target_builds[build_index],
-            anti_synergies=state.target_builds[build_index].anti_synergies + (tw,),
-        )
-        state.save()
-        update_traits_display(state)
+    if not category or not trait_key:
+        return
+    idx = _find_build_index(state, build_id)
+    if idx is None:
+        return
+    trait = create_trait(category, trait_key)
+    tw = TraitWeight(trait=trait, weight_ens=1.0)
+    state.target_builds[idx] = replace(
+        state.target_builds[idx],
+        anti_synergies=state.target_builds[idx].anti_synergies + (tw,),
+    )
+    state.save()
+    update_traits_display(state)
 
 
 def on_remove_build_trait(
-    sender: int, app_data: Any, user_data: tuple[int, int, str, AppState]
+    sender: int, app_data: Any, user_data: tuple[UUID, int, str, AppState]
 ) -> None:
     """Remove a trait from a build's requirements or anti-synergies list."""
-    build_index, trait_index, list_type, state = user_data
+    build_id, trait_index, list_type, state = user_data
+    idx = _find_build_index(state, build_id)
+    if idx is None:
+        return
+    build = state.target_builds[idx]
     target_list = (
-        state.target_builds[build_index].requirements
-        if list_type == "requirements"
-        else state.target_builds[build_index].anti_synergies
+        build.requirements if list_type == "requirements" else build.anti_synergies
     )
-    if 0 <= trait_index < len(target_list):
-        if list_type == "requirements":
-            state.target_builds[build_index] = replace(
-                state.target_builds[build_index],
-                requirements=state.target_builds[build_index].requirements[:trait_index]
-                + state.target_builds[build_index].requirements[trait_index + 1 :],
-            )
-        else:
-            state.target_builds[build_index] = replace(
-                state.target_builds[build_index],
-                anti_synergies=state.target_builds[build_index].anti_synergies[
-                    :trait_index
-                ]
-                + state.target_builds[build_index].anti_synergies[trait_index + 1 :],
-            )
-        state.save()
-        update_traits_display(state)
-
-
-def _modify_build_trait_weight(
-    sender: int,
-    app_data: Any,
-    user_data: tuple[int, int, str, AppState],
-    *,
-    delta: float,
-) -> None:
-    """Modify a build trait's weight by delta."""
-    build_index, trait_index, list_type, state = user_data
-    target_list = (
-        state.target_builds[build_index].requirements
-        if list_type == "requirements"
-        else state.target_builds[build_index].anti_synergies
-    )
-    if 0 <= trait_index < len(target_list):
-        updated_trait = replace(
-            target_list[trait_index],
-            weight_ens=max(0.5, min(10.0, target_list[trait_index].weight_ens + delta)),
+    if not (0 <= trait_index < len(target_list)):
+        return
+    if list_type == "requirements":
+        state.target_builds[idx] = replace(
+            state.target_builds[idx],
+            requirements=build.requirements[:trait_index]
+            + build.requirements[trait_index + 1 :],
         )
-        if list_type == "requirements":
-            state.target_builds[build_index] = replace(
-                state.target_builds[build_index],
-                requirements=state.target_builds[build_index].requirements[:trait_index]
-                + (updated_trait,)
-                + state.target_builds[build_index].requirements[trait_index + 1 :],
-            )
-        else:
-            state.target_builds[build_index] = replace(
-                state.target_builds[build_index],
-                anti_synergies=state.target_builds[build_index].anti_synergies[
-                    :trait_index
-                ]
-                + (updated_trait,)
-                + state.target_builds[build_index].anti_synergies[trait_index + 1 :],
-            )
-        state.save()
-        update_traits_display(state)
+    else:
+        state.target_builds[idx] = replace(
+            state.target_builds[idx],
+            anti_synergies=build.anti_synergies[:trait_index]
+            + build.anti_synergies[trait_index + 1 :],
+        )
+    state.save()
+    update_traits_display(state)
 
 
-on_increment_build_trait_weight = functools.partial(
-    _modify_build_trait_weight, delta=0.5
-)
-on_decrement_build_trait_weight = functools.partial(
-    _modify_build_trait_weight, delta=-0.5
-)
+def on_build_trait_weight_changed(
+    sender: int, app_data: float, user_data: tuple[UUID, int, str, AppState]
+) -> None:
+    """Handle input_float change for build trait weight."""
+    build_id, trait_index, list_type, state = user_data
+    idx = _find_build_index(state, build_id)
+    if idx is None:
+        return
+    build = state.target_builds[idx]
+    target_list = (
+        build.requirements if list_type == "requirements" else build.anti_synergies
+    )
+    if not (0 <= trait_index < len(target_list)):
+        return
+    updated_trait = replace(target_list[trait_index], weight_ens=app_data)
+    if list_type == "requirements":
+        state.target_builds[idx] = replace(
+            state.target_builds[idx],
+            requirements=build.requirements[:trait_index]
+            + (updated_trait,)
+            + build.requirements[trait_index + 1 :],
+        )
+    else:
+        state.target_builds[idx] = replace(
+            state.target_builds[idx],
+            anti_synergies=build.anti_synergies[:trait_index]
+            + (updated_trait,)
+            + build.anti_synergies[trait_index + 1 :],
+        )
+    state.save()
 
 
 def _format_trait_for_listbox(trait: Trait, game_data: GameData) -> str:
@@ -540,27 +648,3 @@ def on_remove_trait(
 def on_clear_traits(sender: int, app_data: Any, user_data: AppState) -> None:
     """Legacy callback - redirects to clear universals."""
     on_clear_universals(sender, app_data, user_data)
-
-
-def on_increment_weight(
-    sender: int, app_data: Any, user_data: tuple[int, AppState]
-) -> None:
-    """Legacy callback - redirects to increment universal weight."""
-    on_increment_universal_weight(sender, app_data, user_data)
-
-
-def on_decrement_weight(
-    sender: int, app_data: Any, user_data: tuple[int, AppState]
-) -> None:
-    """Legacy callback - redirects to decrement universal weight."""
-    on_decrement_universal_weight(sender, app_data, user_data)
-
-
-def on_trait_weight_changed(
-    sender: int, app_data: int, user_data: tuple[int, AppState]
-) -> None:
-    """Legacy callback - redirects to universal weight changed."""
-    index, state = user_data
-    new_weight = max(0.5, min(10.0, float(app_data) * 0.5))
-    state.universals[index] = replace(state.universals[index], weight_ens=new_weight)
-    state.save()

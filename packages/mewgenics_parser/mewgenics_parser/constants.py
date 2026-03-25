@@ -1,12 +1,7 @@
 """Constants used throughout the parser."""
 
 import os
-import re
 from pathlib import Path
-
-_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-_JUNK_STRINGS = frozenset({"none", "null", "", "defaultmove", "default_move"})
 
 STAT_NAMES = ["STR", "DEX", "CON", "INT", "SPD", "CHA", "LCK"]
 

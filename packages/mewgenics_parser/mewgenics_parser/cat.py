@@ -8,7 +8,7 @@ from typing import NamedTuple, Self, TypeGuard
 import lz4.block
 
 from .binary import BinaryReader
-from .constants import _JUNK_STRINGS, ROOM_DISPLAY
+from .constants import ROOM_DISPLAY
 from .trait_dictionary import SKILLSHARE_BASE_ID, normalize_ability_key
 
 
@@ -34,11 +34,6 @@ class CatStatus(StrEnum):
     IN_HOUSE = "In House"
     ADVENTURE = "Adventure"
     GONE = "Gone"
-
-
-def _valid_str(s: str | None) -> TypeGuard[str]:
-    """Reject None, empty, and game filler strings like 'none' or 'defaultmove'."""
-    return bool(s) and s.strip().lower() not in _JUNK_STRINGS
 
 
 class CatBodyPartCategory(StrEnum):

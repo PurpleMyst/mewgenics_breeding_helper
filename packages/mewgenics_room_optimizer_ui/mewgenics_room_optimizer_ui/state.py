@@ -1,6 +1,7 @@
 """Application state for room optimizer UI."""
 
 from typing import Any, Self
+from uuid import UUID, uuid4
 
 import platformdirs
 import traceback
@@ -101,7 +102,9 @@ class ConfigModel(BaseModel):
         parsed = []
         for t in v:
             if isinstance(t, dict):
+                build_id = UUID(t["id"]) if "id" in t else uuid4()
                 build = TargetBuild(
+                    id=build_id,
                     name=t.get("name", "Unnamed Build"),
                     requirements=tuple(
                         TraitWeight(
@@ -128,6 +131,7 @@ class ConfigModel(BaseModel):
     def serialize_target_builds(self, v: list[Any], handler: Any) -> list[dict]:
         return [
             {
+                "id": b.id.hex,
                 "name": b.name,
                 "requirements": [
                     {

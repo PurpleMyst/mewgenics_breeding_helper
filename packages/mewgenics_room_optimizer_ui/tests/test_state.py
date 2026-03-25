@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 from mewgenics_parser.traits import TraitCategory, create_trait
 from mewgenics_scorer.types import TargetBuild, TraitWeight
@@ -151,6 +152,7 @@ class TestConfigModelTargetBuilds:
             universals=[],
             target_builds=[
                 TargetBuild(
+                    id=uuid4(),
                     name="Tank Build",
                     requirements=(TraitWeight(trait=trait1, weight_ens=3.0),),
                     anti_synergies=(TraitWeight(trait=trait2, weight_ens=5.0),),
@@ -181,6 +183,7 @@ class TestConfigModelTargetBuilds:
             universals=[],
             target_builds=[
                 TargetBuild(
+                    id=uuid4(),
                     name="Tank Build",
                     requirements=(TraitWeight(trait=trait1, weight_ens=3.0),),
                     anti_synergies=(),
@@ -223,6 +226,7 @@ class TestConfigModelFullRoundtrip:
             ],
             target_builds=[
                 TargetBuild(
+                    id=uuid4(),
                     name="Build 1",
                     requirements=(TraitWeight(trait=trait2, weight_ens=2.0),),
                     anti_synergies=(),
