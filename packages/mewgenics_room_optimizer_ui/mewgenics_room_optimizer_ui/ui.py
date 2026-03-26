@@ -306,7 +306,7 @@ def on_room_config_changed(sender: int, app_data: Any, user_data: AppState) -> N
             dpg.bind_item_theme(f"room_max_{room.key}", 0)
 
         new_stim = 50.0
-        if new_stim_str.strip():
+        if str(new_stim_str).strip():
             try:
                 new_stim = float(new_stim_str)
                 dpg.bind_item_theme(f"room_stim_{room.key}", 0)
