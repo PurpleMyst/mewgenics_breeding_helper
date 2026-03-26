@@ -69,7 +69,9 @@ def _build_shared_trait_selector(state: AppState) -> None:
 
 def _build_universals_tab(state: AppState) -> None:
     """Build the universals tab."""
-    with dpg.table(header_row=False, borders_innerV=False, borders_outerV=False):
+    with dpg.table(
+        header_row=False, borders_innerV=False, borders_outerV=False, resizable=False
+    ):
         dpg.add_table_column(width_stretch=True)
         dpg.add_table_column(width_fixed=True)
         dpg.add_table_column(width_fixed=True)
@@ -232,6 +234,7 @@ def _update_builds_display(state: AppState) -> None:
                 borders_innerV=False,
                 borders_outerV=False,
                 header_row=False,
+                resizable=False,
             )
             dpg.add_table_column(width_stretch=True, parent=req_table)
             dpg.add_table_column(
@@ -298,6 +301,7 @@ def _update_builds_display(state: AppState) -> None:
                 borders_innerV=False,
                 borders_outerV=False,
                 header_row=False,
+                resizable=False,
             )
             dpg.add_table_column(width_stretch=True, parent=anti_table)
             dpg.add_table_column(

@@ -103,10 +103,9 @@ def build_room_config_section(state: AppState) -> None:
             with dpg.table(
                 tag="room_config_table",
                 header_row=True,
-                borders_innerH=True,
-                row_background=True,
+                resizable=False,
             ):
-                dpg.add_table_column(label="Room Name")
+                dpg.add_table_column(label="Room Name", width_fixed=True)
                 dpg.add_table_column(label="Type")
                 dpg.add_table_column(label="Max Cats")
                 dpg.add_table_column(label="Stimulation")
@@ -121,9 +120,7 @@ def build_room_config_section(state: AppState) -> None:
             ]
             for room in state.room_configs:
                 with dpg.table_row(parent="room_config_table"):
-                    dpg.add_text(
-                        room.display_name, tag=f"room_name_{room.key}", width=150
-                    )
+                    dpg.add_text(room.display_name, tag=f"room_name_{room.key}")
                     dpg.add_combo(
                         room_types,
                         default_value=room.room_type.value,
