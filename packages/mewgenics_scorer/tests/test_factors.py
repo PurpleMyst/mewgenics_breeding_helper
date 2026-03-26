@@ -1,5 +1,7 @@
 """Tests for mewgenics_scorer factors module with ENS architecture."""
 
+import uuid
+
 import pytest
 from mewgenics_breeding import simulate_breeding
 from mewgenics_parser import Cat, SaveData
@@ -156,6 +158,7 @@ class TestCalculatePairFactors:
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         target_builds = [
             TargetBuild(
+                id=uuid.uuid4(),
                 name="Tank Build",
                 requirements=(TraitWeight(trait=sturdy, weight_ens=3.0),),
                 anti_synergies=(),
@@ -268,6 +271,7 @@ class TestEvaluateBuild:
 
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         build = TargetBuild(
+            id=uuid.uuid4(),
             name="Test Build",
             requirements=(TraitWeight(trait=sturdy, weight_ens=2.0),),
             anti_synergies=(),
@@ -286,6 +290,7 @@ class TestEvaluateBuild:
 
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         build = TargetBuild(
+            id=uuid.uuid4(),
             name="Anti Build",
             requirements=(TraitWeight(trait=sturdy, weight_ens=2.0),),
             anti_synergies=(TraitWeight(trait=sturdy, weight_ens=10.0),),
@@ -305,6 +310,7 @@ class TestEvaluateBuild:
         sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
         hunter = create_trait(TraitCategory.PASSIVE_ABILITY, "Hunter")
         build = TargetBuild(
+            id=uuid.uuid4(),
             name="Multi Passive Build",
             requirements=(
                 TraitWeight(trait=sturdy, weight_ens=1.0),
@@ -335,6 +341,7 @@ class TestEvaluateBuild:
         ear_300 = create_trait(TraitCategory.BODY_PART, "Ears300")
         ear_400 = create_trait(TraitCategory.BODY_PART, "Ears400")
         build = TargetBuild(
+            id=uuid.uuid4(),
             name="Same Category Build",
             requirements=(
                 TraitWeight(trait=ear_300, weight_ens=1.0),
@@ -364,6 +371,7 @@ class TestEvaluateBuild:
         ear_trait = create_trait(TraitCategory.BODY_PART, "Ears300")
         tail_trait = create_trait(TraitCategory.BODY_PART, "Tail300")
         build = TargetBuild(
+            id=uuid.uuid4(),
             name="Different Category Build",
             requirements=(
                 TraitWeight(trait=ear_trait, weight_ens=1.0),
