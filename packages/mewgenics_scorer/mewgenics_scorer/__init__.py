@@ -4,12 +4,7 @@ from .factors import (
     PairFactors,
     calculate_pair_factors,
     calculate_pair_quality,
-)
-from .compatibility import (
-    can_breed,
-    is_hater_conflict,
-    is_lover_conflict,
-    is_mutual_lovers,
+    evaluate_cat_ens,
 )
 from .types import (
     TraitWeight,
@@ -20,10 +15,7 @@ __all__ = [
     "PairFactors",
     "calculate_pair_factors",
     "calculate_pair_quality",
-    "can_breed",
-    "is_hater_conflict",
-    "is_lover_conflict",
-    "is_mutual_lovers",
+    "evaluate_cat_ens",
     "TraitWeight",
     "TargetBuild",
 ]

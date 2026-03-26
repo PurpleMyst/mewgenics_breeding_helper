@@ -165,6 +165,25 @@ def calculate_pair_factors(
     )
 
 
+def evaluate_cat_ens(
+    cat: Cat,
+    universals: list[TraitWeight] | None,
+    target_builds: list[TargetBuild] | None,
+) -> float:
+    """Compute a cat's ENS value against universals and target builds."""
+    val = sum(cat.base_stats)
+    if universals:
+        val += sum(u.weight_ens for u in universals if u.trait.is_possessed_by(cat))
+    if target_builds:
+        for build in target_builds:
+            val += sum(
+                req.weight_ens
+                for req in build.requirements
+                if req.trait.is_possessed_by(cat)
+            )
+    return val
+
+
 def calculate_pair_quality(factors: PairFactors) -> float:
     """Calculate baseline quality score from pair factors.
 

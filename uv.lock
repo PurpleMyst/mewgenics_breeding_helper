@@ -352,6 +352,7 @@ name = "mewgenics-room-optimizer"
 version = "1.0.0"
 source = { editable = "packages/mewgenics_room_optimizer" }
 dependencies = [
+    { name = "mewgenics-breeding" },
     { name = "mewgenics-parser" },
     { name = "mewgenics-scorer" },
 ]
@@ -371,6 +372,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "inline-snapshot", marker = "extra == 'test'", specifier = ">=0.6" },
+    { name = "mewgenics-breeding", editable = "packages/mewgenics_breeding" },
     { name = "mewgenics-parser", editable = "packages/mewgenics_parser" },
     { name = "mewgenics-scorer", editable = "packages/mewgenics_scorer" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },

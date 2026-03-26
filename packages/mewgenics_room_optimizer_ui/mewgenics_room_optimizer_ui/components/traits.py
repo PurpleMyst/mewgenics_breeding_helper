@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from ..helpers import trait_substring_match
 from ..state import AppState
+from ..components.overview import update_overview_table
 
 
 def _build_header_label(build: TargetBuild) -> str:
@@ -395,6 +396,7 @@ def on_add_universal(sender: int | None, app_data: Any, user_data: AppState) -> 
         )
         state.save()
         update_traits_display(state)
+        update_overview_table(state)
 
 
 def on_remove_universal(
@@ -405,6 +407,7 @@ def on_remove_universal(
     state.universals.pop(index)
     state.save()
     update_traits_display(state)
+    update_overview_table(state)
 
 
 def on_clear_universals(sender: int, app_data: Any, user_data: AppState) -> None:
@@ -412,6 +415,7 @@ def on_clear_universals(sender: int, app_data: Any, user_data: AppState) -> None
     user_data.universals.clear()
     user_data.save()
     update_traits_display(user_data)
+    update_overview_table(user_data)
 
 
 def on_universal_weight_changed(
@@ -436,6 +440,7 @@ def on_add_build(sender: int, app_data: Any, user_data: AppState) -> None:
     state.target_builds.append(new_build)
     state.save()
     update_traits_display(state)
+    update_overview_table(state)
 
 
 def on_remove_build(
@@ -446,6 +451,7 @@ def on_remove_build(
     state.target_builds = [b for b in state.target_builds if b.id != build_id]
     state.save()
     update_traits_display(state)
+    update_overview_table(state)
 
 
 def _get_active_listbox_selection() -> tuple[TraitCategory | None, str | None]:
@@ -527,6 +533,7 @@ def on_add_build_requirement(
     )
     state.save()
     update_traits_display(state)
+    update_overview_table(state)
 
 
 def on_add_build_anti_synergy(
@@ -548,6 +555,7 @@ def on_add_build_anti_synergy(
     )
     state.save()
     update_traits_display(state)
+    update_overview_table(state)
 
 
 def on_remove_build_trait(
@@ -578,6 +586,7 @@ def on_remove_build_trait(
         )
     state.save()
     update_traits_display(state)
+    update_overview_table(state)
 
 
 def on_build_trait_weight_changed(

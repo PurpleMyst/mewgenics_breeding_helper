@@ -1,7 +1,5 @@
 """Comprehensive tests for Mewgenics room optimizer."""
 
-from inline_snapshot import snapshot
-
 from unittest.mock import patch
 
 import pytest
@@ -13,13 +11,7 @@ from mewgenics_room_optimizer import (
     RoomType,
     optimize_sa,
 )
-from mewgenics_room_optimizer.optimizer import (
-    _generate_pairs,
-)
-from mewgenics_room_optimizer import OptimizationResult
-from mewgenics_room_optimizer import RoomAssignment
-from mewgenics_room_optimizer import ScoredPair
-from mewgenics_scorer import PairFactors
+from mewgenics_breeding.pairs import generate_pairs
 
 
 # --- TEST FIXTURES & HELPERS ---
@@ -123,7 +115,7 @@ class TestUtilities:
             make_cat(3, CatGender.FEMALE),
             make_cat(4, CatGender.DITTO),
         ]
-        pairs = _generate_pairs(cats)
+        pairs = generate_pairs(cats)
 
         # Expect: 1x2, 1x3, 1x4, 2x4, 3x4 = 5 pairs
         assert len(pairs) == 5

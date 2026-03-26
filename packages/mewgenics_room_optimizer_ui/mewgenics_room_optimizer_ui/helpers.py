@@ -31,6 +31,15 @@ class PairSummaryData:
     risk_color: tuple[int, int, int, int]
 
 
+@dataclass(slots=True)
+class TraitCountInfo:
+    """Trait with count and source info for Overview tabs."""
+
+    trait: Trait
+    count: int
+    sources: list[str]
+
+
 def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
     """Extract common pair data for reuse in table and detail views."""
     name_a = pair.cat_a.name or "Unnamed"

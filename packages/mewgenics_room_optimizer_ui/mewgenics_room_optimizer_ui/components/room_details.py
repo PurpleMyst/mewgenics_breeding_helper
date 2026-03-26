@@ -2,12 +2,16 @@ import dearpygui.dearpygui as dpg
 from mewgenics_parser import Cat
 from mewgenics_room_optimizer import RoomAssignment
 
-from ..colors import COLOR_MUTED, COLOR_SUCCESS
+from ..colors import COLOR_MUTED, COLOR_SUCCESS, ROOM_TYPE_COLORS
 from ..components.cats_table import add_cat_table_cols, render_cat_table_rows
 from ..components.inspector.base import clear_inspector
 from ..components.inspector.cat import on_cat_selected
 from ..components.inspector.pair import on_pair_selected
-from ..helpers import LOCATION_COL_WIDTH, get_assigned_room_key, get_pair_summary_data
+from ..helpers import (
+    TraitCountInfo,
+    get_assigned_room_key,
+    get_pair_summary_data,
+)
 from ..state import AppState
 
 
@@ -28,6 +32,9 @@ def update_details_section(selected_room: RoomAssignment, state: AppState) -> No
         dpg.hide_item("details_placeholder")
 
     dpg.add_tab_bar(parent="details_section", tag="details_tab_bar")
+
+    with dpg.tab(label="Overview", parent="details_tab_bar"):
+        _build_overview_tab(selected_room, state)
 
     with dpg.tab(label="Pairs", parent="details_tab_bar"):
         _build_pairs_tab(selected_room, state)
@@ -126,11 +133,25 @@ def _build_misplaced_tab(selected_room: RoomAssignment, state: AppState) -> None
             continue
         assigned_room = get_assigned_room_key(cat.db_key, state.results)
         if assigned_room is not None and assigned_room != selected_room.room.key:
-            assigned_display = next(
-                (r.display_name for r in state.room_configs if r.key == assigned_room),
-                assigned_room,
+            assigned_config = next(
+                (r for r in state.room_configs if r.key == assigned_room),
+                None,
             )
-            misplaced.append({"cat": cat, "assigned_room": assigned_display})
+            assigned_display = (
+                assigned_config.display_name if assigned_config else assigned_room
+            )
+            assigned_color = (
+                ROOM_TYPE_COLORS.get(assigned_config.room_type.value, COLOR_MUTED)
+                if assigned_config
+                else COLOR_MUTED
+            )
+            misplaced.append(
+                {
+                    "cat": cat,
+                    "assigned_room": assigned_display,
+                    "assigned_color": assigned_color,
+                }
+            )
 
     if not misplaced:
         dpg.add_text("No misplaced cats in this room")
@@ -148,18 +169,17 @@ def _build_misplaced_tab(selected_room: RoomAssignment, state: AppState) -> None
         header_row=True,
         borders_innerH=True,
         row_background=True,
+        resizable=False,
     ):
         dpg.add_table_column(label="Name", width_fixed=True)
         dpg.add_table_column(label="Age", width_fixed=True)
         dpg.add_table_column(
             label="In Save",
             width_fixed=True,
-            init_width_or_weight=LOCATION_COL_WIDTH,
         )
         dpg.add_table_column(
             label="Assigned",
             width_fixed=True,
-            init_width_or_weight=LOCATION_COL_WIDTH,
         )
         for item in misplaced:
             cat = item["cat"]
@@ -167,7 +187,69 @@ def _build_misplaced_tab(selected_room: RoomAssignment, state: AppState) -> None
                 dpg.add_text(cat.name or "Unnamed")
                 dpg.add_text(str(cat.age if cat.age is not None else 0))
                 dpg.add_text(selected_room.room.display_name)
-                dpg.add_text(item["assigned_room"])
+                dpg.add_text(item["assigned_room"], color=item["assigned_color"])
+
+
+def _get_room_favorable_traits_info(
+    selected_room: RoomAssignment, state: AppState
+) -> list[TraitCountInfo]:
+    """Collect favorable traits with counts for cats in a specific room."""
+    trait_map: dict[str, TraitCountInfo] = {}
+
+    for universal in state.universals:
+        key = universal.trait.key
+        if key not in trait_map:
+            trait_map[key] = TraitCountInfo(
+                trait=universal.trait, count=0, sources=["Universal"]
+            )
+        else:
+            trait_map[key].sources.append("Universal")
+
+    for build in state.target_builds:
+        for tw in build.requirements:
+            key = tw.trait.key
+            if key not in trait_map:
+                trait_map[key] = TraitCountInfo(
+                    trait=tw.trait, count=0, sources=[build.name]
+                )
+            elif build.name not in trait_map[key].sources:
+                trait_map[key].sources.append(build.name)
+
+    room_cats = list(selected_room.cats) + list(selected_room.eternal_youth_cats)
+    for cat in room_cats:
+        for info in trait_map.values():
+            if info.trait.is_possessed_by(cat):
+                info.count += 1
+
+    return list(trait_map.values())
+
+
+def _build_overview_tab(selected_room: RoomAssignment, state: AppState) -> None:
+    """Build the Overview tab for a specific room."""
+    room_cats = list(selected_room.cats) + list(selected_room.eternal_youth_cats)
+
+    if not room_cats:
+        dpg.add_text("No cats in this room")
+        return
+
+    trait_info = _get_room_favorable_traits_info(selected_room, state)
+    trait_info.sort(key=lambda x: (-x.count, x.trait.get_display_name(state.game_data)))
+
+    with dpg.table(
+        tag="room_overview_table",
+        header_row=True,
+        borders_innerH=True,
+        row_background=True,
+    ):
+        dpg.add_table_column(label="Trait", width_fixed=True)
+        dpg.add_table_column(label="Category", width_fixed=True)
+        dpg.add_table_column(label="Count", width_fixed=True)
+
+    for info in trait_info:
+        with dpg.table_row(parent="room_overview_table"):
+            dpg.add_text(info.trait.get_display_name(state.game_data))
+            dpg.add_text(info.trait.category.display_name, color=COLOR_MUTED)
+            dpg.add_text(str(info.count))
 
 
 def on_room_selected(

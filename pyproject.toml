@@ -22,6 +22,7 @@ dev = [
 ]
 
 [tool.uv.sources]
+mewgenics_breeding = { workspace = true }
 mewgenics_parser = { workspace = true }
 mewgenics_scorer = { workspace = true }
 mewgenics_room_optimizer = { workspace = true }

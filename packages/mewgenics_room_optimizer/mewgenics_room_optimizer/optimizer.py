@@ -7,6 +7,12 @@ import random
 from collections import defaultdict
 from dataclasses import replace, dataclass, field
 
+from mewgenics_breeding import can_breed
+from mewgenics_breeding.pairs import (
+    filter_hater_conflicts,
+    filter_lover_exclusivity,
+    generate_pairs,
+)
 from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatGender, CatStatus
 from mewgenics_scorer import (
@@ -14,95 +20,17 @@ from mewgenics_scorer import (
     TraitWeight,
     calculate_pair_factors,
     calculate_pair_quality,
-    can_breed,
 )
 
 from .types import (
     OptimizationResult,
-    RoomAssignment,
     RoomConfig,
     RoomType,
     ScoredPair,
 )
+from .allocator import RoomAllocator, compute_ey_assignments
 
 MOVE_PENALTY = 0.5
-
-
-def _generate_pairs(
-    cats: list[Cat],
-) -> list[tuple[Cat, Cat]]:
-    """Generate all valid pairs of cats which could potentially produce offspring."""
-    males = [c for c in cats if c.gender == CatGender.MALE]
-    females = [c for c in cats if c.gender == CatGender.FEMALE]
-    dittos = [c for c in cats if c.gender == CatGender.DITTO]
-
-    pairs = []
-    pairs.extend((a, b) for a in males for b in females)
-    pairs.extend((a, b) for a in males for b in dittos)
-    pairs.extend((a, b) for a in females for b in dittos)
-    pairs.extend((a, b) for i, a in enumerate(dittos) for b in dittos[i + 1 :])
-
-    return pairs
-
-
-def _filter_lover_exclusivity(
-    pairs: list[tuple[Cat, Cat]],
-    room_cats: list[Cat],
-) -> list[tuple[Cat, Cat]]:
-    """Filter pairs that violate per-room lover exclusivity.
-
-    Rule: If a cat's lover is in this room, they can only breed with that lover.
-    Cats with lovers in different rooms can breed with anyone here.
-    """
-    room_cat_ids = {c.db_key for c in room_cats}
-    lover_lookup: dict[int, int | None] = {
-        c.db_key: c.lover_id
-        for c in room_cats
-        if c.lover is not None and c.lover_id in room_cat_ids
-    }
-
-    filtered = []
-    for a, b in pairs:
-        a_lover = lover_lookup.get(a.db_key)
-        b_lover = lover_lookup.get(b.db_key)
-
-        if a_lover is not None and b.db_key != a_lover:
-            continue
-        if b_lover is not None and a.db_key != b_lover:
-            continue
-
-        filtered.append((a, b))
-
-    return filtered
-
-
-def _filter_hater_conflicts(
-    pairs: list[tuple[Cat, Cat]],
-    room_cats: list[Cat],
-) -> list[tuple[Cat, Cat]]:
-    """Filter pairs that have hater conflicts within the room.
-
-    Rule: If cat A hates cat B and both are in this room, they can't breed.
-    Cats with haters in different rooms can breed with anyone here.
-    """
-    room_cat_ids = {c.db_key for c in room_cats}
-    hater_lookup: dict[int, set[int]] = {c.db_key: set() for c in room_cats}
-
-    for c in room_cats:
-        if c.hater is not None and c.hater_id in room_cat_ids:
-            hater_lookup[c.db_key].add(c.hater_id)
-
-    filtered = []
-    for a, b in pairs:
-        a_hates_b = b.db_key in hater_lookup.get(a.db_key, set())
-        b_hates_a = a.db_key in hater_lookup.get(b.db_key, set())
-
-        if a_hates_b or b_hates_a:
-            continue
-
-        filtered.append((a, b))
-
-    return filtered
 
 
 @dataclass(slots=True)
@@ -113,7 +41,7 @@ class _AnnealingWorker:
     save_data: SaveData
     universals: list[TraitWeight] | None
     target_builds: list[TargetBuild] | None
-    ey_assignments: dict[str, list[Cat]]
+    _allocator: RoomAllocator
 
     _memo: dict[tuple[int, int, float], ScoredPair | None] = field(
         default_factory=dict, init=False, repr=False
@@ -155,9 +83,9 @@ class _AnnealingWorker:
             # while those are sometimes violated in the game, I don't know the exact mechanics and I'd
             # rather exclude them outright to avoid overestimating breeding potential of certain room
             # comps.
-            pairs = _generate_pairs(cats_in_room)
-            pairs = _filter_lover_exclusivity(pairs, cats_in_room)
-            pairs = _filter_hater_conflicts(pairs, cats_in_room)
+            pairs = generate_pairs(cats_in_room)
+            pairs = filter_lover_exclusivity(pairs, cats_in_room)
+            pairs = filter_hater_conflicts(pairs, cats_in_room)
 
             # Score every possible pair and aggregate total quality and build yields.
             # Also keep track of which cats are actually contributing to breeding.
@@ -287,7 +215,7 @@ class _AnnealingWorker:
             T *= COOLING_RATE
             iteration += 1
 
-        return self._build_results(best_state), best_score
+        return self._allocator.allocate(best_state, self.save_data), best_score
 
     def _score_pair_internal(
         self,
@@ -335,148 +263,6 @@ class _AnnealingWorker:
         scored = self._score_pair_internal(cat_a, cat_b, stimulation)
         self._memo[key] = scored
         return scored
-
-    def _build_results(
-        self,
-        state_dict: dict[int, str],
-    ) -> OptimizationResult:
-        """Build OptimizationResult from a state dictionary."""
-        rooms_content: dict[str, list[Cat]] = {r.key: [] for r in self.room_configs}
-        assigned_cats: set[int] = set()
-
-        for cat_id, room_key in state_dict.items():
-            if room_key in rooms_content:
-                rooms_content[room_key].append(self.save_data.cats_by_id[cat_id])
-                assigned_cats.add(cat_id)
-
-        breeding_rooms = [
-            r for r in self.room_configs if r.room_type == RoomType.BREEDING
-        ]
-        room_pairs: dict[str, list[ScoredPair]] = {r.key: [] for r in self.room_configs}
-
-        for room in breeding_rooms:
-            cats_in_room = rooms_content[room.key]
-            if len(cats_in_room) < 2:
-                continue
-
-            pairs = _generate_pairs(cats_in_room)
-            for a, b in pairs:
-                scored = self._score_pair(a, b, room.stimulation)
-                if scored:
-                    room_pairs[room.key].append(scored)
-
-        sa_cats = [
-            c
-            for c in self.save_data.cats
-            if c.status == CatStatus.IN_HOUSE and not c.has_eternal_youth()
-        ]
-        unassigned = [c for c in sa_cats if c.db_key not in assigned_cats]
-        general_rooms = [
-            r for r in self.room_configs if r.room_type == RoomType.GENERAL
-        ]
-        fighting_rooms = [
-            r for r in self.room_configs if r.room_type == RoomType.FIGHTING
-        ]
-        health_rooms = [r for r in self.room_configs if r.room_type == RoomType.HEALTH]
-        mutation_rooms = [
-            r for r in self.room_configs if r.room_type == RoomType.MUTATION
-        ]
-
-        def _cat_ens_value(cat: Cat) -> float:
-            val = sum(cat.base_stats)
-            if self.universals:
-                val += sum(
-                    u.weight_ens
-                    for u in self.universals
-                    if u.trait.is_possessed_by(cat)
-                )
-            if self.target_builds:
-                for b in self.target_builds:
-                    val += sum(
-                        req.weight_ens
-                        for req in b.requirements
-                        if req.trait.is_possessed_by(cat)
-                    )
-            return val
-
-        # Sort unassigned cats by their ENS value to try to fit higher-value cats first.
-        # TODO: Improve this aspect, namely:
-        # * Raw ENS sum tends to reduce diversity;
-        # * Fighting rooms should prioritize high total stat sum cats, since they're not breeding and
-        # just want strong stats.
-        unassigned.sort(key=_cat_ens_value, reverse=True)
-        for cat in unassigned:
-            has_disorders = bool(cat.disorders)
-            has_defects = cat.has_birth_defects()
-
-            if has_disorders and has_defects:
-                rooms_to_try = (
-                    mutation_rooms + health_rooms + general_rooms + fighting_rooms
-                )
-            elif has_disorders:
-                rooms_to_try = health_rooms + general_rooms + fighting_rooms
-            elif has_defects:
-                rooms_to_try = mutation_rooms + general_rooms + fighting_rooms
-            else:
-                cat_value = _cat_ens_value(cat)
-                rooms_to_try = (
-                    (general_rooms + fighting_rooms)
-                    if cat_value > 0
-                    else (fighting_rooms + general_rooms)
-                )
-
-            for room in rooms_to_try:
-                if _can_fit_single(room, len(rooms_content[room.key])):
-                    rooms_content[room.key].append(cat)
-                    assigned_cats.add(cat.db_key)
-                    break
-
-        excluded = [c for c in sa_cats if c.db_key not in assigned_cats]
-
-        room_results: list[RoomAssignment] = []
-        if excluded:
-            room_results.append(
-                RoomAssignment(
-                    room=RoomConfig(
-                        key="Unassigned (donate perhaps)",
-                        room_type=RoomType.NONE,
-                        max_cats=None,
-                        stimulation=0.0,
-                    ),
-                    cats=excluded,
-                    pairs=[],
-                    eternal_youth_cats=[],
-                )
-            )
-
-        for config in self.room_configs:
-            cats_in_room = rooms_content[config.key]
-            pairs_in_room = room_pairs[config.key]
-            ey_cats = self.ey_assignments.get(config.key, [])
-
-            if cats_in_room or pairs_in_room or ey_cats:
-                room_results.append(
-                    RoomAssignment(
-                        room=config,
-                        cats=cats_in_room,
-                        pairs=pairs_in_room,
-                        eternal_youth_cats=ey_cats,
-                    )
-                )
-
-        return OptimizationResult(
-            rooms=room_results,
-        )
-
-
-def _can_fit_single(
-    room: RoomConfig,
-    current_count: int,
-) -> bool:
-    """Check if a single cat can fit in a room. EY cats are invisible to capacity."""
-    if room.max_cats is None:
-        return True
-    return (current_count + 1) <= room.max_cats
 
 
 def _get_neighbor(
@@ -542,7 +328,7 @@ def _generate_random_valid_state(
     for cat in cats:
         available_rooms = []
         for room in valid_rooms:
-            if _can_fit_single(room, len(room_cats[room.key])):
+            if RoomAllocator._can_fit_single(room, len(room_cats[room.key])):
                 available_rooms.append(room.key)
 
         if available_rooms:
@@ -576,16 +362,8 @@ def optimize_sa(
     sa_cats = [c for c in house_cats if not c.has_eternal_youth()]
     ey_cats = [c for c in house_cats if c.has_eternal_youth()]
 
-    # Statically assign Eternal Youth cats to the breeding room with the highest base stimulation to
-    # boost it further.
-    breeding_rooms = [r for r in room_configs if r.room_type == RoomType.BREEDING]
-    ey_assignments: dict[str, list[Cat]] = {r.key: [] for r in breeding_rooms}
-    if breeding_rooms and ey_cats:
-        best_room = max(breeding_rooms, key=lambda r: r.stimulation)
-        ey_assignments[best_room.key] = ey_cats
+    ey_assignments = compute_ey_assignments(ey_cats, room_configs)
 
-    # Adjust breeding room stim based on EY assignments since they boost the room's effective
-    # stimulation.
     sa_room_configs = []
     for r in room_configs:
         if r.room_type == RoomType.BREEDING:
@@ -615,7 +393,13 @@ def optimize_sa(
                     save_data=save_data,
                     universals=universals,
                     target_builds=target_builds,
-                    ey_assignments=ey_assignments,
+                    _allocator=RoomAllocator(
+                        room_configs=sa_room_configs,
+                        ey_assignments=ey_assignments,
+                        universals=universals,
+                        target_builds=target_builds,
+                        _worker=None,
+                    ),
                 )
             )
             for state in initial_states

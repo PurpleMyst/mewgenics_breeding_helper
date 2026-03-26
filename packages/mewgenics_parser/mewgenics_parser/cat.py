@@ -3,7 +3,7 @@
 import struct
 from dataclasses import dataclass, field
 from enum import StrEnum, auto
-from typing import NamedTuple, Self, TypeGuard
+from typing import NamedTuple, Self
 
 import lz4.block
 

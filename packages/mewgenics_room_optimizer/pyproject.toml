@@ -4,6 +4,7 @@ version = "1.0.0"
 description = "Room optimization logic for Mewgenics breeding"
 requires-python = ">=3.13"
 dependencies = [
+    "mewgenics_breeding",
     "mewgenics_parser",
     "mewgenics_scorer",
 ]

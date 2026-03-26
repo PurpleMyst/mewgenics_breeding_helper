@@ -9,6 +9,7 @@ from mewgenics_room_optimizer import OptimizationResult, RoomType
 
 from .colors import COLOR_EY_TEAL, COLOR_MUTED
 from .components.cats_table import build_all_cats_tab, update_all_cats_table
+from .components.overview import build_overview_tab, update_overview_table
 from .components.inspector.base import build_inspector_section, clear_inspector
 from .components.room_details import build_details_section  # called once in build_ui
 from .components.room_details import clear_details_section, on_room_selected
@@ -37,6 +38,9 @@ def build_ui(state: AppState) -> None:
 
             with dpg.child_window(border=False):
                 with dpg.tab_bar():
+                    with dpg.tab(label="Overview"):
+                        build_overview_tab(state)
+
                     with dpg.tab(label="Results"):
                         build_results_section(state)
                         build_details_section(state)
@@ -224,6 +228,7 @@ def scan_and_load_saves(
             clear_results_table()
             init_traits_lists(state)
             update_all_cats_table(state)
+            update_overview_table(state)
         except Exception as e:
             with dpg.window(label="Error", id="error_modal", modal=True):
                 dpg.add_text("Error loading save!")
@@ -267,6 +272,7 @@ def on_save_selected(sender: int, app_data: str, user_data: AppState) -> None:
         clear_results_table()
         init_traits_lists(user_data)
         update_all_cats_table(user_data)
+        update_overview_table(user_data)
     except Exception as e:
         print(f"Error loading save: {e}")
 
