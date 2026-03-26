@@ -62,7 +62,7 @@ from mewgenics_parser import Cat
 from mewgenics_parser.cat import CatBodySlot
 from mewgenics_parser.trait_dictionary import is_class_active, is_class_passive
 
-from .compatibility import can_breed
+from .compatibility import can_breed as can_breed
 
 PART_SETS = [
     [CatBodySlot.TEXTURE],
