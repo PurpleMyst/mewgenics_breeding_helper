@@ -5,7 +5,8 @@ import struct
 import os
 from pathlib import Path
 from typing import Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import cached_property
 
 from .cat import Cat, CatStatus
 from .constants import APPDATA_SAVE_DIR
@@ -19,6 +20,27 @@ class SaveData:
     house_count: int
     adventure_count: int
     gone_count: int
+    _parents_coi_memo: dict[tuple[int, int], float] = field(default_factory=dict)
+
+    @cached_property
+    def cats_by_id(self) -> dict[int, Cat]:
+        return {c.db_key: c for c in self.cats}
+
+    def get_offspring_coi(self, cat_a: Cat, cat_b: Cat) -> float:
+        """Look up pre-computed CoI for offspring of cat_a and cat_b.
+
+        Checks both orderings since canonical order is unknown.
+
+        Raises:
+            KeyError: If pair not found in memo map.
+        """
+        key1 = (cat_a.db_key, cat_b.db_key)
+        key2 = (cat_b.db_key, cat_a.db_key)
+        if key1 in self._parents_coi_memo:
+            return self._parents_coi_memo[key1]
+        if key2 in self._parents_coi_memo:
+            return self._parents_coi_memo[key2]
+        raise KeyError(f"No CoI memo for pair ({cat_a.db_key}, {cat_b.db_key})")
 
 
 def _get_house_info(conn) -> dict:
@@ -69,11 +91,16 @@ def _get_adventure_keys(conn) -> set:
     return keys
 
 
-def _parse_pedigree(conn) -> dict[int, tuple[int, int]]:
+def _parse_pedigree(
+    conn,
+) -> tuple[dict[int, tuple[int, int]], dict[tuple[int, int], float]]:
     """
     Parse the pedigree blob from the files table.
 
-    Returns ped_map: db_key -> (parent_a_db_key, parent_b_db_key)
+    Returns:
+        Tuple of:
+        - ped_map: db_key -> (parent_a_db_key, parent_b_db_key)
+        - parents_coi_memo: {(pa_id, pb_id): coi} for hypothetical offspring
     Only includes cats where BOTH parents are known.
 
     Raises:
@@ -82,13 +109,14 @@ def _parse_pedigree(conn) -> dict[int, tuple[int, int]]:
     try:
         row = conn.execute("SELECT data FROM files WHERE key='pedigree'").fetchone()
         if not row:
-            return {}
+            return ({}, {})
         data = row[0]
     except Exception:
-        return {}
+        return ({}, {})
 
-    child_pedigrees = parse_pedigree_blob(data)
-    return {cp.child_id: (cp.parent_a_id, cp.parent_b_id) for cp in child_pedigrees}
+    child_pedigrees, coi_memo = parse_pedigree_blob(data)
+    ped_map = {cp.child_id: (cp.parent_a_id, cp.parent_b_id) for cp in child_pedigrees}
+    return (ped_map, coi_memo)
 
 
 def parse_save(path: str) -> SaveData:
@@ -106,7 +134,7 @@ def parse_save(path: str) -> SaveData:
         house = _get_house_info(conn)
         adv = _get_adventure_keys(conn)
         rows = conn.execute("SELECT key, data FROM cats").fetchall()
-        ped_map = _parse_pedigree(conn)
+        ped_map, coi_memo = _parse_pedigree(conn)
         current_day_row = conn.execute(
             "SELECT data FROM properties WHERE key='current_day'"
         ).fetchone()
@@ -150,6 +178,7 @@ def parse_save(path: str) -> SaveData:
         house_count=house_count,
         adventure_count=adventure_count,
         gone_count=gone_count,
+        _parents_coi_memo=coi_memo,
     )
 
 

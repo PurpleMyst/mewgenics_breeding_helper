@@ -7,8 +7,9 @@ import dearpygui.dearpygui as dpg
 from mewgenics_parser import TraitCategory
 from mewgenics_room_optimizer import OptimizationResult, RoomType
 
-from .colors import COLOR_DANGER, COLOR_EY_TEAL, COLOR_HIGH_RISK_ROW, COLOR_MUTED
+from .colors import COLOR_EY_TEAL, COLOR_MUTED
 from .components.cats_table import build_all_cats_tab, update_all_cats_table
+from .components.overview import build_overview_tab, update_overview_table
 from .components.inspector.base import build_inspector_section, clear_inspector
 from .components.room_details import build_details_section  # called once in build_ui
 from .components.room_details import clear_details_section, on_room_selected
@@ -37,6 +38,9 @@ def build_ui(state: AppState) -> None:
 
             with dpg.child_window(border=False):
                 with dpg.tab_bar():
+                    with dpg.tab(label="Overview"):
+                        build_overview_tab(state)
+
                     with dpg.tab(label="Results"):
                         build_results_section(state)
                         build_details_section(state)
@@ -103,15 +107,21 @@ def build_room_config_section(state: AppState) -> None:
             with dpg.table(
                 tag="room_config_table",
                 header_row=True,
-                borders_innerH=True,
-                row_background=True,
+                resizable=False,
             ):
-                dpg.add_table_column(label="Room Key")
+                dpg.add_table_column(label="Room Name", width_fixed=True)
                 dpg.add_table_column(label="Type")
                 dpg.add_table_column(label="Max Cats")
-                dpg.add_table_column(label="Base Stim")
+                dpg.add_table_column(label="Stimulation")
 
-            room_types = ["breeding", "fighting", "general", "none"]
+            room_types = [
+                "breeding",
+                "fighting",
+                "general",
+                "health",
+                "mutation",
+                "none",
+            ]
             for room in state.room_configs:
                 with dpg.table_row(parent="room_config_table"):
                     dpg.add_text(room.display_name, tag=f"room_name_{room.key}")
@@ -127,15 +137,16 @@ def build_room_config_section(state: AppState) -> None:
                     dpg.add_input_text(
                         default_value=max_cats_val,
                         tag=f"room_max_{room.key}",
-                        width=80,
+                        width=120,
                         hint="empty=unlimited",
                         callback=on_room_config_changed,
                         user_data=state,
                     )
-                    dpg.add_input_text(
-                        default_value=str(room.base_stim),
+                    dpg.add_input_float(
+                        default_value=room.stimulation,
                         tag=f"room_stim_{room.key}",
-                        width=80,
+                        width=100,
+                        format="%.0f",
                         callback=on_room_config_changed,
                         user_data=state,
                     )
@@ -156,7 +167,6 @@ def build_results_section(state: AppState) -> None:
                 dpg.add_table_column(label="Pairs")
                 dpg.add_table_column(label="EY")
                 dpg.add_table_column(label="Avg Quality")
-                dpg.add_table_column(label="Risk %")
 
             dpg.add_text("Run optimization to see results", tag="results_placeholder")
 
@@ -201,6 +211,7 @@ def scan_and_load_saves(
         try:
             save_data = parse_save(newest)
             state.cats = save_data.cats
+            state.save_data = save_data
             state.last_save_path = newest
             state.results = None
 
@@ -217,6 +228,7 @@ def scan_and_load_saves(
             clear_results_table()
             init_traits_lists(state)
             update_all_cats_table(state)
+            update_overview_table(state)
         except Exception as e:
             with dpg.window(label="Error", id="error_modal", modal=True):
                 dpg.add_text("Error loading save!")
@@ -247,6 +259,7 @@ def on_save_selected(sender: int, app_data: str, user_data: AppState) -> None:
     try:
         save_data = parse_save(filepath)
         user_data.cats = save_data.cats
+        user_data.save_data = save_data
         user_data.last_save_path = filepath
         user_data.results = None
 
@@ -259,6 +272,7 @@ def on_save_selected(sender: int, app_data: str, user_data: AppState) -> None:
         clear_results_table()
         init_traits_lists(user_data)
         update_all_cats_table(user_data)
+        update_overview_table(user_data)
     except Exception as e:
         print(f"Error loading save: {e}")
 
@@ -291,23 +305,15 @@ def on_room_config_changed(sender: int, app_data: Any, user_data: AppState) -> N
         else:
             dpg.bind_item_theme(f"room_max_{room.key}", 0)
 
-        new_stim = 50.0
-        if new_stim_str.strip():
-            try:
-                new_stim = float(new_stim_str)
-                dpg.bind_item_theme(f"room_stim_{room.key}", 0)
-            except ValueError:
-                dpg.bind_item_theme(f"room_stim_{room.key}", "input_error_theme")
-                is_valid = False
-        else:
-            dpg.bind_item_theme(f"room_stim_{room.key}", 0)
+        new_stim = float(new_stim_str)
+        dpg.bind_item_theme(f"room_stim_{room.key}", 0)
 
         new_configs.append(
             RoomConfig(
                 key=room.key,
                 room_type=RoomType(new_type_str),
                 max_cats=new_max,
-                base_stim=new_stim,
+                stimulation=new_stim,
             )
         )
 
@@ -329,7 +335,7 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     """Run the optimization (blocking)."""
     from mewgenics_room_optimizer import optimize_sa
 
-    if not user_data.cats:
+    if not user_data.cats or not user_data.save_data:
         return
 
     dpg.set_value("status_text", "Calculating...")
@@ -337,7 +343,10 @@ def run_optimization(sender: int, app_data: Any, user_data: AppState) -> None:
     dpg.render_dearpygui_frame()
 
     results = optimize_sa(
-        user_data.cats, user_data.room_configs, user_data.trait_requirements
+        user_data.save_data,
+        user_data.room_configs,
+        universals=user_data.universals,
+        target_builds=user_data.target_builds,
     )
     user_data.results = results
 
@@ -354,16 +363,10 @@ def update_results_table(results: OptimizationResult, state: AppState) -> None:
     clear_inspector(state)
     dpg.hide_item("results_placeholder")
 
-    for i, room in enumerate(results.rooms):
+    for room in results.rooms:
         avg_quality = 0.0
-        avg_risk = 0.0
         if room.pairs:
             avg_quality = sum(p.quality for p in room.pairs) / len(room.pairs)
-            avg_risk = sum(
-                p.factors.combined_malady_chance * 100 for p in room.pairs
-            ) / len(room.pairs)
-
-        row_color = COLOR_HIGH_RISK_ROW if avg_risk > 15 else (0, 0, 0, 0)
 
         with dpg.table_row(parent="results_table"):
             dpg.add_selectable(
@@ -381,13 +384,6 @@ def update_results_table(results: OptimizationResult, state: AppState) -> None:
                 color=COLOR_EY_TEAL if ey_count > 0 else COLOR_MUTED,
             )
             dpg.add_text(f"{avg_quality:.1f}")
-            dpg.add_text(
-                f"{avg_risk:2.0f}%",
-                color=COLOR_DANGER if avg_risk > 15 else COLOR_MUTED,
-            )
-
-        if avg_risk > 15:
-            dpg.highlight_table_row("results_table", i, row_color)
 
 
 def clear_results_table() -> None:

@@ -1,18 +1,11 @@
 """Application state for room optimizer UI."""
 
-import platformdirs
 from typing import Any, Self
+from uuid import UUID, uuid4
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    SkipValidation,
-    field_validator,
-    field_serializer,
-)
-
-from mewgenics_parser import Cat
+import platformdirs
+import traceback
+from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import (
     Trait,
@@ -26,7 +19,8 @@ from mewgenics_room_optimizer import (
     RoomConfig,
 )
 from mewgenics_room_optimizer.types import ScoredPair
-from mewgenics_scorer import TraitRequirement
+from mewgenics_scorer.types import TargetBuild, TraitWeight
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 CONFIG_DIR = platformdirs.user_config_path(
     "mewgenics_breeding_helper", appauthor="PurpleMyst"
@@ -55,14 +49,25 @@ class ConfigModel(BaseModel):
 
     version: int = 1
     rooms: list[RoomConfig] = Field(default_factory=lambda: list(DEFAULT_ROOM_CONFIGS))
-    trait_requirements: list[SkipValidation[TraitRequirement]] = Field(
-        default_factory=list
-    )
+    universals: list[Any] = Field(default_factory=list)
+    target_builds: list[Any] = Field(default_factory=list)
     last_save_path: str | None = None
 
-    @field_validator("trait_requirements", mode="before")
+    @field_validator("rooms", mode="before")
     @classmethod
-    def parse_trait_requirements(cls, v: list[Any]) -> list[Any]:
+    def rename_rooms_stim(cls, v: list[Any]) -> list[Any]:
+        if not isinstance(v, list):
+            return v
+        renamed = []
+        for r in v:
+            if isinstance(r, dict) and "base_stim" in r:
+                r["stimulation"] = r.pop("base_stim")
+            renamed.append(r)
+        return renamed
+
+    @field_validator("universals", mode="before")
+    @classmethod
+    def parse_universals(cls, v: list[Any]) -> list[Any]:
         if not isinstance(v, list):
             return v
         parsed = []
@@ -70,25 +75,87 @@ class ConfigModel(BaseModel):
             if isinstance(t, dict):
                 trait = create_trait(TraitCategory(t["category"]), t["key"])
                 parsed.append(
-                    TraitRequirement(trait=trait, weight=t.get("weight", 5.0))
+                    TraitWeight(trait=trait, weight_ens=t.get("weight_ens", 1.0))
                 )
-            elif isinstance(t, TraitRequirement):
-                parsed.append(t)
             else:
                 parsed.append(t)
         return parsed
 
-    @field_serializer("trait_requirements")
-    def serialize_trait_requirements(self, v: list[TraitRequirement]) -> list[dict]:
+    @field_serializer("universals", mode="plain")
+    def serialize_universals(self, v: list[Any]) -> list[dict]:
         return [
             {
                 "category": t.trait.category.value
                 if hasattr(t.trait.category, "value")
                 else t.trait.category,
                 "key": t.trait.key,
-                "weight": t.weight,
+                "weight_ens": t.weight_ens,
             }
             for t in v
+        ]
+
+    @field_validator("target_builds", mode="before")
+    @classmethod
+    def parse_target_builds(cls, v: list[Any]) -> list[Any]:
+        if not isinstance(v, list):
+            return v
+        parsed = []
+        for t in v:
+            if isinstance(t, dict):
+                build_id = UUID(t["id"]) if "id" in t else uuid4()
+                build = TargetBuild(
+                    id=build_id,
+                    name=t.get("name", "Unnamed Build"),
+                    requirements=tuple(
+                        TraitWeight(
+                            trait=create_trait(TraitCategory(b["category"]), b["key"]),
+                            weight_ens=b.get("weight_ens", 1.0),
+                        )
+                        for b in t.get("requirements", [])
+                    ),
+                    anti_synergies=tuple(
+                        TraitWeight(
+                            trait=create_trait(TraitCategory(b["category"]), b["key"]),
+                            weight_ens=b.get("weight_ens", 1.0),
+                        )
+                        for b in t.get("anti_synergies", [])
+                    ),
+                    synergy_bonus_ens=t.get("synergy_bonus_ens", 0.0),
+                )
+                parsed.append(build)
+            else:
+                parsed.append(t)
+        return parsed
+
+    @field_serializer("target_builds", mode="wrap")
+    def serialize_target_builds(self, v: list[Any], handler: Any) -> list[dict]:
+        return [
+            {
+                "id": b.id.hex,
+                "name": b.name,
+                "requirements": [
+                    {
+                        "category": tw.trait.category.value
+                        if hasattr(tw.trait.category, "value")
+                        else tw.trait.category,
+                        "key": tw.trait.key,
+                        "weight_ens": tw.weight_ens,
+                    }
+                    for tw in b.requirements
+                ],
+                "anti_synergies": [
+                    {
+                        "category": tw.trait.category.value
+                        if hasattr(tw.trait.category, "value")
+                        else tw.trait.category,
+                        "key": tw.trait.key,
+                        "weight_ens": tw.weight_ens,
+                    }
+                    for tw in b.anti_synergies
+                ],
+                "synergy_bonus_ens": b.synergy_bonus_ens,
+            }
+            for b in v
         ]
 
     @classmethod
@@ -98,6 +165,7 @@ class ConfigModel(BaseModel):
             try:
                 return cls.model_validate_json(CONFIG_FILE.read_text())
             except (ValueError, OSError):
+                traceback.print_exc()
                 pass
         return cls()
 
@@ -111,12 +179,14 @@ class AppState:
     """Application state - runtime only, not persisted."""
 
     cats: list[Cat] = []
+    save_data: SaveData | None = None
     room_configs: list[RoomConfig] = []
     results: OptimizationResult | None = None
     last_save_path: str | None = None
     game_data: GameData
 
-    trait_requirements: list[TraitRequirement] = []
+    universals: list[TraitWeight] = []
+    target_builds: list[TargetBuild] = []
 
     selected_pair: ScoredPair | None = None
     selected_pair_index: int | None = None
@@ -134,7 +204,8 @@ class AppState:
         config = ConfigModel.load()
         state = cls()
         state.room_configs = config.rooms
-        state.trait_requirements = config.trait_requirements
+        state.universals = config.universals
+        state.target_builds = config.target_builds
         state.last_save_path = config.last_save_path
         return state
 
@@ -142,7 +213,8 @@ class AppState:
         """Persist current state to disk."""
         config = ConfigModel(
             rooms=self.room_configs,
-            trait_requirements=self.trait_requirements,
+            universals=self.universals,
+            target_builds=self.target_builds,
             last_save_path=self.last_save_path,
         )
         config.save()

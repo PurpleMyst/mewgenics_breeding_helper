@@ -21,6 +21,15 @@ class ChildPedigree:
     coi: float
 
 
+@dataclass
+class ParentCOI:
+    """Parent pair entry with COI for hypothetical offspring."""
+
+    parent_a_id: int
+    parent_b_id: int
+    coi: float
+
+
 class HashMapReader:
     """Parse parallel-hashmap format from ImHex pattern.
 
@@ -72,12 +81,37 @@ def _make_child_pedigree(data: bytes, offset: int) -> ChildPedigree | None:
     return ChildPedigree(int(child_id), int(pa), int(pb), coi)
 
 
-def parse_pedigree_blob(data: bytes) -> list[ChildPedigree]:
+def _make_parent_coi(data: bytes, offset: int) -> ParentCOI | None:
+    """Parse ParentCOI: u64 parent_a_id, u64 parent_b_id, double coi."""
+    pa, pb, coi = struct.unpack_from("<QQd", data, offset)
+
+    if pa == NULL or pb == NULL:
+        return None
+
+    return ParentCOI(int(pa), int(pb), coi)
+
+
+def _calc_hashmap_size(capacity: int, struct_size: int) -> int:
+    """Calculate total size of a HashMap given capacity and struct size."""
+    header = 24
+    hash_table = capacity
+    eot_marker = 1
+    wide_load_rep = 16
+    data_table = capacity * struct_size
+    growth_left = 8
+    return header + hash_table + eot_marker + wide_load_rep + data_table + growth_left
+
+
+def parse_pedigree_blob(
+    data: bytes,
+) -> tuple[list[ChildPedigree], dict[tuple[int, int], float]]:
     """
     Parse the pedigree blob.
 
     Returns:
-        List of ChildPedigree entries where both parents are known.
+        Tuple of:
+        - child_pedigrees: list of ChildPedigree for existing cats
+        - parents_coi_memo: {(pa_id, pb_id): coi} for hypothetical offspring
 
     Raises:
         ValueError: If child_to_parents HashMap version doesn't match.
@@ -90,4 +124,16 @@ def parse_pedigree_blob(data: bytes) -> list[ChildPedigree]:
             f"got {hm1.version:#x}"
         )
 
-    return hm1.read_entries(_make_child_pedigree)
+    child_pedigrees = hm1.read_entries(_make_child_pedigree)
+
+    hm1_size = _calc_hashmap_size(hm1.capacity, 32)
+    hm2_data = data[hm1_size:]
+
+    hm2 = HashMapReader(hm2_data, struct_size=24)
+    parent_cois = hm2.read_entries(_make_parent_coi)
+
+    parents_coi_memo: dict[tuple[int, int], float] = {}
+    for pci in parent_cois:
+        parents_coi_memo[(pci.parent_a_id, pci.parent_b_id)] = pci.coi
+
+    return (child_pedigrees, parents_coi_memo)

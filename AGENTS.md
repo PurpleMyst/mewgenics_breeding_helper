@@ -1,6 +1,6 @@
 # Agent Guidelines for mewgenics_breeding_helper
 
-This project is a Python-based tool for parsing Mewgenics save files. It uses a monorepo structure with multiple packages under the `packages/` directory.
+This project is a Python-based tool for parsing Mewgenics save files and optimizing breeding strategies. It uses a monorepo structure with multiple packages under `packages/`.
 
 ## Project Structure
 
@@ -8,11 +8,10 @@ This project is a Python-based tool for parsing Mewgenics save files. It uses a 
 mewgenics_breeding_helper/
 ├── pyproject.toml              # Root workspace config (uv)
 ├── packages/
-│   ├── mewgenics_parser/        # Save file parsing, trait definitions
+│   ├── mewgenics_parser/       # Save file parsing, trait definitions
 │   │   └── mewgenics_parser/
-│   │       ├── __init__.py
-│   │       ├── binary.py        # BinaryReader helper
-│   │       ├── cat.py           # Cat data model (dataclass)
+│   │       ├── binary.py       # BinaryReader helper
+│   │       ├── cat.py          # Cat data model (dataclass)
 │   │       ├── constants.py     # Constants and regex patterns
 │   │       ├── gpak.py         # GPAK file handling
 │   │       ├── save.py         # Save file parsing
@@ -21,6 +20,7 @@ mewgenics_breeding_helper/
 │   │       ├── visual.py       # Visual mutation handling
 │   │       └── data/           # Static data (abilities, visual names)
 │   ├── mewgenics_scorer/       # Trait scoring logic
+│   ├── mewgenics_breeding/     # Breeding logic and algorithms
 │   ├── mewgenics_room_optimizer/   # Room optimization algorithm
 │   └── mewgenics_room_optimizer_ui/ # DearPyGui UI application
 └── MewgenicsBreedingManager/   # Submodule - reference only, do not modify
@@ -28,190 +28,177 @@ mewgenics_breeding_helper/
 
 ## Commands
 
-### Development Environment
+### Development
 ```bash
-# Install dependencies (requires uv)
-uv sync
-
-# Install dev dependencies
-uv sync --group dev
-
-# Add a new dependency to a package
-uv add <package> -p packages/mewgenics_parser
-
-# Run the UI application
-uv run room-optimizer
+uv sync                     # Install dependencies
+uv sync --group dev         # Install dev dependencies
+uv add <package> -p packages/mewgenics_parser  # Add dependency
+uv run room-optimizer       # Run the UI application
 ```
 
 ### Testing
 ```bash
-# Run all tests (pytest)
-uv run pytest
-
-# Run a single test file
-uv run pytest tests/test_cat.py
-
-# Run a single test function
-uv run pytest tests/test_cat.py::test_parse_cat
-
-# Run tests with coverage
-uv run pytest --cov=mewgenics_parser --cov=mewgenics_scorer
+uv run pytest                           # Run all tests
+uv run pytest tests/test_cat.py         # Run single test file
+uv run pytest tests/test_cat.py::test_parse_cat  # Run single test function
+uv run pytest --cov=mewgenics_parser   # Run with coverage
 ```
 
 ### Linting and Formatting
 ```bash
-# Format code (ruff)
-uv run ruff format .
-
-# Lint code
-uv run ruff check .
-
-# Fix auto-fixable issues
-uv run ruff check --fix .
+uv run ruff format .      # Format code
+uv run ruff check .       # Lint code
+uv run ruff check --fix . # Fix auto-fixable issues
 ```
 
 ### Type Checking
 ```bash
-# Run type checker (ty)
-uv run ty check .
-
-# Type check a specific file
+uv run ty check .                         # Check all
 uv run ty check packages/mewgenics_parser/mewgenics_parser/cat.py
 ```
 
 ## Code Style Guidelines
 
 ### Type Hints
-- Use Python 3\.13+ type syntax (e.g., `list[Cat]`, `dict[str, int]`)
-- Use union types: `str | None` is preferred over Optional[str]
-- `from __future__ import annotations` is only for files ported from MewgenicsBreedingManager
-- New code should use standard type hints
+- Use Python 3.13+ type syntax: `list[Cat]`, `dict[str, int]`
+- Prefer `str | None` over `Optional[str]`
+- `from __future__ import annotations` only for ported code
 
 ### Naming Conventions
-- **Classes**: PascalCase (e.g., `Cat`, `BinaryReader`, `SaveData`)
-- **Functions/variables**: snake_case (e.g., `parse_save`, `_valid_str`)
-- **Private methods/attributes**: prefix with underscore (e.g., `_parent_uid_a`)
-- **Constants**: UPPER_SNAKE_CASE (e.g., `STAT_NAMES`, `ROOM_DISPLAY`)
-- **Private module-level constants**: UPPER_SNAKE with underscore prefix (e.g., `_IDENT_RE`, `_JUNK_STRINGS`)
+| Element | Convention | Example |
+|---------|------------|---------|
+| Classes | PascalCase | `Cat`, `BinaryReader` |
+| Functions/variables | snake_case | `parse_save`, `_valid_str` |
+| Private methods | `_prefix` | `_parent_uid_a` |
+| Constants | UPPER_SNAKE | `STAT_NAMES`, `ROOM_DISPLAY` |
+| Private module constants | _UPPER_SNAKE | `_IDENT_RE`, `_JUNK_STRINGS` |
 
 ### Imports
-- Use relative imports within packages: `from .binary import BinaryReader`
-- Use absolute imports between packages: `from mewgenics_parser.cat import Cat`
-- Group imports: stdlib first, then third-party, then local
-- Use trailing commas in multi-line imports
+- Relative within packages: `from .binary import BinaryReader`
+- Absolute between packages: `from mewgenics_parser.cat import Cat`
+- Group order: stdlib → third-party → local; use trailing commas
 
 ### Dataclasses
-- Use `@dataclass` for data models with `slots=True` for memory efficiency
-- Use `init=False` when custom `__init__` is needed (see `cat.py`)
+- Use `@dataclass(slots=True)` for data models
+- Use `init=False` when custom `__init__` is needed
 - Use `field(default=None, repr=False)` for computed/private fields
 - Use `field(default_factory=list)` for mutable defaults
-- Store raw/internal data with underscore prefix and `repr=False`
-
-### Docstrings
-- Use """triple quotes""" for module-level and public function docstrings
-- Follow Google-style docstrings for functions with Args/Returns sections
-- Keep docstrings concise but descriptive
-- Omit docstrings for trivial getters/setters
+- Prefix raw/internal data with underscore, `repr=False`
 
 ### Error Handling
-- Use broad `except Exception` sparingly, only when specific handling isn't possible
+- Avoid broad `except Exception` unless specific handling isn't possible
 - Prefer specific exception types when known
-- Use `try/except` blocks with clear fallbacks
-- Avoid swallowing exceptions silently unless explicitly intended
+- Avoid silent exception swallowing unless explicitly intended
 
 ### Formatting
-- Use 4 spaces for indentation (no tabs)
-- Maximum line length: 100 characters (soft guideline)
-- Use blank lines to separate logical sections within functions
-- Use blank lines between top-level definitions (2 lines) and methods (1 line)
-- Use underscores in large numeric literals: `4_294_967_296`
+- 4 spaces indentation (no tabs)
+- Max line length: 100 characters (soft guideline)
+- Blank lines: 2 between top-level definitions, 1 between methods
+- Use underscores in large numbers: `4_294_967_296`
 
-### Performance Considerations
-- Use `frozenset` for constant lookup sets (e.g., `_JUNK_STRINGS`)
-- Use `__slots__` on classes (via dataclass `slots=True`)
+### Performance
+- Use `frozenset` for constant lookup sets
 - Prefer dataclasses over dictionaries for structured data
 
 ## Key Patterns
 
 ### Binary Parsing
-Use the `BinaryReader` class for reading binary data:
 ```python
 r = BinaryReader(data)
-value = r.u32()    # unsigned 32-bit
-value = r.i32()    # signed 32-bit
-value = r.u64()    # unsigned 64-bit
-value = r.f64()    # 64-bit float
-string = r.str()   # length-prefixed UTF-8 string
+value = r.u32()        # unsigned 32-bit
+value = r.i32()        # signed 32-bit
+value = r.u64()        # unsigned 64-bit
+value = r.f64()        # 64-bit float
+string = r.str()        # length-prefixed UTF-8 string
 string = r.utf16str()  # length-prefixed UTF-16LE string
 ```
 
 ### Trait Operations
-Use the traits module for working with cat traits:
 ```python
 from mewgenics_parser.traits import extract_traits_from_cat, create_trait, TraitCategory
 
-traits = extract_traits_from_cat(cat)  # Extract all traits as domain objects
-trait = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")  # Create specific trait
-name = trait.get_display_name(game_data)  # Get display name
-desc = trait.get_description(game_data)  # Get description
+traits = extract_traits_from_cat(cat)
+trait = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+name = trait.get_display_name(game_data)
+desc = trait.get_description(game_data)
 ```
 
-### Property Methods
-Use `@property` for computed attributes:
+### Properties
 ```python
 @property
 def room_display(self) -> str:
     return ROOM_DISPLAY.get(self.room, self.room)
 ```
 
-## Mewgenics Reference Guide  Information
-
-The core meta-progression of Mewgenics revolves around cultivating optimal genetics. Breeding relies on combining cats with high base stats and favorable traits while manipulating environmental variables (furniture) to control the RNG of inheritance.
-
-#### 1. The House & Room Stats
-The physical environment dictates breeding behavior and genetic transfer. Furniture modifies these parameters on a per-room basis (except Appeal, which is global).
-* **Comfort:** The "Behavior" dial. High comfort increases breeding frequency and prevents cats from fighting. Negatively impacted by overcrowding (more than 4 cats) and uncleaned poop.
-* **Stimulation:** The "Genetics" dial. This is the most critical stat for optimization. It directly scales the probability of kittens inheriting the *higher* of their parents' stats, spells, and passives.
-* **Health:** The "Recovery" dial. Prevents diseases and cures injuries overnight. Low health risks hygiene-related disorders.
-* **Mutation:** The "Chaos" dial. Increases the odds of a cat spontaneously mutating overnight. 
-* **Appeal:** The "Stray Quality" dial (Global). Determines the base stat quality and trait loadout of stray cats that arrive at your house.
-
-#### 2. Cat Stats & Breeding Prerequisites
-* **Base Stats Only:** Kittens only inherit **Base Stats** (STR, DEX, CON, INT, SPD, CHA, LCK). Temporary modifications from items, injuries, or diseases are ignored.
-* **Libido & Aggression:** Hidden stats (until unlocked via Tink) that dictate how often a cat initiates breeding or fighting.
-* **Gender:** Cats are Male, Female, or Fluid (`?` / Spidercats). Gay/Same-sex pairs will happily partner up but cannot produce offspring unless one of the cats is Fluid (`?`).
-
-#### 3. The Inheritance Math (Internal Engine Rules)
-When the day ends and two cats breed, the game's engine (`glaiel::CatData::breed`) executes the following order of operations:
-
-**A. Stat Inheritance**
-For each of the 7 stats, the game picks either the mother's or father's base stat. The probability of inheriting the *higher* of the two stats scales with room Stimulation:
-$$P(\text{Higher Stat}) = \frac{1.0 + 0.01 \times \text{Stimulation}}{2.0 + 0.01 \times \text{Stimulation}}$$
-*Note:* Stimulation has diminishing returns for stats. At 0 Stimulation, it is a 50/50 coin flip. At 50 Stimulation, it is a 60% chance. At 100 Stimulation, it is roughly 66.6%.
-
-**B. Spell Inheritance**
-Parents pass down Active Abilities. If class spells are present, the game has a $0.01 \times \text{Stimulation}$ probability of forcing the selection from the parent with class spells.
-* **First Spell Chance:** $0.2 + 0.025 \times \text{Stimulation}$ (Guaranteed at 32+ Stimulation).
-* **Second Spell Chance:** $0.02 + 0.005 \times \text{Stimulation}$.
-
-**C. Passive Inheritance**
-* **Passive Chance:** $0.05 + 0.01 \times \text{Stimulation}$ (Guaranteed at 95+ Stimulation).
-* **SkillShare+ Override:** If a parent has the upgraded *SkillShare+* ability, the game guarantees their *other* passive is passed down, bypassing standard inheritance logic.
-
-**D. Disorders & Birth Defects (Inbreeding)**
-* **Inherited Disorders:** There is a flat **15%** chance to inherit a random disorder from the mother, and a **15%** chance from the father. This is completely unaffected by room furniture.
-* **Birth Defects:** If the kitten inherits fewer than 2 disorders, it rolls for a spontaneous birth defect based on the parents' Inbreeding Coefficient:
-    $$P(\text{Birth Defect}) = 0.02 + 0.4 \times \max(\text{Inbreeding} - 0.2, 0.0)$$
-    *If the inbreeding coefficient is >0.05, the kitten may also roll for physical deformed parts later in the generation step.*
-
-**E. Body Parts & Mutations**
-Mutations are treated as specific part variants (e.g., a mutated arm).
-* There is an **80%** chance that all body parts are inherited perfectly from the parents. If this fails, a random part-set (e.g., both legs) is randomly generated.
-* If only one parent has a mutated part, the game attempts to favor the mutation using the exact same formula as Stat Inheritance ($P(\text{Higher Stat})$). Otherwise, it is a 50/50 split between parents.
-
 ## Important Notes
 
-1. **Do not modify MewgenicsBreedingManager submodule** - it's a reference for understanding the game data format
-2. **Python 3\.13+ required for all packages and root** - check `.python-version` for details
-3. **Use uv for all package management** - don't use pip directly
+1. **Do not modify MewgenicsBreedingManager submodule** - reference only
+2. **Python 3.13+ required** - check `.python-version`
+3. **Use uv for all package management** - never pip directly
 4. **Use uv run for all tools** - ruff, ty, pytest, etc.
+
+## Mewgenics Game Reference
+
+Reference: https://mewgenics.wiki.gg/
+
+### Cat Stats
+- **Base Stats (3-7 range):** STR, DEX, CON, INT, SPD, CHA, LCK
+- **Derived:** HP = CON × 4, Mana max = CHA × 3
+- **Luck:** Each point from baseline (5) adds 10% chance for extra die roll (best result); +2% crit chance per point
+- **Base stats only inherit** - temporary modifications from items/injuries are ignored in breeding
+
+### Room Stats (House-wide or per-room)
+| Stat | Effect |
+|------|--------|
+| **Appeal** | Stat quality/diversity of stray cats (global) |
+| **Comfort** | Breeding frequency; -1 per cat above 4 in room |
+| **Stimulation** | **Critical for breeding optimization** - higher = better inheritance |
+| **Health** | Aging speed, injury/disorder recovery chance |
+| **Mutation** | Chance for overnight mutations |
+
+### Stat Inheritance Formula
+```
+P(higher stat) = (1.0 + 0.01 × Stimulation) / (2.0 + 0.01 × Stimulation)
+```
+At 0 Stimulation: 50% | At 50: ~60% | At 100: ~66.6%
+
+### Ability Inheritance
+- **First Spell:** 0.20 + 0.025 × Stimulation (guaranteed at 32+ Stimulation)
+- **Second Spell:** 0.02 + 0.005 × Stimulation
+- **Passive:** 0.05 + 0.01 × Stimulation (guaranteed at 95+ Stimulation)
+- **Skill Share+** overrides: guarantees parent's "other passive" passes
+
+### Disorder Inheritance
+- **15% chance** from each parent (independent rolls)
+- **Unaffected by furniture/Stimulation**
+- Birth-defect disorders: 2% base + 0.4 × clamp(inbreeding - 0.2, 0, 1)
+
+### Body Part/Mutation Inheritance
+- **80%** chance all parts inherit normally
+- **20%** chance one random part-set is randomly generated
+- When only one parent has mutation: uses same P(higher) formula
+- Max 10 mutations on bred kittens (symmetry enforcement)
+
+### Inbreeding System
+- **Strays always 0% inbred**
+- Closeness 4 or closer raises coefficient; 5+ distance reduces it
+- Birth defects only appear at >5% inbreeding coefficient
+- Formula: f = sum of 0.5^(n+1) × (1 + f_ancestor)
+
+### Gender/Reproduction
+- **Male, Female, Neutral** (? / Spidercats)
+- Neutral can breed with both; 10% of cats born Neutral
+- Gayness/Libido/Aggression are hidden stats affecting breeding behavior
+
+### Fertility
+- Hidden stat (1.0-1.25) affecting twin probability
+- Average twin chance: ~17.36%
+- Twins guaranteed if combined_fertility > 1.0, with extra chance up to 56.25%
+
+### Key Classes
+Fighter, Hunter, Mage, Tank, Cleric, Thief, Necromancer, Tinkerer, Butcher, Druid, Psychic, Monk, Jester
+
+### Disorders
+- Similar to passive abilities but don't count toward passive cap
+- Max 2 disorders per cat; some are contagious
+- Can be removed by high Health room or events

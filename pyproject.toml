@@ -1,6 +1,6 @@
 [project]
 name = "mewgenics_breeding_helper"
-version = "1.0.0"
+version = "2.0.0"
 requires-python = ">=3.13"
 dependencies = [
     "dearpygui>=2.2",
@@ -11,7 +11,18 @@ dependencies = [
     "inline-snapshot>=0.32.5",
 ]
 
+[dependency-groups]
+dev = [
+    "beautifulsoup4>=4.14.3",
+    "dirty-equals>=0.11",
+    "pytest>=9.0.2",
+    "requests>=2.32.5",
+    "ruff>=0.15.6",
+    "ty>=0.0.23",
+]
+
 [tool.uv.sources]
+mewgenics_breeding = { workspace = true }
 mewgenics_parser = { workspace = true }
 mewgenics_scorer = { workspace = true }
 mewgenics_room_optimizer = { workspace = true }
@@ -22,8 +33,9 @@ members = ["packages/*"]
 
 [tool.pytest.ini_options]
 pythonpath = [
-    "packages/mewgenics_scorer",
     "packages/mewgenics_parser",
+    "packages/mewgenics_breeding",
+    "packages/mewgenics_scorer",
     "packages/mewgenics_room_optimizer",
     "packages/mewgenics_room_optimizer_ui",
 ]
@@ -31,20 +43,11 @@ addopts = "--import-mode=importlib"
 
 [tool.ty.environment]
 extra-paths = [
-    "packages/mewgenics_scorer",
     "packages/mewgenics_parser",
+    "packages/mewgenics_breeding",
+    "packages/mewgenics_scorer",
     "packages/mewgenics_room_optimizer",
     "packages/mewgenics_room_optimizer_ui",
-]
-
-[dependency-groups]
-dev = [
-    "beautifulsoup4>=4.14.3",
-    "dirty-equals>=0.11",
-    "pytest>=9.0.2",
-    "requests>=2.32.5",
-    "ruff>=0.15.6",
-    "ty>=0.0.23",
 ]
 
 [tool.inline-snapshot]

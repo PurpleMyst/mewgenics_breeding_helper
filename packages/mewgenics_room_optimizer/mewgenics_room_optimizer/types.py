@@ -13,6 +13,8 @@ class RoomType(Enum):
     BREEDING = "breeding"
     FIGHTING = "fighting"
     GENERAL = "general"
+    HEALTH = "health"
+    MUTATION = "mutation"
     NONE = "none"
 
 
@@ -23,7 +25,7 @@ class RoomConfig:
     key: str
     room_type: RoomType
     max_cats: int | None
-    base_stim: float
+    stimulation: float
 
     @property
     def display_name(self) -> str:
@@ -54,25 +56,10 @@ class RoomAssignment:
 
 
 @dataclass
-class OptimizationStats:
-    """Summary statistics."""
-
-    total_cats: int
-    assigned_cats: int
-    total_pairs: int
-    breeding_rooms_used: int
-    general_rooms_used: int
-    avg_pair_quality: float
-    avg_risk_percent: float
-
-
-@dataclass
 class OptimizationResult:
     """Final optimization output."""
 
     rooms: list[RoomAssignment]
-    excluded_cats: list[Cat]
-    stats: OptimizationStats
 
 
 DEFAULT_ROOM_CONFIGS = [

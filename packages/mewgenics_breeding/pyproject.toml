@@ -1,16 +1,15 @@
 [project]
-name = "mewgenics_scorer"
+name = "mewgenics-breeding"
 version = "2.0.0"
-description = "Pair scoring factors for Mewgenics breeding optimization"
+description = "Breeding simulation for Mewgenics."
+readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "mewgenics-breeding",
     "mewgenics_parser",
 ]
 
 [tool.uv.sources]
 mewgenics_parser = { workspace = true }
-mewgenics-breeding = { workspace = true }
 
 [tool.inline-snapshot]
 format-command="ruff format --stdin-filename {filename}"

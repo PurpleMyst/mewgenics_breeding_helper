@@ -7,8 +7,8 @@ from mewgenics_parser.traits import extract_traits_from_cat
 from ..colors import COLOR_DANGER, COLOR_MUTED, COLOR_SUCCESS, COLOR_WARNING
 from ..helpers import (
     LOCATION_COL_WIDTH,
+    get_all_favorable_keys,
     get_assigned_room_key,
-    get_favorable_trait_names,
     plain_substring_match,
     trait_substring_match,
 )
@@ -62,13 +62,17 @@ def render_cat_table_rows(
         else:
             loc_color = COLOR_DANGER
 
-        stat_values = cat.stat_total
+        stat_values = cat.total_stats
         total = sum(stat_values)
 
-        favorable_names = get_favorable_trait_names(
-            cat, state.trait_requirements, state.game_data
-        )
-        trait_display = ", ".join(favorable_names)
+        all_traits = extract_traits_from_cat(cat)
+        fav_keys = get_all_favorable_keys(state)
+        if fav_keys:
+            fav_traits = [t for t in all_traits if t.key in fav_keys]
+            trait_names = [t.get_display_name(state.game_data) for t in fav_traits]
+        else:
+            trait_names = [t.get_display_name(state.game_data) for t in all_traits[:3]]
+        trait_display = ", ".join(trait_names)
 
         callback = row_callback
         user_data = (cat, state)
@@ -93,7 +97,7 @@ def render_cat_table_rows(
                 dpg.add_text(str(sv))
             dpg.add_text(str(total))
             dpg.add_text(
-                trait_display, color=COLOR_SUCCESS if favorable_names else COLOR_MUTED
+                trait_display, color=COLOR_MUTED if not trait_display else COLOR_SUCCESS
             )
 
 

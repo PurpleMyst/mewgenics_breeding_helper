@@ -11,6 +11,7 @@ from ...colors import (
     COLOR_SUCCESS,
 )
 from ...display_helpers import get_cat_abilities, get_cat_body_parts, get_cat_passives
+from ...helpers import get_all_favorable_keys
 from ...state import AppState
 
 
@@ -80,7 +81,7 @@ def show_cat_detail_window(cat: Cat, state: AppState) -> None:
                 dpg.add_text(f"Hater: {haters_str}", color=COLOR_DANGER)
 
             with dpg.table_row():
-                for i, stat in enumerate(cat.stat_base):
+                for i, stat in enumerate(cat.base_stats):
                     dpg.add_text(f"{STAT_NAMES[i]}: {stat}")
 
         sexuality = cat.sexuality
@@ -134,6 +135,8 @@ def on_cat_selected(
 
 def _render_trait_tree_node(label: str, traits: list[Trait], state: AppState) -> None:
     """Reusable component for rendering a collapsable list of traits in the inspector."""
+    fav_keys = get_all_favorable_keys(state)
+
     with dpg.tree_node(label=f"{label} ({len(traits)})", default_open=bool(traits)):
         if not traits:
             dpg.add_text("  None", color=COLOR_MUTED)
@@ -145,7 +148,7 @@ def _render_trait_tree_node(label: str, traits: list[Trait], state: AppState) ->
             if not name and not desc:
                 print(trait)
 
-            is_fav = any(trait.key == req.trait.key for req in state.trait_requirements)
+            is_fav = trait.key in fav_keys
 
             if trait.is_negative():
                 color = COLOR_DANGER
@@ -161,6 +164,8 @@ def _render_ability_list(
     label: str, abilities: list[AbilityDisplay], state: AppState
 ) -> None:
     """Render abilities with upgrade indicator (+ suffix) and favorable trait highlighting."""
+    fav_keys = get_all_favorable_keys(state)
+
     with dpg.tree_node(
         label=f"{label} ({len(abilities)})", default_open=bool(abilities)
     ):
@@ -168,11 +173,9 @@ def _render_ability_list(
             dpg.add_text("  None", color=COLOR_MUTED)
             return
 
-        req_keys = {req.trait.key for req in state.trait_requirements}
-
         for ability in abilities:
             color = (
-                COLOR_SUCCESS if ability.base_key in req_keys else COLOR_DEFAULT_TEXT
+                COLOR_SUCCESS if ability.base_key in fav_keys else COLOR_DEFAULT_TEXT
             )
             dpg.add_text(f"  {ability.name}", color=color)
             if ability.description:
@@ -181,6 +184,8 @@ def _render_ability_list(
 
 def _render_body_part_list(label: str, body_parts: list, state: AppState) -> None:
     """Render body parts grouped by symmetric slots with favorable trait highlighting."""
+    fav_keys = get_all_favorable_keys(state)
+
     with dpg.tree_node(
         label=f"{label} ({len(body_parts)})", default_open=bool(body_parts)
     ):
@@ -188,10 +193,8 @@ def _render_body_part_list(label: str, body_parts: list, state: AppState) -> Non
             dpg.add_text("  None", color=COLOR_MUTED)
             return
 
-        req_keys = {req.trait.key for req in state.trait_requirements}
-
         for bp in body_parts:
-            is_fav = bp.key in req_keys
+            is_fav = bp.key in fav_keys
 
             slots_str = ", ".join(bp.slot_labels)
             text = f"{bp.display_name} [{slots_str}]"

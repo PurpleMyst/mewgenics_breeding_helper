@@ -9,6 +9,7 @@ __all__ = [
     "COLOR_AGGRESSION",
     "COLOR_DISORDER_DESC",
     "COLOR_HIGH_RISK_ROW",
+    "ROOM_TYPE_COLORS",
 ]
 
 COLOR_SUCCESS = (100, 255, 100, 255)
@@ -21,3 +22,12 @@ COLOR_DEFAULT_TEXT = (255, 255, 255, 255)
 COLOR_AGGRESSION = (100, 200, 255, 255)
 COLOR_DISORDER_DESC = (255, 150, 150, 255)
 COLOR_HIGH_RISK_ROW = (50, 30, 30, 255)
+
+ROOM_TYPE_COLORS: dict[str, tuple[int, int, int, int]] = {
+    "breeding": (255, 150, 200, 255),
+    "fighting": (255, 100, 100, 255),
+    "general": (150, 200, 255, 255),
+    "health": (100, 255, 150, 255),
+    "mutation": (200, 100, 255, 255),
+    "none": (150, 150, 150, 255),
+}

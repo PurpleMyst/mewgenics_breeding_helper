@@ -4,6 +4,7 @@ requires-python = ">=3.13"
 
 [manifest]
 members = [
+    "mewgenics-breeding",
     "mewgenics-breeding-helper",
     "mewgenics-parser",
     "mewgenics-room-optimizer",
@@ -257,8 +258,19 @@ wheels = [
 ]
 
 [[package]]
+name = "mewgenics-breeding"
+version = "2.0.0"
+source = { editable = "packages/mewgenics_breeding" }
+dependencies = [
+    { name = "mewgenics-parser" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "mewgenics-parser", editable = "packages/mewgenics_parser" }]
+
+[[package]]
 name = "mewgenics-breeding-helper"
-version = "1.0.0"
+version = "2.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "dearpygui" },
@@ -301,7 +313,7 @@ dev = [
 
 [[package]]
 name = "mewgenics-parser"
-version = "1.0.0"
+version = "2.0.0"
 source = { editable = "packages/mewgenics_parser" }
 dependencies = [
     { name = "lz4" },
@@ -337,9 +349,10 @@ dev = [
 
 [[package]]
 name = "mewgenics-room-optimizer"
-version = "1.0.0"
+version = "2.0.0"
 source = { editable = "packages/mewgenics_room_optimizer" }
 dependencies = [
+    { name = "mewgenics-breeding" },
     { name = "mewgenics-parser" },
     { name = "mewgenics-scorer" },
 ]
@@ -359,6 +372,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "inline-snapshot", marker = "extra == 'test'", specifier = ">=0.6" },
+    { name = "mewgenics-breeding", editable = "packages/mewgenics_breeding" },
     { name = "mewgenics-parser", editable = "packages/mewgenics_parser" },
     { name = "mewgenics-scorer", editable = "packages/mewgenics_scorer" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
@@ -371,7 +385,7 @@ dev = [{ name = "dirty-equals", specifier = ">=0.11" }]
 
 [[package]]
 name = "mewgenics-room-optimizer-ui"
-version = "1.0.0"
+version = "2.0.0"
 source = { editable = "packages/mewgenics_room_optimizer_ui" }
 dependencies = [
     { name = "dearpygui" },
@@ -402,14 +416,18 @@ dev = [{ name = "pyinstaller", specifier = ">=6.19.0" }]
 
 [[package]]
 name = "mewgenics-scorer"
-version = "1.0.0"
+version = "2.0.0"
 source = { editable = "packages/mewgenics_scorer" }
 dependencies = [
+    { name = "mewgenics-breeding" },
     { name = "mewgenics-parser" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mewgenics-parser", editable = "packages/mewgenics_parser" }]
+requires-dist = [
+    { name = "mewgenics-breeding", editable = "packages/mewgenics_breeding" },
+    { name = "mewgenics-parser", editable = "packages/mewgenics_parser" },
+]
 
 [[package]]
 name = "packaging"

@@ -1,34 +1,21 @@
-"""Tests for mewgenics_scorer factors module."""
+"""Tests for mewgenics_scorer factors module with ENS architecture."""
+
+import uuid
 
 import pytest
-from mewgenics_parser import Cat, TraitCategory, create_trait
+from mewgenics_breeding import simulate_breeding
+from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatBodySlot, CatGender, CatStatus, Stats
-from mewgenics_parser.traits import (
-    BodyPartTrait,
-    cat_has_defect_in_slot,
-    cat_has_mutation_in_slot,
-)
-from mewgenics_scorer.ancestry import KinshipManager
+from mewgenics_parser.traits import BodyPartTrait, TraitCategory, create_trait
+
 from mewgenics_scorer.factors import (
     PairFactors,
-    _aggression_factor,
-    _libido_factor,
-    _stat_variance,
+    _evaluate_build,
+    _get_marginal_prob,
     calculate_pair_factors,
+    calculate_pair_quality,
 )
-from mewgenics_scorer.inheritance import (
-    _better_chance,
-    _class_favoring_chance,
-    _passive_inheritance_chance,
-    _spell_inheritance_chance,
-    calculate_trait_probability,
-    expected_stats,
-    inherited_disorder_chance,
-    inherited_part_defect_chance,
-    novel_disorder_chance,
-    novel_part_defect_chance,
-)
-from mewgenics_scorer.types import TraitRequirement
+from mewgenics_scorer.types import TargetBuild, TraitWeight
 
 
 def _default_body_parts() -> dict[CatBodySlot, int]:
@@ -54,14 +41,10 @@ def _default_body_parts() -> dict[CatBodySlot, int]:
 def make_cat(
     db_key: int,
     gender: CatGender = CatGender.MALE,
-    stat_base: list[int] | None = None,
-    aggression: float | None = None,
-    libido: float | None = None,
+    base_stats: list[int] | None = None,
     passives: list | None = None,
     abilities: list | None = None,
     disorders: list | None = None,
-    parent_a: Cat | None = None,
-    parent_b: Cat | None = None,
     body_parts: dict[CatBodySlot, int] | None = None,
 ):
     return Cat(
@@ -70,16 +53,16 @@ def make_cat(
         name_tag="",
         status=CatStatus.IN_HOUSE,
         gender=gender,
-        stat_base=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
-        stat_total=Stats(*stat_base or [5, 5, 5, 5, 5, 5, 5]),
-        aggression=aggression,
-        libido=libido,
+        base_stats=Stats(*base_stats or [5, 5, 5, 5, 5, 5, 5]),
+        total_stats=Stats(*base_stats or [5, 5, 5, 5, 5, 5, 5]),
+        aggression=None,
+        libido=None,
         sexuality=None,
         passive_abilities=passives or [],
         active_abilities=abilities or [],
         disorders=disorders or [],
-        parent_a=parent_a,
-        parent_b=parent_b,
+        parent_a=None,
+        parent_b=None,
         room="Test Room",
         age=5,
         body_parts=body_parts or _default_body_parts(),
@@ -92,679 +75,323 @@ def make_cat(
     )
 
 
-class TestExpectedStats:
-    """Tests for expected_stats function."""
-
-    def test_identical_stats(self):
-        a = make_cat(1, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_cat(2, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        result = expected_stats(a, b, 50.0)
-        assert all(s == 5.0 for s in result)
-
-    def test_different_stats(self):
-        a = make_cat(1, stat_base=[10, 0, 0, 0, 0, 0, 0])
-        b = make_cat(2, stat_base=[0, 10, 0, 0, 0, 0, 0])
-        result = expected_stats(a, b, 50.0)
-        # First stat: max(10,0)*chance + min(10,0)*(1-chance) = 10*chance
-        # Second stat: max(0,10)*chance + min(0,10)*(1-chance) = 10*chance
-        chance = _better_chance(50.0)
-        assert abs(result[0] - 10 * chance) < 0.0001
-        assert abs(result[1] - 10 * chance) < 0.0001
-
-
-class TestStatVariance:
-    """Tests for stat_variance function."""
-
-    def test_identical_stats(self):
-        a = make_cat(1, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_cat(2, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        assert _stat_variance(a, b) == 0.0
-
-    def test_all_different(self):
-        a = make_cat(1, stat_base=[10, 10, 10, 10, 10, 10, 10])
-        b = make_cat(2, stat_base=[0, 0, 0, 0, 0, 0, 0])
-        assert _stat_variance(a, b) == 70.0  # 7 * 10
-
-
-class TestAggressionFactor:
-    """Tests for aggression_factor function."""
-
-    def test_both_low_aggression(self):
-        a = make_cat(1, aggression=0.1)
-        b = make_cat(2, aggression=0.1)
-        result = _aggression_factor(a, b)
-        assert result > 0.8  # High factor for low aggression
-
-    def test_both_high_aggression(self):
-        a = make_cat(1, aggression=0.9)
-        b = make_cat(2, aggression=0.9)
-        result = _aggression_factor(a, b)
-        assert result < 0.2  # Low factor for high aggression
-
-    def test_unknown_aggression_defaults(self):
-        a = make_cat(1, aggression=None)
-        b = make_cat(2, aggression=None)
-        assert _aggression_factor(a, b) == 0.5
-
-
-class TestLibidoFactor:
-    """Tests for libido_factor function."""
-
-    def test_both_low_libido(self):
-        a = make_cat(1, libido=0.1)
-        b = make_cat(2, libido=0.1)
-        result = _libido_factor(a, b)
-        assert result < 0.2
-
-    def test_both_high_libido(self):
-        a = make_cat(1, libido=0.9)
-        b = make_cat(2, libido=0.9)
-        result = _libido_factor(a, b)
-        assert result > 0.8
-
-    def test_unknown_libido_defaults(self):
-        a = make_cat(1, libido=None)
-        b = make_cat(2, libido=None)
-        assert _libido_factor(a, b) == 0.5
+def make_save_data(cats: list[Cat] | None = None, coi: float = 0.0) -> SaveData:
+    """Create a mock SaveData with optional cats and default CoI for all pairs."""
+    if cats is None:
+        cats = []
+    coi_memo: dict[tuple[int, int], float] = {}
+    for cat_a in cats:
+        for cat_b in cats:
+            coi_memo[(cat_a.db_key, cat_b.db_key)] = coi
+    return SaveData(
+        cats=cats,
+        current_day=0,
+        house_count=len(cats),
+        adventure_count=0,
+        gone_count=0,
+        _parents_coi_memo=coi_memo,
+    )
 
 
 class TestCalculatePairFactors:
-    """Tests for calculate_pair_factors function."""
+    """Tests for calculate_pair_factors function with ENS architecture."""
 
     def test_basic_calculation(self):
-        a = make_cat(1, CatGender.MALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        b = make_cat(2, CatGender.FEMALE, stat_base=[5, 5, 5, 5, 5, 5, 5])
-        km = KinshipManager([a, b])
+        a = make_cat(1, CatGender.MALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        save_data = make_save_data([a, b])
 
-        result = calculate_pair_factors(km, a, b)
+        result = calculate_pair_factors(save_data, a, b)
 
         assert isinstance(result, PairFactors)
-        assert result.can_breed is True
-        assert result.hater_conflict is False
-        assert result.lover_conflict is False
-        assert result.mutual_lovers is False
+        assert len(result.expected_stats) == 7
+        assert result.expected_disorders >= 0
+        assert result.expected_defects >= 0
+        assert result.universal_ev == 0.0
+        assert result.build_yields == {}
 
-    def test_unrelated_cats_no_risk(self):
+    def test_unrelated_cats_no_inherited_disorders(self):
         a = make_cat(1, CatGender.MALE)
         b = make_cat(2, CatGender.FEMALE)
-        km = KinshipManager([a, b])
+        save_data = make_save_data([a, b])
 
-        result = calculate_pair_factors(km, a, b)
+        result = calculate_pair_factors(save_data, a, b)
 
-        # Unrelated cats have CoI = 0.0, so:
-        # - disorder chance = 2% (base)
-        # - part defect chance = 0% (CoI <= 0.05)
-        assert result.novel_disorder_chance == 0.02
-        assert result.novel_part_defect_chance == 0.0
+        assert result.expected_defects == 0.0
 
-    def test_total_expected_stats(self):
-        a = make_cat(1, CatGender.MALE, stat_base=[10, 0, 0, 0, 0, 0, 0])
-        b = make_cat(2, CatGender.FEMALE, stat_base=[0, 10, 0, 0, 0, 0, 0])
-        km = KinshipManager([a, b])
+    def test_cats_with_disorders_inherit_probability(self):
+        a = make_cat(1, CatGender.MALE, disorders=["Scatological"])
+        b = make_cat(2, CatGender.FEMALE, disorders=["SavantSyndrome"])
+        save_data = make_save_data([a, b])
 
-        result = calculate_pair_factors(km, a, b)
+        result = calculate_pair_factors(save_data, a, b)
 
-        # Should be 7 values that sum to something based on better_chance
+        assert result.expected_disorders > 0
+
+    def test_expected_stats_sum(self):
+        a = make_cat(1, CatGender.MALE, base_stats=[10, 0, 0, 0, 0, 0, 0])
+        b = make_cat(2, CatGender.FEMALE, base_stats=[0, 10, 0, 0, 0, 0, 0])
+        save_data = make_save_data([a, b])
+
+        result = calculate_pair_factors(save_data, a, b)
+
         assert len(result.expected_stats) == 7
-        assert result.total_expected_stats == sum(result.expected_stats)
+        assert sum(result.expected_stats) > 0
+
+    def test_universal_ev_with_universal_trait(self):
+        a = make_cat(1, CatGender.MALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        save_data = make_save_data([a, b])
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        universals = [TraitWeight(trait=sturdy, weight_ens=2.0)]
+
+        result = calculate_pair_factors(save_data, a, b, universals=universals)
+
+        assert result.universal_ev >= 0
+
+    def test_build_yields_with_target_build(self):
+        a = make_cat(1, CatGender.MALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        b = make_cat(2, CatGender.FEMALE, base_stats=[5, 5, 5, 5, 5, 5, 5])
+        save_data = make_save_data([a, b])
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        target_builds = [
+            TargetBuild(
+                id=uuid.uuid4(),
+                name="Tank Build",
+                requirements=(TraitWeight(trait=sturdy, weight_ens=3.0),),
+                anti_synergies=(),
+                synergy_bonus_ens=1.0,
+            )
+        ]
+
+        result = calculate_pair_factors(save_data, a, b, target_builds=target_builds)
+
+        assert "Tank Build" in result.build_yields
+        assert result.build_yields["Tank Build"] >= 0
 
 
-class TestSpellInheritanceChance:
-    """Tests for spell inheritance chance functions."""
+class TestCalculatePairQuality:
+    """Tests for calculate_pair_quality function."""
 
-    def test_spell_inheritance_0_stim(self):
-        first, second = _spell_inheritance_chance(0.0)
-        assert first == 0.2
-        assert second == 0.02
-
-    def test_spell_inheritance_32_stim(self):
-        first, second = _spell_inheritance_chance(32.0)
-        assert first == 1.0  # 0.2 + 0.025*32 = 1.0 (capped)
-        assert second == 0.02 + 0.005 * 32
-
-    def test_spell_inheritance_50_stim(self):
-        first, second = _spell_inheritance_chance(50.0)
-        assert first == 1.0  # Capped at 1.0
-        assert second == 0.27  # 0.02 + 0.005*50 = 0.27
-
-
-class TestPassiveInheritanceChance:
-    """Tests for passive inheritance chance."""
-
-    def test_passive_inheritance_0_stim(self):
-        chance = _passive_inheritance_chance(0.0)
-        assert chance == 0.05
-
-    def test_passive_inheritance_50_stim(self):
-        chance = _passive_inheritance_chance(50.0)
-        assert chance == 0.55  # 0.05 + 0.01*50
-
-    def test_passive_inheritance_95_stim(self):
-        chance = _passive_inheritance_chance(95.0)
-        assert chance == 1.0  # Capped at 1.0
-
-
-class TestClassFavoringChance:
-    """Tests for class-favoring chance."""
-
-    def test_favoring_0_stim(self):
-        chance = _class_favoring_chance(0.0)
-        assert chance == 0.0
-
-    def test_favoring_50_stim(self):
-        chance = _class_favoring_chance(50.0)
-        assert chance == 0.5
-
-    def test_favoring_100_stim(self):
-        chance = _class_favoring_chance(100.0)
-        assert chance == 1.0
-
-
-class TestTraitInheritanceProbability:
-    """Tests for calculate_trait_probability function."""
-
-    def test_ability_neither_parent_has(self):
-        mother = make_cat(1, abilities=[])
-        father = make_cat(2, abilities=[])
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+    def test_quality_formula_no_malady(self):
+        factors = PairFactors(
+            expected_stats=[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            expected_disorders=0.0,
+            expected_defects=0.0,
+            universal_ev=0.0,
+            build_yields={},
         )
 
-        result = calculate_trait_probability(trait, mother, father, 0.0)
+        quality = calculate_pair_quality(factors)
 
-        assert result.probability == 0.0
-        assert result.parent_source == "Neither"
+        assert quality == sum(factors.expected_stats)
 
-    def test_ability_single_parent_has(self):
-        mother = make_cat(1, abilities=["PathOfTheHunter"])
-        father = make_cat(2, abilities=[])
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+    def test_quality_with_disorders_penalized(self):
+        factors = PairFactors(
+            expected_stats=[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            expected_disorders=1.0,
+            expected_defects=0.0,
+            universal_ev=0.0,
+            build_yields={},
         )
 
-        result = calculate_trait_probability(trait, mother, father, 0.0)
+        quality = calculate_pair_quality(factors)
 
-        # At 0 stim: 50% parent pick * 20% inherit chance * 100% pool = 10%
-        # Parent selection is decoupled from trait possession
-        assert result.probability == pytest.approx(0.1)
+        assert quality == 35.0 - 5.0
 
-    def test_ability_pool_dilution(self):
-        # Mother has 4 spells, father has 1
-        mother = make_cat(1, abilities=["A", "B", "C", "PathOfTheHunter"])
-        father = make_cat(2, abilities=["Zap"])
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+    def test_quality_with_defects_penalized(self):
+        factors = PairFactors(
+            expected_stats=[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            expected_disorders=0.0,
+            expected_defects=2.0,
+            universal_ev=0.0,
+            build_yields={},
         )
 
-        result = calculate_trait_probability(trait, mother, father, 0.0)
+        quality = calculate_pair_quality(factors)
 
-        # 50% parent pick * 20% inherit chance * (1/4 pool size) = 2.5%
-        # Parent selection is decoupled from trait possession
-        assert result.probability == pytest.approx(0.025)
+        assert quality == 35.0 - 2.0
 
-    def test_passive_skillshare_plus_guaranteed(self):
-        mother = make_cat(1, passives=["SkillShare2", "Sturdy"])
-        father = make_cat(2, passives=[])
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+    def test_quality_with_universal_ev(self):
+        factors = PairFactors(
+            expected_stats=[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+            expected_disorders=0.0,
+            expected_defects=0.0,
+            universal_ev=10.0,
+            build_yields={},
         )
 
-        result = calculate_trait_probability(trait, mother, father, 0.0)
+        quality = calculate_pair_quality(factors)
 
-        # SkillShare+ guarantees other passives
-        assert result.probability == 1.0
-        assert "SkillShare+" in result.parent_source
+        assert quality == 45.0
 
-    def test_passive_disorder_not_in_passive_pool(self):
-        # Disorders should NOT be in passive_abilities (separated at parse time)
-        mother = make_cat(1, passives=["Sturdy"], disorders=["Blind"])
-        father = make_cat(2, passives=[])
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Blind")
+
+class TestGetMarginalProb:
+    """Tests for _get_marginal_prob helper."""
+
+    def test_passive_ability_probability(self):
+        a = make_cat(1, CatGender.MALE, passives=["Sturdy", "Frenzy"])
+        b = make_cat(2, CatGender.FEMALE, passives=[])
+        coi = 0.0
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=coi)
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        prob = _get_marginal_prob(pmf, sturdy)
+
+        assert 0 <= prob <= 1.0
+
+    def test_body_part_only_checks_first_slot(self):
+        body_parts = {
+            CatBodySlot.LEFT_EAR: 300,
+            CatBodySlot.RIGHT_EAR: 400,
+        }
+        a = make_cat(1, CatGender.MALE, body_parts=body_parts)
+        b = make_cat(2, CatGender.FEMALE)
+        coi = 0.0
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=coi)
+
+        ear_trait = create_trait(TraitCategory.BODY_PART, "Ears300")
+        prob = _get_marginal_prob(pmf, ear_trait)
+
+        assert 0 <= prob <= 1.0
+
+
+class TestEvaluateBuild:
+    """Tests for _evaluate_build helper."""
+
+    def test_build_with_single_requirement(self):
+        a = make_cat(1, CatGender.MALE)
+        b = make_cat(2, CatGender.FEMALE)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        build = TargetBuild(
+            id=uuid.uuid4(),
+            name="Test Build",
+            requirements=(TraitWeight(trait=sturdy, weight_ens=2.0),),
+            anti_synergies=(),
+            synergy_bonus_ens=0.0,
         )
 
-        result = calculate_trait_probability(trait, mother, father, 0.0)
+        yield_value = _evaluate_build(pmf, build)
 
-        # blind is a disorder, not a passive - should not inherit via passive mechanics
-        assert result.probability == 0.0
+        assert yield_value >= 0
 
-    # def test_mutation_inheritance_80_percent(self):
-    #     mother = make_cat(1, mutations=["Frostbit"])
-    #     father = make_cat(2, mutations=[])
-    #     trait = TraitRequirement("mutation", "Frostbit")
-    #
-    #     result = calculate_trait_probability(trait, mother, father, 0.0)
-    #
-    #     # 80% inherit parts * 50% favor for mother (when only she has it at 0 stim)
-    #     # = 0.8 * 0.5 = 0.4
-    #     assert result.probability == pytest.approx(0.4)
-    #
-    # def test_mutation_favoring_with_stimulation(self):
-    #     mother = make_cat(1, mutations=["Frostbit"])
-    #     father = make_cat(2, mutations=[])
-    #     trait = TraitRequirement("mutation", "Frostbit")
-    #
-    #     result = calculate_trait_probability(trait, mother, father, 50.0)
-    #
-    #     # At 50 stim, mutation favor = (1 + 0.5)/(2 + 0.5) = 1.5/2.5 = 0.6
-    #     # 80% inherit * 60% favor = 48%
-    #     expected = 0.8 * ((1.0 + 0.01 * 50) / (2.0 + 0.01 * 50))
-    #     assert result.probability == pytest.approx(expected)
-    #
-    def test_passive_skillshare_not_inherited(self):
-        """Base SkillShare cannot be inherited - should always return 0%."""
-        mother = make_cat(1, passives=["SkillShare", "Sturdy"])
-        father = make_cat(2, passives=[])
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.PASSIVE_ABILITY, "SkillShare")
+    def test_build_yield_clamped_at_zero(self):
+        a = make_cat(1, CatGender.MALE)
+        b = make_cat(2, CatGender.FEMALE)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        build = TargetBuild(
+            id=uuid.uuid4(),
+            name="Anti Build",
+            requirements=(TraitWeight(trait=sturdy, weight_ens=2.0),),
+            anti_synergies=(TraitWeight(trait=sturdy, weight_ens=10.0),),
+            synergy_bonus_ens=0.0,
         )
 
-        result = calculate_trait_probability(trait, mother, father, 0.0)
+        yield_value = _evaluate_build(pmf, build)
 
-        # Base skillshare is excluded from inheritable pool
-        assert result.probability == 0.0
+        assert yield_value >= 0
 
-    def test_passive_upgraded_ability_normalized(self):
-        """Querying for base passive matches parent's upgraded variant."""
-        mother = make_cat(1, passives=["Sturdy2"])
-        father = make_cat(2, passives=[])
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+    def test_multiple_passives_synergy_not_zero(self):
+        a = make_cat(1, CatGender.MALE, passives=["Sturdy", "Hunter"])
+        b = make_cat(2, CatGender.FEMALE)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        sturdy = create_trait(TraitCategory.PASSIVE_ABILITY, "Sturdy")
+        hunter = create_trait(TraitCategory.PASSIVE_ABILITY, "Hunter")
+        build = TargetBuild(
+            id=uuid.uuid4(),
+            name="Multi Passive Build",
+            requirements=(
+                TraitWeight(trait=sturdy, weight_ens=1.0),
+                TraitWeight(trait=hunter, weight_ens=1.0),
+            ),
+            anti_synergies=(),
+            synergy_bonus_ens=2.0,
         )
 
-        result = calculate_trait_probability(trait, mother, father, 0.0)
+        yield_value = _evaluate_build(pmf, build)
 
-        # Should match because normalized = "sturdy"
-        assert result.probability > 0.0
+        p_sturdy = _get_marginal_prob(pmf, sturdy)
+        p_hunter = _get_marginal_prob(pmf, hunter)
+        p_at_least_one = 1.0 - (1.0 - p_sturdy) * (1.0 - p_hunter)
+        expected_synergy = p_at_least_one * 2.0
+        expected_yield = (p_sturdy + p_hunter) + expected_synergy
 
-    def test_ability_upgraded_ability_normalized(self):
-        """Querying for base ability matches parent's upgraded variant."""
-        mother = make_cat(1, abilities=["PathOfTheHunter2"])
-        father = make_cat(2, abilities=[])
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+        assert yield_value == pytest.approx(expected_yield, rel=1e-9)
+
+    def test_body_parts_same_category(self):
+        body_parts_a = {CatBodySlot.LEFT_EAR: 300}
+        body_parts_b = {CatBodySlot.LEFT_EAR: 400}
+        a = make_cat(1, CatGender.MALE, body_parts=body_parts_a)
+        b = make_cat(2, CatGender.FEMALE, body_parts=body_parts_b)
+
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        ear_300 = create_trait(TraitCategory.BODY_PART, "Ears300")
+        ear_400 = create_trait(TraitCategory.BODY_PART, "Ears400")
+        build = TargetBuild(
+            id=uuid.uuid4(),
+            name="Same Category Build",
+            requirements=(
+                TraitWeight(trait=ear_300, weight_ens=1.0),
+                TraitWeight(trait=ear_400, weight_ens=1.0),
+            ),
+            anti_synergies=(),
+            synergy_bonus_ens=1.0,
         )
 
-        result = calculate_trait_probability(trait, mother, father, 0.0)
+        yield_value = _evaluate_build(pmf, build)
 
-        # Should match because normalized = "paththehunter"
-        assert result.probability > 0.0
+        p_300 = _get_marginal_prob(pmf, ear_300)
+        p_400 = _get_marginal_prob(pmf, ear_400)
+        p_at_least_one = 1.0 - (1.0 - p_300) * (1.0 - p_400)
+        expected_yield = (p_300 + p_400) + p_at_least_one * 1.0
 
+        assert yield_value == pytest.approx(expected_yield, rel=1e-9)
 
-class TestClassFavoringAlgebra:
-    """Tests verifying the corrected class-favoring math."""
+    def test_body_parts_different_categories(self):
+        body_parts_a = {CatBodySlot.LEFT_EAR: 300, CatBodySlot.TAIL: 300}
+        body_parts_b = {CatBodySlot.LEFT_EAR: 400, CatBodySlot.TAIL: 400}
+        a = make_cat(1, CatGender.MALE, body_parts=body_parts_a)
+        b = make_cat(2, CatGender.FEMALE, body_parts=body_parts_b)
 
-    def test_class_favoring_100_percent(self):
-        # At 100 stim, favor_chance = 1.0
-        # mother_select should be 0.5 + 0.5*1.0 = 1.0
-        mother = make_cat(1, abilities=["PathOfTheHunter"])  # class spell
-        father = make_cat(2, abilities=["Swat"])  # generic spell
-        trait = TraitRequirement(
-            trait=create_trait(TraitCategory.ACTIVE_ABILITY, "PathOfTheHunter")
+        pmf = simulate_breeding(a, b, stimulation=50.0, coi=0.0)
+
+        ear_trait = create_trait(TraitCategory.BODY_PART, "Ears300")
+        tail_trait = create_trait(TraitCategory.BODY_PART, "Tail300")
+        build = TargetBuild(
+            id=uuid.uuid4(),
+            name="Different Category Build",
+            requirements=(
+                TraitWeight(trait=ear_trait, weight_ens=1.0),
+                TraitWeight(trait=tail_trait, weight_ens=1.0),
+            ),
+            anti_synergies=(),
+            synergy_bonus_ens=1.0,
         )
 
-        result = calculate_trait_probability(trait, mother, father, 100.0)
+        yield_value = _evaluate_build(pmf, build)
 
-        # With 100% favor chance, should strongly favor mother (class spell holder)
-        # At 100 stim, inherit chance is capped at 1.0
-        assert result.parent_favor_chance == 1.0
-
-
-class TestNovelMaladyChance:
-    """Tests for novel disorder and part defect chance functions."""
-
-    def test_novel_disorder_at_coi_0(self):
-        assert novel_disorder_chance(0.0) == 0.02
-
-    def test_novel_disorder_at_coi_0_3(self):
-        assert novel_disorder_chance(0.3) == pytest.approx(0.06)
-
-    def test_novel_disorder_at_coi_1_0(self):
-        # Formula: 0.02 + 0.4 * min(max(coi - 0.2, 0.0), 1.0)
-        # At coi=1.0: 0.02 + 0.4 * min(0.8, 1.0) = 0.02 + 0.32 = 0.34
-        assert novel_disorder_chance(1.0) == pytest.approx(0.34)
-
-    def test_novel_part_defect_at_coi_0_03(self):
-        assert novel_part_defect_chance(0.03) == 0.0
-
-    def test_novel_part_defect_at_coi_0_5(self):
-        assert novel_part_defect_chance(0.5) == 0.75
-
-
-class TestInheritedDisorderChance:
-    """Tests for inherited_disorder_chance function."""
-
-    def test_no_parents_no_disorders(self):
-        a = make_cat(1, disorders=[])
-        b = make_cat(2, disorders=[])
-        assert inherited_disorder_chance(a, b) == 0.0
-
-    def test_one_parent_has_disorder(self):
-        a = make_cat(1, disorders=["Blind"])
-        b = make_cat(2, disorders=[])
-        assert inherited_disorder_chance(a, b) == pytest.approx(0.15)
-
-    def test_both_parents_have_disorders(self):
-        a = make_cat(1, disorders=["Blind", "Lame"])
-        b = make_cat(2, disorders=["Deaf"])
-        result = inherited_disorder_chance(a, b)
-        expected = 1.0 - (1.0 - 0.15 / 2) * (1.0 - 0.15 / 1)
-        assert result == pytest.approx(expected, rel=0.01)
-
-
-class TestInheritedPartDefectChance:
-    """Tests for inherited_part_defect_chance function."""
-
-    def test_no_defects(self):
-        a = make_cat(1)
-        b = make_cat(2)
-        assert inherited_part_defect_chance(a, b, 0.0) == 0.0
-
-    def test_one_parent_has_defect(self):
-        a = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 700,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
+        p_ear = _get_marginal_prob(pmf, ear_trait)
+        p_tail = _get_marginal_prob(pmf, tail_trait)
+        p_at_least_one_ear = 1.0 - (1.0 - p_ear)
+        p_at_least_one_tail = 1.0 - (1.0 - p_tail)
+        expected_yield = (p_ear + p_tail) + (
+            p_at_least_one_ear * p_at_least_one_tail * 1.0
         )
-        b = make_cat(2)
-        result = inherited_part_defect_chance(a, b, 0.0)
-        # 98% inherit * symmetrization(50% favor) = 0.98 * 0.25 = 0.245
-        assert result == pytest.approx(0.245)
 
-    def test_multi_category_defect_accumulation(self):
-        """Test OR probability accumulation when defects exist in multiple categories."""
-        a = make_cat(
-            1,
-            body_parts={
-                **_default_body_parts(),
-                CatBodySlot.LEFT_EAR: 700,  # Paired slot defect
-                CatBodySlot.TAIL: 700,  # Unpaired slot defect
-            },
-        )
-        b = make_cat(2)
-
-        result = inherited_part_defect_chance(a, b, 0.0)
-
-        # Ear defect prob: 0.98 * 0.25 = 0.245
-        # Tail defect prob: 0.98 * 0.5 = 0.49
-        # Combined OR prob: 1.0 - ((1 - 0.245) * (1 - 0.49))
-        # = 1.0 - (0.755 * 0.51) = 1.0 - 0.38505 = 0.61495
-        assert result == pytest.approx(0.61495)
-
-
-class TestMutationFavoring:
-    """Tests for mutation favoring fix in body part inheritance."""
-
-    def test_mom_has_mutation_slot_dad_not(self):
-        mother = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 300,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        father = make_cat(
-            2,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 0,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
-
-        result = calculate_trait_probability(trait, mother, father, 0.0)
-
-        # 98% inherit * symmetrization(50% favor) = 0.98 * 0.25 = 0.245
-        assert result.probability == pytest.approx(0.245)
-
-    def test_both_parents_different_mutations_same_slot(self):
-        mother = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 300,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        father = make_cat(
-            2,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 320,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
-
-        result = calculate_trait_probability(trait, mother, father, 0.0)
-
-        # 98% inherit * symmetrization(50% favor) = 0.98 * 0.25 = 0.245
-        assert result.probability == pytest.approx(0.245)
-
-    def test_mutation_favoring_at_high_stimulation(self):
-        mother = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 300,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        father = make_cat(
-            2,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 0,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
-
-        result = calculate_trait_probability(trait, mother, father, 50.0)
-
-        # 98% inherit * symmetrization(60% favor) = 0.98 * 0.3 = 0.294
-        assert result.probability == pytest.approx(0.294)
-
-    def test_unpaired_category_inheritance(self):
-        """Test inheritance for a non-paired slot (TAIL).
-        Should bypass symmetrization entirely."""
-        mother = make_cat(
-            1,
-            body_parts={**_default_body_parts(), CatBodySlot.TAIL: 300},
-        )
-        father = make_cat(2)
-        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Tail300"))
-
-        result = calculate_trait_probability(trait, mother, father, 0.0)
-
-        # 98% inherit * 50% favor (no symmetrization division) = 0.49
-        assert result.probability == pytest.approx(0.49)
-
-    def test_parent_has_full_symmetry(self):
-        """Test when a parent has the mutation in BOTH left and right slots."""
-        mother = make_cat(
-            1,
-            body_parts={
-                **_default_body_parts(),
-                CatBodySlot.LEFT_EAR: 300,
-                CatBodySlot.RIGHT_EAR: 300,
-            },
-        )
-        father = make_cat(2)
-        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
-
-        result = calculate_trait_probability(trait, mother, father, 0.0)
-
-        # prob_left = 0.5, prob_right = 0.5
-        # symmetrization = 0.5 * (0.5 + 0.5) = 0.5
-        # 98% inherit * 0.5 = 0.49
-        assert result.probability == pytest.approx(0.49)
-
-    def test_cross_symmetrical_parents(self):
-        """Mom has mutation on Left, Dad has SAME mutation on Right."""
-        mother = make_cat(
-            1,
-            body_parts={**_default_body_parts(), CatBodySlot.LEFT_EAR: 300},
-        )
-        father = make_cat(
-            2,
-            body_parts={**_default_body_parts(), CatBodySlot.RIGHT_EAR: 300},
-        )
-        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears300"))
-
-        result = calculate_trait_probability(trait, mother, father, 0.0)
-
-        # prob_left = 0.5 (from Mom), prob_right = 0.5 (from Dad)
-        # symmetrization = 0.5 * (0.5 + 0.5) = 0.5
-        # Final = 0.98 * 0.5 = 0.49
-        assert result.probability == pytest.approx(0.49)
-
-    def test_bug_different_mutations_show_wrong_probability(self):
-        """Parents have Ears300 and Ears400, but we ask about Ears700.
-
-        This demonstrates the bug where the probability is non-zero even though
-        neither parent has Ears700. The parent_source is also wrong.
-        """
-        mother = make_cat(
-            1,
-            body_parts={**_default_body_parts(), CatBodySlot.LEFT_EAR: 300},
-        )
-        father = make_cat(
-            2,
-            body_parts={**_default_body_parts(), CatBodySlot.RIGHT_EAR: 400},
-        )
-        trait = TraitRequirement(trait=create_trait(TraitCategory.BODY_PART, "Ears700"))
-
-        result = calculate_trait_probability(trait, mother, father, 0.0)
-
-        print(f"Probability: {result.probability}")
-        print(f"Parent source: {result.parent_source}")
-        print(f"Inherit chance: {result.inherit_chance}")
-        print(f"Parent favor chance: {result.parent_favor_chance}")
-
-        # Neither parent has Ears700, so probability should be 0
-        assert result.probability == 0.0, f"Expected 0.0 but got {result.probability}"
-        assert result.parent_source == "Neither"
-
-
-class TestDisorderTraitProbability:
-    """Tests for disorder trait inheritance probability."""
-
-    def test_disorder_neither_parent_has(self):
-        mother = make_cat(1, disorders=[])
-        father = make_cat(2, disorders=[])
-        trait = TraitRequirement(trait=create_trait(TraitCategory.DISORDER, "Blind"))
-
-        result = calculate_trait_probability(trait, mother, father)
-
-        assert result.probability == 0.0
-
-    def test_disorder_one_parent_has(self):
-        mother = make_cat(1, disorders=["Blind"])
-        father = make_cat(2, disorders=[])
-        trait = TraitRequirement(trait=create_trait(TraitCategory.DISORDER, "Blind"))
-
-        result = calculate_trait_probability(trait, mother, father)
-
-        assert result.probability == pytest.approx(0.15)
-
-    def test_disorder_pool_dilution(self):
-        mother = make_cat(1, disorders=["Blind", "Lame", "Deaf"])
-        father = make_cat(2, disorders=[])
-        trait = TraitRequirement(trait=create_trait(TraitCategory.DISORDER, "Blind"))
-
-        result = calculate_trait_probability(trait, mother, father)
-
-        assert result.probability == pytest.approx(0.05)
+        assert yield_value == pytest.approx(expected_yield, rel=1e-9)
 
 
 class TestBodyPartTraitHelpers:
@@ -779,96 +406,3 @@ class TestBodyPartTraitHelpers:
     def test_get_part_id(self):
         trait = BodyPartTrait(_key="Ears300")
         assert trait.part_id == 300
-
-    def test_cat_has_mutation_in_slot_true(self):
-        cat = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 300,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        assert cat_has_mutation_in_slot(cat, CatBodySlot.LEFT_EAR) is True
-
-    def test_cat_has_mutation_in_slot_true_for_defect(self):
-        # Birth defects (700+) ARE mutations per the game
-        cat = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 700,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        assert cat_has_mutation_in_slot(cat, CatBodySlot.LEFT_EAR) is True
-
-    def test_cat_has_defect_in_slot_true(self):
-        cat = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 700,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        assert cat_has_defect_in_slot(cat, CatBodySlot.LEFT_EAR) is True
-
-    def test_cat_has_defect_in_slot_false_for_mutation(self):
-        cat = make_cat(
-            1,
-            body_parts={
-                CatBodySlot.TEXTURE: 0,
-                CatBodySlot.BODY: 0,
-                CatBodySlot.HEAD: 0,
-                CatBodySlot.TAIL: 0,
-                CatBodySlot.LEFT_LEG: 0,
-                CatBodySlot.RIGHT_LEG: 0,
-                CatBodySlot.LEFT_ARM: 0,
-                CatBodySlot.RIGHT_ARM: 0,
-                CatBodySlot.LEFT_EYE: 0,
-                CatBodySlot.RIGHT_EYE: 0,
-                CatBodySlot.LEFT_EYEBROW: 0,
-                CatBodySlot.RIGHT_EYEBROW: 0,
-                CatBodySlot.LEFT_EAR: 300,
-                CatBodySlot.RIGHT_EAR: 0,
-                CatBodySlot.MOUTH: 0,
-            },
-        )
-        assert cat_has_defect_in_slot(cat, CatBodySlot.LEFT_EAR) is False
