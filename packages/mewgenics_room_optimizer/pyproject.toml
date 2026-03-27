@@ -1,6 +1,6 @@
 [project]
 name = "mewgenics_room_optimizer"
-version = "1.0.0"
+version = "2.0.0"
 description = "Room optimization logic for Mewgenics breeding"
 requires-python = ">=3.13"
 dependencies = [
