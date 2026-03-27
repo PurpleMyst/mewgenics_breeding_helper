@@ -5,9 +5,8 @@ from concurrent.futures import Future
 import math
 import random
 from collections import defaultdict
-from dataclasses import replace, dataclass, field
+from dataclasses import replace, dataclass
 
-from mewgenics_breeding import can_breed
 from mewgenics_breeding.pairs import (
     filter_hater_conflicts,
     filter_lover_exclusivity,
@@ -18,8 +17,6 @@ from mewgenics_parser.cat import CatGender, CatStatus
 from mewgenics_scorer import (
     TargetBuild,
     TraitWeight,
-    calculate_pair_factors,
-    calculate_pair_quality,
 )
 
 from .types import (
@@ -28,7 +25,7 @@ from .types import (
     RoomType,
     ScoredPair,
 )
-from .allocator import RoomAllocator, compute_ey_assignments
+from .allocator import RoomAllocator, CachingScorer, compute_ey_assignments
 
 MOVE_PENALTY = 0.5
 
@@ -42,10 +39,7 @@ class _AnnealingWorker:
     universals: list[TraitWeight] | None
     target_builds: list[TargetBuild] | None
     _allocator: RoomAllocator
-
-    _memo: dict[tuple[int, int, float], ScoredPair | None] = field(
-        default_factory=dict, init=False, repr=False
-    )
+    _scorer: CachingScorer
 
     def _evaluate_state(
         self,
@@ -215,36 +209,9 @@ class _AnnealingWorker:
             T *= COOLING_RATE
             iteration += 1
 
-        return self._allocator.allocate(best_state, self.save_data), best_score
-
-    def _score_pair_internal(
-        self,
-        cat_a: Cat,
-        cat_b: Cat,
-        stimulation: float,
-    ) -> ScoredPair | None:
-        """Score a pair, returning None if they can't be paired."""
-        if not can_breed(cat_a, cat_b):
-            return None
-
-        try:
-            factors = calculate_pair_factors(
-                self.save_data,
-                cat_a,
-                cat_b,
-                stimulation=stimulation,
-                universals=self.universals,
-                target_builds=self.target_builds,
-            )
-        except KeyError:
-            return None
-
-        return ScoredPair(
-            cat_a=cat_a,
-            cat_b=cat_b,
-            factors=factors,
-            quality=calculate_pair_quality(factors),
-        )
+        return self._allocator.allocate(
+            best_state, self.save_data, self._scorer
+        ), best_score
 
     def _score_pair(
         self,
@@ -253,16 +220,7 @@ class _AnnealingWorker:
         stimulation: float,
     ) -> ScoredPair | None:
         """Score a pair with memoization."""
-        key = (
-            min(cat_a.db_key, cat_b.db_key),
-            max(cat_a.db_key, cat_b.db_key),
-            stimulation,
-        )
-        if key in self._memo:
-            return self._memo[key]
-        scored = self._score_pair_internal(cat_a, cat_b, stimulation)
-        self._memo[key] = scored
-        return scored
+        return self._scorer.score_pair(cat_a, cat_b, stimulation)
 
 
 def _get_neighbor(
@@ -328,7 +286,7 @@ def _generate_random_valid_state(
     for cat in cats:
         available_rooms = []
         for room in valid_rooms:
-            if RoomAllocator._can_fit_single(room, len(room_cats[room.key])):
+            if RoomAllocator.can_fit_single(room, len(room_cats[room.key])):
                 available_rooms.append(room.key)
 
         if available_rooms:
@@ -398,7 +356,11 @@ def optimize_sa(
                         ey_assignments=ey_assignments,
                         universals=universals,
                         target_builds=target_builds,
-                        _worker=None,
+                    ),
+                    _scorer=CachingScorer(
+                        save_data=save_data,
+                        universals=universals,
+                        target_builds=target_builds,
                     ),
                 )
             )

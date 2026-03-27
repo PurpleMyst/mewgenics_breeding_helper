@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from mewgenics_breeding.pairs import generate_pairs
 from mewgenics_parser import Cat, SaveData
@@ -17,9 +16,7 @@ from .types import (
     RoomType,
     ScoredPair,
 )
-
-if TYPE_CHECKING:
-    from .optimizer import _AnnealingWorker
+from .scorer import CachingScorer
 
 
 @dataclass(slots=True)
@@ -30,12 +27,12 @@ class RoomAllocator:
     ey_assignments: dict[str, list[Cat]]
     universals: list[TraitWeight] | None
     target_builds: list[TargetBuild] | None
-    _worker: _AnnealingWorker | None = None
 
     def allocate(
         self,
         state_dict: dict[int, str],
         save_data: SaveData,
+        scorer: CachingScorer,
     ) -> OptimizationResult:
         """Build OptimizationResult from SA state, performing greedy allocation for unassigned cats."""
         rooms_content: dict[str, list[Cat]] = {r.key: [] for r in self.room_configs}
@@ -58,11 +55,7 @@ class RoomAllocator:
 
             pairs = generate_pairs(cats_in_room)
             for a, b in pairs:
-                scored = (
-                    self._worker._score_pair(a, b, room.stimulation)
-                    if self._worker
-                    else None
-                )
+                scored = scorer.score_pair(a, b, room.stimulation)
                 if scored:
                     room_pairs[room.key].append(scored)
 
@@ -108,7 +101,7 @@ class RoomAllocator:
                 )
 
             for room in rooms_to_try:
-                if self._can_fit_single(room, len(rooms_content[room.key])):
+                if RoomAllocator.can_fit_single(room, len(rooms_content[room.key])):
                     rooms_content[room.key].append(cat)
                     assigned_cats.add(cat.db_key)
                     break
@@ -151,7 +144,7 @@ class RoomAllocator:
         )
 
     @staticmethod
-    def _can_fit_single(
+    def can_fit_single(
         room: RoomConfig,
         current_count: int,
     ) -> bool:
