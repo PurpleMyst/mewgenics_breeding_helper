@@ -5,7 +5,7 @@ from mewgenics_parser.cat import Cat, CatBodySlot, CatGender, CatStatus, Stats
 from pytest import approx
 
 from mewgenics_breeding import (
-    OffspringProbabilityMass,
+    OffspringMarginalProbabilities,
     StatsProbabilityMass,
     simulate_breeding,
 )
@@ -109,7 +109,7 @@ class TestBreedingSimulation:
         assert simulate_breeding(
             PARENT_A, PARENT_B, stimulation=0.0, coi=COI
         ) == snapshot(
-            OffspringProbabilityMass(
+            OffspringMarginalProbabilities(
                 stats=StatsProbabilityMass(
                     strength=[(7, 1.0)],
                     dexterity=[(7, 1.0)],
@@ -193,7 +193,7 @@ class TestBreedingSimulation:
         assert simulate_breeding(
             PARENT_A, PARENT_B, stimulation=32.0, coi=COI
         ) == snapshot(
-            OffspringProbabilityMass(
+            OffspringMarginalProbabilities(
                 stats=StatsProbabilityMass(
                     strength=[(7, 1.0)],
                     dexterity=[(7, 1.0)],
@@ -277,7 +277,7 @@ class TestBreedingSimulation:
         assert simulate_breeding(
             PARENT_A, PARENT_B, stimulation=95.0, coi=COI
         ) == snapshot(
-            OffspringProbabilityMass(
+            OffspringMarginalProbabilities(
                 stats=StatsProbabilityMass(
                     strength=[(7, 1.0)],
                     dexterity=[(7, 1.0)],

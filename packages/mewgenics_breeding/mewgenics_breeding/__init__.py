@@ -89,29 +89,29 @@ class StatsProbabilityMass(NamedTuple):
 
 
 @dataclass(frozen=True)
-class OffspringProbabilityMass:
-    """The probability mass of a cat's offspring's traits, given the parents and breeding conditions."""
+class OffspringMarginalProbabilities:
+    """The marginal probabilities of a cat's offspring's traits, given the parents and breeding conditions. Note that these are not necessarily independent, and should not be treated as such."""
 
     stats: StatsProbabilityMass
     """The probability mass of the cat's offspring having each possible stat value. Each stat value is a tuple of (stat_value, probability)."""
 
     passive_abilities: dict[str, float]
-    """The probability mass of the cat's offspring inheriting each passive ability. Maps passive ability ID to probability."""
+    """The marginal probability of the cat's offspring inheriting each passive ability. Maps passive ability ID to probability. Note that SkillShare+ is treated as a special case, and is not included in this dict."""
 
     active_abilities: dict[str, float]
-    """The probability mass of the cat's offspring inheriting each active ability. Maps active ability ID to probability."""
+    """The marginal probability of the cat's offspring inheriting each active ability. Maps active ability ID to probability."""
 
     inherited_disorders: dict[str, float]
-    """The probability mass of the cat's offspring inheriting each disorder from its parents. Maps disorder ID to probability."""
+    """The marginal probability of the cat's offspring inheriting each disorder from its parents. Maps disorder ID to probability. Note that this only includes inherited disorders, and not novel disorders received as birth defects."""
 
     novel_disorder: float
-    """The probability of the cat's offspring receiving a novel disorder as a birth defect. This is only rolled if the cat inherits fewer than 2 disorders from its parents."""
+    """The probability of the cat's offspring receiving a novel disorder as a birth defect. This is rolled independently of disorder inheritance, and is applied after disorder inheritance."""
 
     body_parts: dict[CatBodySlot, dict[int, float]]
-    """The probability mass of the cat's offspring inheriting each body part. Maps body slot to a dict mapping part ID to probability."""
+    """The marginal probability of the cat's offspring inheriting each body part from its parents. Maps body slot to a dict mapping part ID to probability."""
 
     novel_birth_defect: float
-    """The probability of the cat's offspring receiving novel birth defect parts. This is rolled independently of disorder inheritance, and is applied after part inheritance."""
+    """The probability of the cat's offspring receiving novel birth defect parts. This is rolled independently of part inheritance, and is applied after part inheritance. Note that this only represents the probability of receiving birth defect parts, and not the probability of receiving specific birth defect parts, which would require simulating the birth defect part application process."""
 
     expected_inherited_disorders: float
     """The expected count of disorders inherited from parents (sum of disorder probabilities)."""
@@ -357,7 +357,7 @@ def _body_part_inheritance(
 
 def simulate_breeding(
     parent_a: Cat, parent_b: Cat, stimulation: float, coi: float
-) -> OffspringProbabilityMass:
+) -> OffspringMarginalProbabilities:
     assert stimulation >= 0
     stats = _stats_inheritance(parent_a, parent_b, stimulation)
     passive_abilities = _passive_ability_inheritance(parent_a, parent_b, stimulation)
@@ -389,7 +389,7 @@ def simulate_breeding(
         if pid < 0 or (700 <= pid <= 710)
     )
 
-    return OffspringProbabilityMass(
+    return OffspringMarginalProbabilities(
         stats,
         passive_abilities,
         active_abilities,
