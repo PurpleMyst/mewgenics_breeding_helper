@@ -88,7 +88,7 @@ class _AnnealingWorker:
             build_yields = defaultdict(lambda: 0.0)
             useful_cats = set()
             for a, b in pairs:
-                scored = self._score_pair(a, b, room.stimulation)
+                scored = self._scorer.score_pair(a, b, room.stimulation)
                 if scored is not None:
                     total_pair_quality += scored.quality
                     useful_pair_count += 1
@@ -98,6 +98,12 @@ class _AnnealingWorker:
                     useful_cats.add(b.db_key)
             if not useful_pair_count:
                 continue
+
+            # Calculate the total pairs possible in the room to correctly consider dilution of
+            # non-offspring-producing pairs when estimating the room's contribution to the overall
+            # score, which is important for steering towards comps where more cats are contributing
+            # to breeding.
+            total_pair_count = len(cats_in_room) * (len(cats_in_room) - 1) / 2
 
             useful_males, useful_females, useful_dittos = 0, 0, 0
             for c in cats_in_room:
@@ -121,11 +127,11 @@ class _AnnealingWorker:
                 useful_females + useful_dittos,
                 room.max_cats // 2 if room.max_cats else float("inf"),
             )
-            avg_pair_quality = total_pair_quality / useful_pair_count
+            avg_pair_quality = total_pair_quality / total_pair_count
             pair_quality_total = concurrent_breeds * avg_pair_quality
             for build_name, total_yield in build_yields.items():
                 house_build_yields[build_name] += concurrent_breeds * (
-                    total_yield / useful_pair_count
+                    total_yield / total_pair_count
                 )
             total_base_quality += pair_quality_total
 
@@ -213,15 +219,6 @@ class _AnnealingWorker:
             best_state, self.save_data, self._scorer
         ), best_score
 
-    def _score_pair(
-        self,
-        cat_a: Cat,
-        cat_b: Cat,
-        stimulation: float,
-    ) -> ScoredPair | None:
-        """Score a pair with memoization."""
-        return self._scorer.score_pair(cat_a, cat_b, stimulation)
-
 
 def _get_neighbor(
     state: dict[int, str], room_configs: list[RoomConfig]
@@ -280,10 +277,12 @@ def _generate_random_valid_state(
     if not valid_rooms:
         return {c.db_key: "" for c in cats}
 
-    state: dict[int, str] = {}
+    state: dict[int, str] = {cat.db_key: "" for cat in cats}
     room_cats: dict[str, list[Cat]] = {r.key: [] for r in valid_rooms}
 
-    for cat in cats:
+    shuffled_cats = cats[:]
+    random.shuffle(shuffled_cats)
+    for cat in shuffled_cats:
         available_rooms = []
         for room in valid_rooms:
             if RoomAllocator.can_fit_single(room, len(room_cats[room.key])):
@@ -293,8 +292,6 @@ def _generate_random_valid_state(
             chosen_room = random.choice(available_rooms)
             state[cat.db_key] = chosen_room
             room_cats[chosen_room].append(cat)
-        else:
-            state[cat.db_key] = ""
 
     return state
 
@@ -337,6 +334,8 @@ def optimize_sa(
         _generate_random_valid_state(sa_cats, sa_room_configs)
         for i in range(num_workers)
     ]
+    for state in initial_states:
+        assert frozenset(state.keys()) == frozenset(c.db_key for c in sa_cats)
 
     best_overall_state = None
     best_overall_score = -float("inf")
