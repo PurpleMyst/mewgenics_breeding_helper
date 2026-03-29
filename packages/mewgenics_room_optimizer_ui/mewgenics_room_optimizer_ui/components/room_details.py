@@ -1,5 +1,6 @@
 import dearpygui.dearpygui as dpg
-from mewgenics_parser import Cat
+from mewgenics_parser import Cat, GameData
+from mewgenics_parser.cat import CatBodyPartCategory
 from mewgenics_room_optimizer import RoomAssignment
 
 from ..colors import COLOR_MUTED, COLOR_SUCCESS, ROOM_TYPE_COLORS
@@ -9,6 +10,7 @@ from ..components.inspector.cat import on_cat_selected
 from ..components.inspector.pair import on_pair_selected
 from ..helpers import (
     TraitCountInfo,
+    get_all_favorable_keys,
     get_assigned_room_key,
     get_pair_summary_data,
 )
@@ -58,10 +60,74 @@ def clear_details_section() -> None:
         dpg.show_item("details_placeholder")
 
 
+def _format_body_part_display_name(
+    part_id: int, category: CatBodyPartCategory, game_data: GameData
+) -> str:
+    """Get display name for a body part from part_id and category."""
+    name_desc = game_data.body_part_text[category].get(part_id)
+    if name_desc and name_desc.name:
+        return name_desc.name
+    return f"{category.name.title()}"
+
+
+def _format_trait_column(
+    inheritance_dict: dict[str, float],
+    favorable_keys: set[str],
+    game_data: GameData,
+    max_items: int = 3,
+) -> str:
+    """Format trait inheritance dict as comma-separated string for table display."""
+    items = []
+    for key, prob in sorted(inheritance_dict.items(), key=lambda x: -x[1]):
+        if key in favorable_keys and prob > 0:
+            trait_display = game_data.ability_text.get(key)
+            if trait_display and trait_display.name:
+                name = trait_display.name
+            else:
+                name = key
+            items.append(f"{name} {prob * 100:.0f}%")
+            if len(items) >= max_items:
+                break
+    return ", ".join(items) if items else ""
+
+
+def _format_body_parts_column(
+    body_parts_dict: dict[int, float],
+    favorable_keys: set[str],
+    game_data: GameData,
+    max_items: int = 3,
+) -> str:
+    """Format body parts inheritance dict as comma-separated string for table display."""
+    items = []
+    for part_id, prob in sorted(body_parts_dict.items(), key=lambda x: -x[1]):
+        if prob > 0:
+            for category in CatBodyPartCategory:
+                display_name = _format_body_part_display_name(
+                    part_id, category, game_data
+                )
+                trait_key = f"{category.name.title()}{part_id}"
+                if trait_key in favorable_keys:
+                    items.append(f"{display_name} {prob * 100:.0f}%")
+                    break
+            else:
+                for category in CatBodyPartCategory:
+                    if part_id in game_data.body_part_text.get(category, {}):
+                        display_name = _format_body_part_display_name(
+                            part_id, category, game_data
+                        )
+                        items.append(f"{display_name} {prob * 100:.0f}%")
+                        break
+        if len(items) >= max_items:
+            break
+    return ", ".join(items) if items else ""
+
+
 def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
     if not selected_room.pairs:
         dpg.add_text("No breeding pairs in this room")
         return
+
+    favorable_keys = get_all_favorable_keys(state)
 
     with dpg.table(
         tag="pairs_detail_table",
@@ -70,14 +136,28 @@ def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
         row_background=True,
     ):
         dpg.add_table_column(label="Names", width_fixed=True)
+        dpg.add_table_column(label="Stats", width_fixed=True)
+        dpg.add_table_column(label="Passives", width_fixed=True)
+        dpg.add_table_column(label="Actives", width_fixed=True)
+        dpg.add_table_column(label="Body Parts", width_fixed=True)
+        dpg.add_table_column(label="COI", width_fixed=True)
         dpg.add_table_column(label="Quality", width_fixed=True)
-        dpg.add_table_column(label="Stats ENS", width_fixed=True)
-        dpg.add_table_column(label="Universal EV", width_fixed=True)
-        dpg.add_table_column(label="Disorders", width_fixed=True)
-        dpg.add_table_column(label="Defects", width_fixed=True)
 
         for i, pair in enumerate(selected_room.pairs):
             summary = get_pair_summary_data(pair, state)
+            combined_malady = summary.expected_disorders + summary.expected_defects
+
+            passives_str = _format_trait_column(
+                summary.passives_inheritance, favorable_keys, state.game_data
+            )
+            actives_str = _format_trait_column(
+                summary.actives_inheritance, favorable_keys, state.game_data
+            )
+            body_parts_str = _format_body_parts_column(
+                summary.body_parts_inheritance, favorable_keys, state.game_data
+            )
+
+            coi_str = f"{summary.coi * 100:.1f}% COI ({combined_malady:.2f})"
 
             with dpg.table_row():
                 dpg.add_selectable(
@@ -86,14 +166,19 @@ def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
                     user_data=(i, pair, state),
                     tag=f"pair_selectable_{i}",
                 )
-                dpg.add_text(f"{summary.quality:.1f}")
                 dpg.add_text(f"{summary.expected_stats_sum:.1f}")
                 dpg.add_text(
-                    f"{summary.universal_ev:.2f}",
-                    color=COLOR_SUCCESS if summary.universal_ev > 0 else COLOR_MUTED,
+                    passives_str, color=COLOR_SUCCESS if passives_str else COLOR_MUTED
                 )
-                dpg.add_text(f"{summary.expected_disorders:.2f}")
-                dpg.add_text(f"{summary.expected_defects:.2f}")
+                dpg.add_text(
+                    actives_str, color=COLOR_SUCCESS if actives_str else COLOR_MUTED
+                )
+                dpg.add_text(
+                    body_parts_str,
+                    color=COLOR_SUCCESS if body_parts_str else COLOR_MUTED,
+                )
+                dpg.add_text(coi_str)
+                dpg.add_text(f"{summary.quality:.1f}")
 
 
 def _build_cats_tab(selected_room: RoomAssignment, state: AppState) -> None:

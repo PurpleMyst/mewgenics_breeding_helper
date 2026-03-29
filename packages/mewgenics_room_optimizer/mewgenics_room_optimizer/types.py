@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
+from mewgenics_breeding import OffspringMarginalProbabilities
 from mewgenics_parser import Cat
 from mewgenics_scorer import PairFactors
 
@@ -43,6 +44,7 @@ class ScoredPair:
     cat_b: Cat
     factors: PairFactors
     quality: float
+    omp: OffspringMarginalProbabilities | None = field(default=None)
 
 
 @dataclass

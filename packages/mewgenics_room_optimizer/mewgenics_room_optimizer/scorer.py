@@ -64,6 +64,7 @@ class CachingScorer:
             cat_b=cat_b,
             factors=factors,
             quality=calculate_pair_quality(factors),
+            omp=factors.omp,
         )
         self._memo[key] = scored
         return scored

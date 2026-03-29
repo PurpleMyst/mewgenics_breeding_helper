@@ -1,6 +1,6 @@
 """Helper functions for UI rendering."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mewgenics_parser import GameData
 from mewgenics_parser.traits import Trait
@@ -29,6 +29,13 @@ class PairSummaryData:
     build_yields: dict[str, float]
     combined_malady_pct: float
     risk_color: tuple[int, int, int, int]
+    coi: float = 0.0
+    passives_inheritance: dict[str, float] = field(default_factory=dict)
+    actives_inheritance: dict[str, float] = field(default_factory=dict)
+    body_parts_inheritance: dict[int, float] = field(default_factory=dict)
+    disorder_inheritance: dict[str, float] = field(default_factory=dict)
+    novel_disorder_prob: float = 0.0
+    novel_defect_parts_prob: float = 0.0
 
 
 @dataclass(slots=True)
@@ -55,6 +62,29 @@ def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
     combined_malady_pct = expected_disorders * 5.0 + expected_defects * 1.0
     risk_color = COLOR_DANGER if combined_malady_pct > 15 else COLOR_SUCCESS
 
+    coi = 0.0
+    passives_inheritance: dict[str, float] = {}
+    actives_inheritance: dict[str, float] = {}
+    body_parts_inheritance: dict[int, float] = {}
+    disorder_inheritance: dict[str, float] = {}
+    novel_disorder_prob = 0.0
+    novel_defect_parts_prob = 0.0
+
+    if pair.omp is not None and state.save_data is not None:
+        save_data = state.save_data
+        coi = save_data.get_offspring_coi(pair.cat_a, pair.cat_b)
+        passives_inheritance = dict(pair.omp.passive_abilities)
+        actives_inheritance = dict(pair.omp.active_abilities)
+        body_parts_inheritance = {}
+        for slot_parts in pair.omp.body_parts.values():
+            for part_id, prob in slot_parts.items():
+                body_parts_inheritance[part_id] = max(
+                    body_parts_inheritance.get(part_id, 0.0), prob
+                )
+        disorder_inheritance = dict(pair.omp.inherited_disorders)
+        novel_disorder_prob = pair.omp.novel_disorder
+        novel_defect_parts_prob = pair.omp.novel_birth_defect
+
     return PairSummaryData(
         names_display=names_display,
         quality=pair.quality,
@@ -65,6 +95,13 @@ def get_pair_summary_data(pair: ScoredPair, state: AppState) -> PairSummaryData:
         build_yields=build_yields,
         combined_malady_pct=combined_malady_pct,
         risk_color=risk_color,
+        coi=coi,
+        passives_inheritance=passives_inheritance,
+        actives_inheritance=actives_inheritance,
+        body_parts_inheritance=body_parts_inheritance,
+        disorder_inheritance=disorder_inheritance,
+        novel_disorder_prob=novel_disorder_prob,
+        novel_defect_parts_prob=novel_defect_parts_prob,
     )
 
 

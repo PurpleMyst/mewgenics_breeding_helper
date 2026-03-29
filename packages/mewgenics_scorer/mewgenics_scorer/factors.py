@@ -29,6 +29,8 @@ class PairFactors:
 
     breeding_prob: float = field(default=1.0)
 
+    omp: OffspringMarginalProbabilities | None = field(default=None)
+
 
 def _calc_expected_stats(pmf: OffspringMarginalProbabilities) -> list[float]:
     """Calculate expected stat values from PMF as a flat list of 7 floats."""
@@ -172,6 +174,7 @@ def calculate_pair_factors(
         universal_ev=universal_ev,
         build_yields=build_yields,
         breeding_prob=(1 - (a.sexuality or 0.0)) * (1 - (b.sexuality or 0.0)),
+        omp=pmf,
     )
 
 
