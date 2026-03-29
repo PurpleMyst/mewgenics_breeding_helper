@@ -109,14 +109,6 @@ def _format_body_parts_column(
                 if trait_key in favorable_keys:
                     items.append(f"{display_name} {prob * 100:.0f}%")
                     break
-            else:
-                for category in CatBodyPartCategory:
-                    if part_id in game_data.body_part_text.get(category, {}):
-                        display_name = _format_body_part_display_name(
-                            part_id, category, game_data
-                        )
-                        items.append(f"{display_name} {prob * 100:.0f}%")
-                        break
         if len(items) >= max_items:
             break
     return ", ".join(items) if items else ""
@@ -134,12 +126,13 @@ def _build_pairs_tab(selected_room: RoomAssignment, state: AppState) -> None:
         header_row=True,
         borders_innerH=True,
         row_background=True,
+        resizable=False,
     ):
         dpg.add_table_column(label="Names", width_fixed=True)
         dpg.add_table_column(label="Stats", width_fixed=True)
-        dpg.add_table_column(label="Passives", width_fixed=True)
-        dpg.add_table_column(label="Actives", width_fixed=True)
-        dpg.add_table_column(label="Body Parts", width_fixed=True)
+        dpg.add_table_column(label="Passives", width_stretch=True)
+        dpg.add_table_column(label="Actives", width_stretch=True)
+        dpg.add_table_column(label="Body Parts", width_stretch=True)
         dpg.add_table_column(label="COI", width_fixed=True)
         dpg.add_table_column(label="Quality", width_fixed=True)
 
