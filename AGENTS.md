@@ -137,6 +137,57 @@ def room_display(self) -> str:
 3. **Use uv for all package management** - never pip directly
 4. **Use uv run for all tools** - ruff, ty, pytest, etc.
 
+## Addendum: Shell Constraints (opencode / cmd.exe)
+
+**CRITICAL INSTRUCTION FOR AGENTS:** The execution environment (`opencode`) uses `cmd.exe`, **not** `bash`, `zsh`, or `pwsh`. You must strictly adhere to the following `cmd.exe` limitations when generating shell commands, passing arguments, or writing scripts.
+
+### 1. No Multiline Strings or Arguments
+Unlike `bash`, `cmd.exe` cannot handle multiline strings passed as command-line arguments. If you attempt to pass an argument containing a newline character (`\n` or a literal line break), `cmd.exe` will immediately truncate the command at the first newline or throw a syntax error.
+* **Bad (Bash style):** `uv run python script.py --desc "Line 1\nLine2"`
+* **Bad (Bash style):** Passing a raw multiline JSON string directly into a CLI argument.
+* **The Fix:** If a script requires complex or multiline string data (like a JSON payload or a long trait description), **write the data to a temporary file first**, and pass the file path to the command.
+
+### 2. Single Quotes Do Not Group Arguments
+In `bash` and PowerShell, single quotes (`'`) group arguments and treat the contents as literal strings. In `cmd.exe`, **single quotes have no special meaning** and are treated as literal characters passed directly to the underlying program. 
+* **Bad:** `uv run python -c 'print("Hello")'` (Fails: `cmd.exe` passes the single quotes to Python, causing a syntax error).
+* **Good:** `uv run python -c "print('Hello')"` (Always use double quotes to group arguments in `cmd.exe`).
+
+### 3. Line Continuation
+Do not use the bash backslash (`\`) or PowerShell backtick (`` ` ``) to split long commands across multiple lines. 
+* **cmd.exe uses the caret (`^`):** ```cmd
+  uv run ruff check ^
+    --fix ^
+    packages/mewgenics_parser
+  ```
+* *Warning:* Avoid trailing spaces after the `^`, as this will break the continuation. When in doubt, generate the command as a single, continuous line.
+
+### 4. No Command Substitution
+`cmd.exe` does not support `bash`-style command substitution like `$(command)` or `` `command` ``. You cannot dynamically pass the output of one command as an argument to another inline.
+* **Bad:** `uv run script.py --id $(cat id.txt)`
+* **The Fix:** You must use the `FOR /F` loop syntax, or much preferably, handle the logic inside a Python script rather than relying on the shell.
+
+### 5. Variable Expansion and Delayed Expansion
+Variables are expanded using `%VAR%`, not `$VAR`. Furthermore, `cmd.exe` evaluates variables at parse time, not execution time, which causes nested logic or loops to fail unless `EnableDelayedExpansion` is used.
+* **Environment Variables:** Use `set VAR=value` (no quotes around the value unless you want the quotes included).
+* **Inline usage:** `set MY_FILE=cat.json && uv run python parse.py %MY_FILE%`
+
+### 6. Command Length Limits
+`cmd.exe` has a strict hard limit of **8,191 characters** per command line. If you are chaining commands or passing massive base64-encoded strings directly in the terminal, the command will silently truncate or fail. Again, rely on file I/O for large data transfers.
+
+### Quick Reference: Bash vs. cmd.exe
+
+| Feature | Bash (Do Not Use) | cmd.exe (Required) |
+| :--- | :--- | :--- |
+| **Argument Grouping** | `"text"` or `'text'` | `"text"` **ONLY** |
+| **Environment Variables** | `$VAR` or `${VAR}` | `%VAR%` |
+| **Inline Env Assignment** | `VAR=val uv run ...` | `set VAR=val && uv run ...` |
+| **Command Substitution** | `$(ls)` | Requires `FOR /F` |
+| **Line Continuation** | `\` | `^` |
+| **Path Separators** | `/` | `\` (Though `uv` and Python accept `/`) |
+| **Null Output** | `> /dev/null` | `> NUL` |
+
+**Agent Directive Summary:** Keep shell interactions as simple and atomic as possible. Rely on Python (`uv run python ...`) to do the heavy lifting for data parsing, file I/O, and string manipulation rather than attempting complex shell scripting in `cmd.exe`.
+
 ## Mewgenics Game Reference
 
 Reference: https://mewgenics.wiki.gg/
