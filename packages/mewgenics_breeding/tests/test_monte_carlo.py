@@ -1,6 +1,7 @@
 """Tests for Monte Carlo room breeding simulation."""
 
 import pytest
+from inline_snapshot import snapshot
 from mewgenics_parser.cat import Cat, CatBodySlot, CatGender, CatStatus, Stats
 
 from mewgenics_breeding.monte_carlo import (
@@ -219,3 +220,133 @@ class TestSimulateRoomBreeding:
         )
         pair_key = (1, 2)
         assert pair_key in result.pair_kittens
+
+
+class TestSnapshotValues:
+    def test_compatibility_values(self) -> None:
+        high_char_male = make_cat(1, charisma=10)
+        low_char_male = make_cat(2, charisma=3)
+        high_libido_female = make_cat(
+            3, gender=CatGender.FEMALE, charisma=7, libido=1.0
+        )
+        low_libido_female = make_cat(4, gender=CatGender.FEMALE, charisma=7, libido=0.1)
+        straight_male = make_cat(5, charisma=7, sexuality=0.0)
+        gay_male = make_cat(6, charisma=7, sexuality=1.0)
+        lovers_male = make_cat(7, charisma=7, lover_id=8, lover_affinity=0.5)
+        lovers_female = make_cat(
+            8, gender=CatGender.FEMALE, charisma=7, lover_id=7, lover_affinity=0.5
+        )
+
+        assert calc_compatibility(high_char_male, low_libido_female) == snapshot(0.3375)
+        assert calc_compatibility(low_char_male, high_libido_female) == snapshot(0.4875)
+        assert calc_compatibility(straight_male, gay_male) == snapshot(0.2625)
+        assert calc_compatibility(lovers_male, lovers_female) == snapshot(
+            0.7875000000000001
+        )
+
+    def test_typical_room_output_snapshot(self) -> None:
+        cats = [
+            make_cat(1, charisma=7, libido=0.5, sexuality=0.0),
+            make_cat(2, gender=CatGender.FEMALE, charisma=7, libido=0.5, sexuality=0.0),
+            make_cat(3, charisma=10, libido=1.0, sexuality=0.0),
+            make_cat(
+                4, gender=CatGender.FEMALE, charisma=10, libido=1.0, sexuality=0.0
+            ),
+        ]
+        result = simulate_room_breeding(
+            cats,
+            comfort=5.0,
+            max_iterations=10_000,
+            seed=42,
+        )
+        assert result.pair_kittens == snapshot(
+            {
+                (1, 2): 0.326,
+                (1, 4): 0.3924,
+                (2, 3): 0.3883,
+                (3, 4): 0.5621,
+            }
+        )
+
+    def test_high_stimulation_room_snapshot(self) -> None:
+        cats = [
+            make_cat(1, charisma=10, libido=1.0, sexuality=0.0),
+            make_cat(
+                2, gender=CatGender.FEMALE, charisma=10, libido=1.0, sexuality=0.0
+            ),
+            make_cat(3, charisma=10, libido=1.0, sexuality=0.0),
+            make_cat(
+                4, gender=CatGender.FEMALE, charisma=10, libido=1.0, sexuality=0.0
+            ),
+            make_cat(5, charisma=10, libido=1.0, sexuality=0.0),
+            make_cat(
+                6, gender=CatGender.FEMALE, charisma=10, libido=1.0, sexuality=0.0
+            ),
+        ]
+        result = simulate_room_breeding(
+            cats,
+            comfort=10.0,
+            max_iterations=20_000,
+            early_stop_rounds=1000,
+            relative_tolerance=0.005,
+            seed=123,
+        )
+        total_expected_kittens = sum(result.pair_kittens.values())
+        assert total_expected_kittens == snapshot(3.0)
+        assert len(result.pair_kittens) == snapshot(9)
+
+    def test_lover_boost_snapshot(self) -> None:
+        male = make_cat(1, charisma=7, libido=0.5)
+        female = make_cat(
+            2,
+            gender=CatGender.FEMALE,
+            charisma=7,
+            libido=0.5,
+            lover_id=1,
+            lover_affinity=0.8,
+        )
+        result = simulate_room_breeding(
+            [male, female],
+            comfort=5.0,
+            max_iterations=5000,
+            seed=42,
+        )
+        assert result.pair_kittens == snapshot({(1, 2): 0.7676})
+
+    def test_twin_probability_snapshot(self) -> None:
+        fertile_male = make_cat(1, charisma=10, libido=1.0, sexuality=0.0)
+        fertile_female = make_cat(
+            2,
+            gender=CatGender.FEMALE,
+            charisma=10,
+            libido=1.0,
+            sexuality=0.0,
+            fertility=1.25,
+        )
+        infertile_male = make_cat(
+            3, charisma=10, libido=1.0, sexuality=0.0, fertility=1.0
+        )
+        infertile_female = make_cat(
+            4,
+            gender=CatGender.FEMALE,
+            charisma=10,
+            libido=1.0,
+            sexuality=0.0,
+            fertility=1.0,
+        )
+
+        result_fertile = simulate_room_breeding(
+            [fertile_male, fertile_female],
+            comfort=10.0,
+            max_iterations=10_000,
+            seed=42,
+        )
+        result_infertile = simulate_room_breeding(
+            [infertile_male, infertile_female],
+            comfort=10.0,
+            max_iterations=10_000,
+            seed=42,
+        )
+        assert (
+            result_fertile.pair_kittens[(1, 2)] > result_infertile.pair_kittens[(3, 4)]
+        )
