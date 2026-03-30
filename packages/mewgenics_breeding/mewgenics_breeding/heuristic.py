@@ -65,7 +65,6 @@ class HeuristicCalculator:
             return {}
 
         cats_by_idx = list(enumerate(cats))
-        pair_keys: dict[tuple[int, int], tuple[int, int]] = {}
 
         key = frozenset(c.db_key for c in cats)
         if key in self._matrix_cache:
@@ -82,7 +81,6 @@ class HeuristicCalculator:
                         min(cat_i.db_key, cat_j.db_key),
                         max(cat_i.db_key, cat_j.db_key),
                     )
-                    pair_keys[pair] = (i, j)
 
                     compat = calc_compatibility(cat_i, cat_j)
                     fertility = calc_combined_fertility(cat_i, cat_j)
@@ -91,6 +89,17 @@ class HeuristicCalculator:
                     fertility_by_pair[pair] = fertility
 
             self._matrix_cache[key] = (compat_by_pair, fertility_by_pair)
+
+        pair_keys: dict[tuple[int, int], tuple[int, int]] = {}
+        for i, cat_i in cats_by_idx:
+            for j, cat_j in cats_by_idx:
+                if j <= i:
+                    continue
+                pair = (
+                    min(cat_i.db_key, cat_j.db_key),
+                    max(cat_i.db_key, cat_j.db_key),
+                )
+                pair_keys[pair] = (i, j)
 
         total_compat = sum(compat_by_pair.values())
         if total_compat == 0:

@@ -175,8 +175,6 @@ class TestOptimizerBenchmark:
             optimize_sa,
             benchmark_save_data,
             configs,
-            use_heuristic=True,
-            post_process_mc_iterations=0,
         )
         assert result.rooms is not None
 
@@ -193,8 +191,6 @@ class TestOptimizerBenchmark:
             optimize_sa,
             benchmark_save_data,
             configs,
-            use_heuristic=True,
-            post_process_mc_iterations=0,
         )
         assert result.rooms is not None
 
