@@ -199,15 +199,15 @@ class TestRoomSimulatorBenchmark:
         """Benchmark RoomSimulator first run (no cache)."""
         from mewgenics_breeding import RoomSimulator
 
+        def run_mc(cats, comfort):
+            # Always create fresh simulator to measure true cold performance
+            sim = RoomSimulator(
+                iterations=10_000, early_stop_rounds=500, relative_tolerance=0.01
+            )
+            return sim.get_expected_kittens(cats, comfort)
+
         cats = benchmark_cats[:6]
-        sim = RoomSimulator(
-            iterations=10_000, early_stop_rounds=500, relative_tolerance=0.01
-        )
-
-        # Clear cache to benchmark first run
-        sim._cache.clear()
-
-        result = benchmark(sim.get_expected_kittens, cats, 5.0)
+        result = benchmark(run_mc, cats, 5.0)
         assert result is not None
 
     def test_room_simulator_cached(self, benchmark, benchmark_cats):
