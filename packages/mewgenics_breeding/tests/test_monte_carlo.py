@@ -7,7 +7,6 @@ from mewgenics_parser.cat import Cat, CatBodySlot, CatGender, CatStatus, Stats
 from mewgenics_breeding.monte_carlo import (
     calc_combined_fertility,
     calc_compatibility,
-    can_breed_pair,
     simulate_room_breeding,
 )
 
@@ -93,11 +92,13 @@ class TestCompatibilityCalculation:
         compat = calc_compatibility(father, mother)
         assert compat > 0
 
-    def test_same_sex_straight_gives_zero(self) -> None:
-        father = make_cat(1, charisma=7, sexuality=0.0)
-        mother = make_cat(2, gender=CatGender.MALE, libido=0.5, sexuality=0.0)
+    def test_same_sex_with_sexuality_uses_sin_math(self) -> None:
+        father = make_cat(1, charisma=10, sexuality=0.1)
+        mother = make_cat(
+            2, gender=CatGender.MALE, charisma=10, libido=1.0, sexuality=0.1
+        )
         compat = calc_compatibility(father, mother)
-        assert compat == 0.0
+        assert compat > 0
 
     def test_ditto_bypasses_sexuality(self) -> None:
         ditto = make_cat(1, gender=CatGender.DITTO, charisma=7)
@@ -116,23 +117,6 @@ class TestFertilityCalculation:
         a = make_cat(1, fertility=1.1)
         b = make_cat(2, fertility=1.2)
         assert calc_combined_fertility(a, b) == pytest.approx(1.32)
-
-
-class TestCanBreedPair:
-    def test_male_female(self) -> None:
-        male = make_cat(1, gender=CatGender.MALE)
-        female = make_cat(2, gender=CatGender.FEMALE)
-        assert can_breed_pair(male, female)
-
-    def test_male_ditto(self) -> None:
-        male = make_cat(1, gender=CatGender.MALE)
-        ditto = make_cat(2, gender=CatGender.DITTO)
-        assert can_breed_pair(male, ditto)
-
-    def test_same_sex_no_ditto(self) -> None:
-        male1 = make_cat(1, gender=CatGender.MALE)
-        male2 = make_cat(2, gender=CatGender.MALE)
-        assert not can_breed_pair(male1, male2)
 
 
 class TestSimulateRoomBreeding:
@@ -261,10 +245,10 @@ class TestSnapshotValues:
         )
         assert result.pair_kittens == snapshot(
             {
-                (1, 2): 0.326,
-                (1, 4): 0.3924,
-                (2, 3): 0.3883,
-                (3, 4): 0.5621,
+                (1, 2): 0.1229,
+                (1, 4): 0.2532,
+                (2, 3): 0.2553,
+                (3, 4): 0.5492,
             }
         )
 
@@ -311,7 +295,7 @@ class TestSnapshotValues:
             max_iterations=5000,
             seed=42,
         )
-        assert result.pair_kittens == snapshot({(1, 2): 0.7676})
+        assert result.pair_kittens == snapshot({(1, 2): 0.3896})
 
     def test_twin_probability_snapshot(self) -> None:
         fertile_male = make_cat(1, charisma=10, libido=1.0, sexuality=0.0)

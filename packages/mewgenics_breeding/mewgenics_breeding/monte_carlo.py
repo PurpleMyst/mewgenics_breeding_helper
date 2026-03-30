@@ -69,12 +69,6 @@ def calc_combined_fertility(a: Cat, b: Cat) -> float:
     return fert_a * fert_b
 
 
-def can_breed_pair(a: Cat, b: Cat) -> bool:
-    """Check if a pair can potentially breed (not blocked by gender)."""
-    genders = {a.gender, b.gender}
-    return CatGender.DITTO in genders or genders == {CatGender.MALE, CatGender.FEMALE}
-
-
 def _simulate_day(
     cats: list[Cat],
     compat_matrix: dict[tuple[int, int], float],
@@ -110,9 +104,7 @@ def _simulate_day(
                 max(current_cat.db_key, cats[j].db_key),
             )
             compat = compat_matrix.get(pair, 0.0)
-            if compat < 0.05:
-                continue
-            if not can_breed_pair(current_cat, cats[j]):
+            if compat <= 0.0:
                 continue
             valid_targets.append((j, compat))
 
@@ -135,8 +127,19 @@ def _simulate_day(
         )
         compat = compat_matrix[pair_key]
 
-        roll_1_prob = compat * math.sqrt(0.1 * comfort)
-        if random.random() > roll_1_prob:
+        roll_prob = compat * math.sqrt(0.1 * comfort)
+
+        if random.random() > roll_prob:
+            continue
+
+        if random.random() > roll_prob:
+            available[i] = False
+            available[target_idx] = False
+            continue
+
+        if compat < 0.05:
+            available[i] = False
+            available[target_idx] = False
             continue
 
         available[i] = False
