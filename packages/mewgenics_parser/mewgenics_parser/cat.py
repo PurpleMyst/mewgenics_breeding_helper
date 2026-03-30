@@ -188,10 +188,10 @@ class Cat:
     hater: Self | int | None = field(default=None, repr=False)
     """Hater (SQL key of rival cat) as either a Cat object (after resolution) or int (before resolution). None if no hater."""
 
-    lover_coefficient: float = field(default=1.0)
+    lover_affinity: float = field(default=1.0)
     """Coefficient/strength of the lover relationship."""
 
-    hater_coefficient: float = field(default=1.0)
+    hater_affinity: float = field(default=1.0)
     """Coefficient/strength of the hater relationship."""
 
     @classmethod
@@ -218,7 +218,7 @@ class Cat:
     def _parse_personality(
         cls, r: BinaryReader, cat_key: int
     ) -> tuple[float, float, float, float, int | None, float, int | None, float]:
-        """Parse personality fields: libido, sexuality, aggression, fertility, lover_id, lover_coefficient, hater_id, hater_coefficient."""
+        """Parse personality fields: libido, sexuality, aggression, fertility, lover_id, lover_affinity, hater_id, hater_affinity."""
         r.u32()
         r.skip((8 + 8 + 8 + 5 * 8) // 8)
         _unknown_none_str = r.str()
@@ -230,24 +230,24 @@ class Cat:
         libido = r.f64()
         sexuality = r.f64()
         lover_id = r.u64()
-        lover_coefficient = r.f64()
+        lover_affinity = r.f64()
         aggression = r.f64()
         hater_id = r.u64()
+        hater_affinity = r.f64()
         fertility = r.f64()
         if lover_id == 0xFFFF_FFFF:
             lover_id = None
         if hater_id == 0xFFFF_FFFF:
             hater_id = None
-        hater_coefficient = r.f64()
         return (
             libido,
             sexuality,
             aggression,
             fertility,
             lover_id,
-            lover_coefficient,
+            lover_affinity,
             hater_id,
-            hater_coefficient,
+            hater_affinity,
         )
 
     @classmethod
@@ -375,9 +375,9 @@ class Cat:
             aggression,
             fertility,
             lover_id,
-            lover_coefficient,
+            lover_affinity,
             hater_id,
-            hater_coefficient,
+            hater_affinity,
         ) = cls._parse_personality(r, cat_key)
         body_parts = cls._parse_body_parts(r, cat_key)
         base_stats, _stat_mod1, total_stats = cls._parse_stats(r)
@@ -415,9 +415,9 @@ class Cat:
             parent_a=None,
             parent_b=None,
             lover=lover_id,
-            lover_coefficient=lover_coefficient,
+            lover_affinity=lover_affinity,
             hater=hater_id,
-            hater_coefficient=hater_coefficient,
+            hater_affinity=hater_affinity,
             level=level,
             coi=coi,
             collar=collar,
