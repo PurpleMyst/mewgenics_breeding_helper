@@ -1,6 +1,5 @@
 """Tests for cat breeding eligibility methods."""
 
-import pytest
 from mewgenics_parser.cat import Cat, CatBodySlot, CatGender, CatStatus, Stats
 
 
