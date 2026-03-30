@@ -406,7 +406,7 @@ def optimize_sa(
     if not house_cats:
         return OptimizationResult(rooms=[])
 
-    sa_cats = [c for c in house_cats if not c.has_eternal_youth()]
+    sa_cats = [c for c in house_cats if c.can_breed()]
     ey_cats = [c for c in house_cats if c.has_eternal_youth()]
 
     ey_assignments = compute_ey_assignments(ey_cats, room_configs)

@@ -245,10 +245,10 @@ class TestSnapshotValues:
         )
         assert result.pair_kittens == snapshot(
             {
-                (1, 2): 0.1229,
-                (1, 4): 0.2532,
-                (2, 3): 0.2553,
-                (3, 4): 0.5492,
+                (1, 2): 0.1272,
+                (1, 4): 0.2494,
+                (2, 3): 0.2447,
+                (3, 4): 0.5589,
             }
         )
 
@@ -334,3 +334,106 @@ class TestSnapshotValues:
         assert (
             result_fertile.pair_kittens[(1, 2)] > result_infertile.pair_kittens[(3, 4)]
         )
+
+
+class TestComfortPenalty:
+    def test_four_cats_no_penalty(self) -> None:
+        from mewgenics_breeding.monte_carlo import _effective_comfort
+
+        assert _effective_comfort(5.0, 4) == 5.0
+        assert _effective_comfort(10.0, 4) == 10.0
+
+    def test_five_cats_one_penalty(self) -> None:
+        from mewgenics_breeding.monte_carlo import _effective_comfort
+
+        assert _effective_comfort(5.0, 5) == 4.0
+        assert _effective_comfort(10.0, 5) == 9.0
+
+    def test_six_cats_two_penalty(self) -> None:
+        from mewgenics_breeding.monte_carlo import _effective_comfort
+
+        assert _effective_comfort(5.0, 6) == 3.0
+        assert _effective_comfort(10.0, 6) == 8.0
+
+    def test_overcrowding_reduces_kittens(self) -> None:
+        cat1 = make_cat(1, charisma=10, libido=1.0)
+        cat2 = make_cat(2, gender=CatGender.FEMALE, charisma=10, libido=1.0)
+        cat3 = make_cat(3, charisma=10, libido=1.0)
+        cat4 = make_cat(4, gender=CatGender.FEMALE, charisma=10, libido=1.0)
+        cat5 = make_cat(5, charisma=10, libido=1.0)
+        cat6 = make_cat(6, gender=CatGender.FEMALE, charisma=10, libido=1.0)
+
+        result_4_unchanged = simulate_room_breeding(
+            [cat1, cat2, cat3, cat4], comfort=5.0, max_iterations=5000, seed=42
+        )
+        result_6_with_penalty = simulate_room_breeding(
+            [cat1, cat2, cat3, cat4, cat5, cat6],
+            comfort=5.0,
+            max_iterations=5000,
+            seed=42,
+        )
+        result_6_no_penalty = simulate_room_breeding(
+            [cat1, cat2, cat3, cat4, cat5, cat6],
+            comfort=7.0,
+            max_iterations=5000,
+            seed=42,
+        )
+        avg_per_pair_4 = sum(result_4_unchanged.pair_kittens.values()) / len(
+            result_4_unchanged.pair_kittens
+        )
+        avg_per_pair_6_penalty = sum(result_6_with_penalty.pair_kittens.values()) / len(
+            result_6_with_penalty.pair_kittens
+        )
+        avg_per_pair_6_no_penalty = sum(
+            result_6_no_penalty.pair_kittens.values()
+        ) / len(result_6_no_penalty.pair_kittens)
+        assert avg_per_pair_6_penalty < avg_per_pair_4
+        assert avg_per_pair_6_no_penalty > avg_per_pair_6_penalty
+
+
+class TestKittenExclusion:
+    def test_kitten_excluded_from_breeding(self) -> None:
+        adult_male = make_cat(1, charisma=10, libido=1.0)
+        adult_female = make_cat(2, gender=CatGender.FEMALE, charisma=10, libido=1.0)
+        kitten_male = make_cat(3, charisma=10, libido=1.0)
+        kitten_male.age = 0
+        kitten_female = make_cat(4, gender=CatGender.FEMALE, charisma=10, libido=1.0)
+        kitten_female.age = 1
+
+        result = simulate_room_breeding(
+            [adult_male, adult_female, kitten_male, kitten_female],
+            comfort=10.0,
+            max_iterations=5000,
+            seed=42,
+        )
+        assert (1, 2) in result.pair_kittens
+        assert (1, 3) not in result.pair_kittens
+        assert (1, 4) not in result.pair_kittens
+        assert (2, 3) not in result.pair_kittens
+        assert (2, 4) not in result.pair_kittens
+        assert (3, 4) not in result.pair_kittens
+
+    def test_only_kittens_no_breeding(self) -> None:
+        kitten1 = make_cat(1, charisma=10, libido=1.0)
+        kitten1.age = 0
+        kitten2 = make_cat(2, gender=CatGender.FEMALE, charisma=10, libido=1.0)
+        kitten2.age = 1
+
+        result = simulate_room_breeding(
+            [kitten1, kitten2], comfort=10.0, max_iterations=1000, seed=42
+        )
+        assert len(result.pair_kittens) == 0
+
+
+class TestCompatibilityThreshold:
+    def test_below_threshold_no_kittens(self) -> None:
+        low_char_male = make_cat(1, charisma=1, libido=0.01)
+        low_char_female = make_cat(2, gender=CatGender.FEMALE, charisma=1, libido=0.01)
+
+        result = simulate_room_breeding(
+            [low_char_male, low_char_female],
+            comfort=10.0,
+            max_iterations=5000,
+            seed=42,
+        )
+        assert len(result.pair_kittens) == 0

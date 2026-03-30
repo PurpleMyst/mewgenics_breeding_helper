@@ -16,6 +16,7 @@ class RoomType(Enum):
     GENERAL = "general"
     HEALTH = "health"
     MUTATION = "mutation"
+    NURSERY = "nursery"
     NONE = "none"
 
 
@@ -56,6 +57,7 @@ class RoomAssignment:
     cats: list[Cat]
     pairs: list[ScoredPair]
     eternal_youth_cats: list[Cat] = field(default_factory=list)
+    nursery_cats: list[Cat] = field(default_factory=list)
 
 
 @dataclass

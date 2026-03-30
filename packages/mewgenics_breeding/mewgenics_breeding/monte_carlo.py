@@ -7,6 +7,15 @@ from dataclasses import dataclass
 
 from mewgenics_parser import Cat
 from mewgenics_parser.cat import CatGender, CatStatus
+from mewgenics_parser.constants import COMFORT_BASE_CAPACITY, MIN_BREEDING_COMPAT
+
+
+def _effective_comfort(base_comfort: float, n_cats: int) -> float:
+    """Calculate effective comfort after overcrowding penalty.
+
+    Comfort is reduced by 1 for each cat above COMFORT_BASE_CAPACITY (4).
+    """
+    return max(0.0, base_comfort - max(0, n_cats - COMFORT_BASE_CAPACITY))
 
 
 def _calc_directional_compatibility(father: Cat, mother: Cat) -> float:
@@ -79,12 +88,16 @@ def _simulate_day(
 
     Returns a dict mapping (father_db_key, mother_db_key) to kitten count.
     """
-    n = len(cats)
-    if n < 2:
+    breedable = [(i, c) for i, c in enumerate(cats) if c.can_breed()]
+    if len(breedable) < 2:
         return {}
 
-    available = [True] * n
-    indices = list(range(n))
+    n = len(breedable)
+    effective_comfort = _effective_comfort(comfort, n)
+    cats_by_original_idx = {i: c for i, c in breedable}
+
+    available = {i: True for i, _ in breedable}
+    indices = [i for i, _ in breedable]
     random.shuffle(indices)
 
     kittens: dict[tuple[int, int], int] = defaultdict(int)
@@ -93,18 +106,18 @@ def _simulate_day(
         if not available[i]:
             continue
 
-        current_cat = cats[i]
+        current_cat = cats_by_original_idx[i]
 
         valid_targets = []
-        for j in range(n):
+        for j in indices:
             if j == i or not available[j]:
                 continue
             pair = (
-                min(current_cat.db_key, cats[j].db_key),
-                max(current_cat.db_key, cats[j].db_key),
+                min(current_cat.db_key, cats_by_original_idx[j].db_key),
+                max(current_cat.db_key, cats_by_original_idx[j].db_key),
             )
             compat = compat_matrix.get(pair, 0.0)
-            if compat <= 0.0:
+            if compat < MIN_BREEDING_COMPAT:
                 continue
             valid_targets.append((j, compat))
 
@@ -119,7 +132,7 @@ def _simulate_day(
         target_idx = random.choices([j for j, _ in valid_targets], weights=probs, k=1)[
             0
         ]
-        target_cat = cats[target_idx]
+        target_cat = cats_by_original_idx[target_idx]
 
         pair_key = (
             min(current_cat.db_key, target_cat.db_key),
@@ -127,7 +140,7 @@ def _simulate_day(
         )
         compat = compat_matrix[pair_key]
 
-        roll_prob = compat * math.sqrt(0.1 * comfort)
+        roll_prob = compat * math.sqrt(0.1 * effective_comfort)
 
         if random.random() > roll_prob:
             continue
@@ -137,7 +150,7 @@ def _simulate_day(
             available[target_idx] = False
             continue
 
-        if compat < 0.05:
+        if compat < MIN_BREEDING_COMPAT:
             available[i] = False
             available[target_idx] = False
             continue

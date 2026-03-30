@@ -137,56 +137,67 @@ def room_display(self) -> str:
 3. **Use uv for all package management** - never pip directly
 4. **Use uv run for all tools** - ruff, ty, pytest, etc.
 
-## Addendum: Shell Constraints (opencode / cmd.exe)
+## Addendum: Shell Constraints (opencode / PowerShell)
 
-**CRITICAL INSTRUCTION FOR AGENTS:** The execution environment (`opencode`) uses `cmd.exe`, **not** `bash`, `zsh`, or `pwsh`. You must strictly adhere to the following `cmd.exe` limitations when generating shell commands, passing arguments, or writing scripts.
+**CRITICAL INSTRUCTION FOR AGENTS:** The execution environment (`opencode`) uses **PowerShell (`pwsh.exe`)**, not `bash`, `zsh`, or `cmd.exe`. You must strictly adhere to the following PowerShell conventions when generating shell commands, passing arguments, or writing scripts.
 
-### 1. No Multiline Strings or Arguments
-Unlike `bash`, `cmd.exe` cannot handle multiline strings passed as command-line arguments. If you attempt to pass an argument containing a newline character (`\n` or a literal line break), `cmd.exe` will immediately truncate the command at the first newline or throw a syntax error.
-* **Bad (Bash style):** `uv run python script.py --desc "Line 1\nLine2"`
-* **Bad (Bash style):** Passing a raw multiline JSON string directly into a CLI argument.
-* **The Fix:** If a script requires complex or multiline string data (like a JSON payload or a long trait description), **write the data to a temporary file first**, and pass the file path to the command.
+### 1. Use PowerShell Syntax
+PowerShell uses different syntax than `bash` or `cmd.exe`:
+* **Variables:** `$VAR` (not `%VAR%` like cmd.exe)
+* **String Grouping:** Both `"double"` and `'single'` quotes work for strings
+* **Command Separation:** Use `;` for multiple commands on one line
+* **Line Continuation:** Use backtick (`` ` ``) to continue long commands across lines```powershell
+uv run ruff check `
+  --fix `
+  packages/mewgenics_parser
+```
 
-### 2. Single Quotes Do Not Group Arguments
-In `bash` and PowerShell, single quotes (`'`) group arguments and treat the contents as literal strings. In `cmd.exe`, **single quotes have no special meaning** and are treated as literal characters passed directly to the underlying program. 
-* **Bad:** `uv run python -c 'print("Hello")'` (Fails: `cmd.exe` passes the single quotes to Python, causing a syntax error).
-* **Good:** `uv run python -c "print('Hello')"` (Always use double quotes to group arguments in `cmd.exe`).
+### 2. Comparison Operators in PowerShell
+PowerShell uses different comparison operators than Python or bash:
+* **Equality:** `-eq` (not `==`)
+* **Inequality:** `-ne` (not `!=`)
+* **Greater/Less:** `-gt`, `-lt`, `-ge`, `-le`
+* **String matching:** `-like`, `-match`, `-contains`
+* **Boolean operators:** `-and`, `-or`, `-not` (or `!`)
 
-### 3. Line Continuation
-Do not use the bash backslash (`\`) or PowerShell backtick (`` ` ``) to split long commands across multiple lines. 
-* **cmd.exe uses the caret (`^`):** ```cmd
-  uv run ruff check ^
-    --fix ^
-    packages/mewgenics_parser
-  ```
-* *Warning:* Avoid trailing spaces after the `^`, as this will break the continuation. When in doubt, generate the command as a single, continuous line.
+### 3. Pipe and Redirection
+PowerShell has powerful pipe capabilities:
+* **Pipe output:** `|` works like bash, but objects flow through, not just text
+* **To file:** `| Out-File -FilePath output.txt` or `> output.txt`
+* **Null output:** `| Out-Null` or `> $null`
+* **Append:** `>> output.txt` or `| Add-Content output.txt`
 
-### 4. No Command Substitution
-`cmd.exe` does not support `bash`-style command substitution like `$(command)` or `` `command` ``. You cannot dynamically pass the output of one command as an argument to another inline.
-* **Bad:** `uv run script.py --id $(cat id.txt)`
-* **The Fix:** You must use the `FOR /F` loop syntax, or much preferably, handle the logic inside a Python script rather than relying on the shell.
+### 4. Environment Variables
+* **Set inline:** `$env:VAR = "value"`
+* **Use in command:** `$env:VAR` or `${env:VAR}`
+* **Example:** `$env:PYTHONPATH = "src"; uv run pytest`
 
-### 5. Variable Expansion and Delayed Expansion
-Variables are expanded using `%VAR%`, not `$VAR`. Furthermore, `cmd.exe` evaluates variables at parse time, not execution time, which causes nested logic or loops to fail unless `EnableDelayedExpansion` is used.
-* **Environment Variables:** Use `set VAR=value` (no quotes around the value unless you want the quotes included).
-* **Inline usage:** `set MY_FILE=cat.json && uv run python parse.py %MY_FILE%`
+### 5. Working Directory
+PowerShell uses `Set-Location` or `cd` for changing directories:
+* `cd packages/mewgenics_parser` - works like bash
+* `Push-Location` / `Pop-Location` - save/restore directory stack
 
-### 6. Command Length Limits
-`cmd.exe` has a strict hard limit of **8,191 characters** per command line. If you are chaining commands or passing massive base64-encoded strings directly in the terminal, the command will silently truncate or fail. Again, rely on file I/O for large data transfers.
+### 6. Command Substitution
+PowerShell supports command substitution with `$()`:
+```powershell
+$files = Get-ChildItem -Filter *.py
+uv run ruff check $files
+```
 
-### Quick Reference: Bash vs. cmd.exe
+### Quick Reference: Bash vs. PowerShell
 
-| Feature | Bash (Do Not Use) | cmd.exe (Required) |
+| Feature | Bash (Do Not Use) | PowerShell (Use This) |
 | :--- | :--- | :--- |
-| **Argument Grouping** | `"text"` or `'text'` | `"text"` **ONLY** |
-| **Environment Variables** | `$VAR` or `${VAR}` | `%VAR%` |
-| **Inline Env Assignment** | `VAR=val uv run ...` | `set VAR=val && uv run ...` |
-| **Command Substitution** | `$(ls)` | Requires `FOR /F` |
-| **Line Continuation** | `\` | `^` |
-| **Path Separators** | `/` | `\` (Though `uv` and Python accept `/`) |
-| **Null Output** | `> /dev/null` | `> NUL` |
+| **Variables** | `$VAR` or `${VAR}` | `$VAR` or `${VAR}` |
+| **String Quotes** | `"double"` or `'single'` | `"double"` or `'single'` |
+| **Line Continuation** | `\` | `` ` `` (backtick) |
+| **Command Separation** | `;` or `&&` | `;` (use `;` for chaining) |
+| **Null Output** | `> /dev/null` | `| Out-Null` or `> $null` |
+| **Path Separators** | `/` preferred | Both `/` and `\` work |
+| **Environment Vars** | `$VAR` | `$env:VAR` |
+| **Array/List** | `arr=(a b c)` | `$arr = @('a', 'b', 'c')`|
 
-**Agent Directive Summary:** Keep shell interactions as simple and atomic as possible. Rely on Python (`uv run python ...`) to do the heavy lifting for data parsing, file I/O, and string manipulation rather than attempting complex shell scripting in `cmd.exe`.
+**Agent Directive Summary:** Use PowerShell syntax for all shell commands. When in doubt, prefer Python scripts (`uv run python ...`) for complex logic, file I/O, and string manipulation rather than complex shell scripting.
 
 ## Mewgenics Game Reference
 
@@ -253,3 +264,24 @@ Fighter, Hunter, Mage, Tank, Cleric, Thief, Necromancer, Tinkerer, Butcher, Drui
 - Similar to passive abilities but don't count toward passive cap
 - Max 2 disorders per cat; some are contagious
 - Can be removed by high Health room or events
+
+### Breeding Ineligibility
+- Cats with `age <= 1` are kittens and cannot breed
+- Cats with Eternal Youth disorder cannot breed
+- Use `cat.can_breed()` to check eligibility (returns `True` for adults without EY)
+- Use `cat.is_kitten()` to check if cat is a kitten (default max_age=1)
+
+### Room Comfort Penalty
+- Comfort is reduced by 1 for each cat above 4 in a room
+- Formula: `effective_comfort = max(0, comfort - max(0, n_cats - 4))`
+- Use `_effective_comfort(base_comfort, n_cats)` from `mewgenics_breeding.monte_carlo` or `mewgenics_breeding.heuristic`
+
+### Minimum Compatibility Threshold
+- Breeding requires compatibility >= 0.05 (defined in `MIN_BREEDING_COMPAT`)
+- Pairs with compatibility below this threshold cannot produce kittens
+
+### NURSERY Room Type
+- Kittens (age <= 1) are assigned to NURSERY rooms
+- Assigned by descending ENS (Expected Net Score) value
+- Overflow kittens use adult placement logic (GENERAL/FIGHTING/etc.)
+- Use `RoomType.NURSERY` in room configurations

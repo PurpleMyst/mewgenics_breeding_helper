@@ -465,6 +465,14 @@ class Cat:
         """Check if cat has EternalYouth disorder."""
         return any(p.lower() == "eternalyouth" for p in (self.disorders or []))
 
+    def is_kitten(self, max_age: int = 1) -> bool:
+        """Check if cat is a kitten (too young to breed)."""
+        return self.age is not None and self.age <= max_age
+
+    def can_breed(self) -> bool:
+        """Check if cat is eligible for breeding (not EY, not kitten)."""
+        return not self.has_eternal_youth() and not self.is_kitten()
+
     def has_birth_defects(self) -> bool:
         """Check if cat has any birth defect body parts."""
         return any(

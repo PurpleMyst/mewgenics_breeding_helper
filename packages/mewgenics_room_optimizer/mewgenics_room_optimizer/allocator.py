@@ -62,9 +62,35 @@ class RoomAllocator:
         sa_cats = [
             c
             for c in save_data.cats
-            if c.status == CatStatus.IN_HOUSE and not c.has_eternal_youth()
+            if c.status == CatStatus.IN_HOUSE and c.can_breed()
+        ]
+        kittens = [
+            c
+            for c in save_data.cats
+            if c.status == CatStatus.IN_HOUSE and c.is_kitten()
         ]
         unassigned = [c for c in sa_cats if c.db_key not in assigned_cats]
+
+        nursery_rooms = [
+            r for r in self.room_configs if r.room_type == RoomType.NURSERY
+        ]
+        nursery_assignments: dict[str, list[Cat]] = {r.key: [] for r in nursery_rooms}
+
+        kittens.sort(
+            key=lambda c: evaluate_cat_ens(c, self.universals, self.target_builds),
+            reverse=True,
+        )
+        for kitten in kittens:
+            placed = False
+            for room in nursery_rooms:
+                if RoomAllocator.can_fit_single(
+                    room, len(nursery_assignments[room.key])
+                ):
+                    nursery_assignments[room.key].append(kitten)
+                    placed = True
+                    break
+            if not placed:
+                unassigned.append(kitten)
         general_rooms = [
             r for r in self.room_configs if r.room_type == RoomType.GENERAL
         ]
@@ -128,14 +154,16 @@ class RoomAllocator:
             cats_in_room = rooms_content[config.key]
             pairs_in_room = room_pairs[config.key]
             ey_cats = self.ey_assignments.get(config.key, [])
+            nursery_cats = nursery_assignments.get(config.key, [])
 
-            if cats_in_room or pairs_in_room or ey_cats:
+            if cats_in_room or pairs_in_room or ey_cats or nursery_cats:
                 room_results.append(
                     RoomAssignment(
                         room=config,
                         cats=cats_in_room,
                         pairs=pairs_in_room,
                         eternal_youth_cats=ey_cats,
+                        nursery_cats=nursery_cats,
                     )
                 )
 

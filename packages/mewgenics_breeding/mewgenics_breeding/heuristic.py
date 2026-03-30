@@ -14,8 +14,17 @@ is always valid.
 from dataclasses import dataclass, field
 
 from mewgenics_parser import Cat
+from mewgenics_parser.constants import COMFORT_BASE_CAPACITY, MIN_BREEDING_COMPAT
 
 from .monte_carlo import calc_compatibility, calc_combined_fertility
+
+
+def _effective_comfort(base_comfort: float, n_cats: int) -> float:
+    """Calculate effective comfort after overcrowding penalty.
+
+    Comfort is reduced by 1 for each cat above COMFORT_BASE_CAPACITY (4).
+    """
+    return max(0.0, base_comfort - max(0, n_cats - COMFORT_BASE_CAPACITY))
 
 
 @dataclass(slots=True)
@@ -64,6 +73,7 @@ class HeuristicCalculator:
         if n < 2:
             return {}
 
+        effective_comfort = _effective_comfort(comfort, n)
         cats_by_idx = list(enumerate(cats))
 
         key = frozenset(c.db_key for c in cats)
@@ -114,7 +124,7 @@ class HeuristicCalculator:
 
         for pair, (i, j) in pair_keys.items():
             compat = compat_by_pair[pair]
-            if compat <= 0:
+            if compat < MIN_BREEDING_COMPAT:
                 continue
 
             row_compat_i = row_compat_sum[i]
@@ -125,7 +135,7 @@ class HeuristicCalculator:
 
             expected_attempts = p_i_selects_j + p_j_selects_i
 
-            success_chance = (compat**2) * (0.1 * comfort)
+            success_chance = (compat**2) * (0.1 * effective_comfort)
 
             avg_success = expected_attempts * success_chance
 
