@@ -7,7 +7,7 @@ the game code in _simulate_day().
 
 from mewgenics_parser import Cat
 
-from .monte_carlo import get_cached_compatibility, get_cached_fertility
+from .monte_carlo import calc_compatibility, calc_combined_fertility
 
 
 def approximate_expected_kittens(
@@ -49,8 +49,8 @@ def approximate_expected_kittens(
             pair = (min(cat_i.db_key, cat_j.db_key), max(cat_i.db_key, cat_j.db_key))
             pair_keys[pair] = (i, j)
 
-            compat = get_cached_compatibility(cat_i, cat_j)
-            fertility = get_cached_fertility(cat_i, cat_j)
+            compat = calc_compatibility(cat_i, cat_j)
+            fertility = calc_combined_fertility(cat_i, cat_j)
 
             compat_by_pair[pair] = compat
             fertility_by_pair[pair] = fertility

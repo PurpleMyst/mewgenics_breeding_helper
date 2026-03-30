@@ -64,7 +64,6 @@ from mewgenics_parser.trait_dictionary import is_class_active, is_class_passive
 
 from .compatibility import can_breed as can_breed
 from .monte_carlo import SimulationResult as SimulationResult
-from .monte_carlo import clear_breeding_caches as clear_breeding_caches
 from .monte_carlo import simulate_room_breeding as simulate_room_breeding
 from .heuristic import approximate_expected_kittens as approximate_expected_kittens
 from .room_simulator import RoomSimulator as RoomSimulator
