@@ -7,12 +7,7 @@ import random
 from collections import defaultdict
 from dataclasses import replace, dataclass
 
-from mewgenics_breeding import RoomSimulator, approximate_expected_kittens
-from mewgenics_breeding.pairs import (
-    filter_hater_conflicts,
-    filter_lover_exclusivity,
-    generate_pairs,
-)
+from mewgenics_breeding import RoomSimulator, HeuristicCalculator
 from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.cat import CatStatus
 from mewgenics_scorer import (
@@ -41,6 +36,7 @@ class _AnnealingWorker:
     _allocator: RoomAllocator
     _scorer: CachingScorer
     _room_simulator: RoomSimulator
+    _heuristic_calc: HeuristicCalculator
     _use_heuristic: bool = False
 
     def _evaluate_state(
@@ -75,23 +71,20 @@ class _AnnealingWorker:
             if len(cats_in_room) < 2:
                 continue
 
-            # Generate pairs and filter to valid pairs based on lover exclusivity and hater conflicts;
-            # while those are sometimes violated in the game, I don't know the exact mechanics and I'd
-            # rather exclude them outright to avoid overestimating breeding potential of certain room
-            # comps.
-            pairs = generate_pairs(cats_in_room)
-            pairs = filter_lover_exclusivity(pairs, cats_in_room)
-            pairs = filter_hater_conflicts(pairs, cats_in_room)
-
-            # Get expected kittens per pair - use heuristic for speed during SA, MC for final result
+            # Get expected kittens per pair - use heuristic for speed during SA, MC for final result.
+            # The heuristic caches compat/fertility matrices internally to avoid O(N^2) recomputation
+            # when the same cat set appears across SA iterations.
             if self._use_heuristic:
-                room_kittens = approximate_expected_kittens(cats_in_room, room.comfort)
+                room_kittens = self._heuristic_calc.get_expected_kittens(
+                    cats_in_room, room.comfort
+                )
             else:
                 room_kittens = self._room_simulator.get_expected_kittens(
                     cats_in_room, room.comfort
                 )
 
-            # Score each pair and aggregate expected value: sum(expected_kittens × theoretical_kitten_value)
+            # Score each pair and aggregate expected value: sum(expected_kittens × theoretical_kitten_value).
+            # Also accumulate build yields in the same loop to avoid iterating room_kittens twice.
             cats_by_id = {c.db_key: c for c in cats_in_room}
             pair_quality_total = 0.0
             for (a_key, b_key), expected_kittens in room_kittens.items():
@@ -102,25 +95,14 @@ class _AnnealingWorker:
                 if a is None or b is None:
                     continue
                 scored = self._scorer.score_pair(a, b, room.stimulation)
-                if scored is not None:
-                    pair_quality_total += expected_kittens * scored.quality
+                if scored is None:
+                    continue
+                pair_quality_total += expected_kittens * scored.quality
+                for build_name, yield_value in scored.factors.build_yields.items():
+                    house_build_yields[build_name] += expected_kittens * yield_value
 
             if pair_quality_total == 0.0:
                 continue
-
-            # Weight build yields by expected kitten contribution
-            for (a_key, b_key), expected_kittens in room_kittens.items():
-                if expected_kittens <= 0:
-                    continue
-                a = cats_by_id.get(a_key)
-                b = cats_by_id.get(b_key)
-                if a is None or b is None:
-                    continue
-                scored = self._scorer.score_pair(a, b, room.stimulation)
-                if scored is None:
-                    continue
-                for build_name, yield_value in scored.factors.build_yields.items():
-                    house_build_yields[build_name] += expected_kittens * yield_value
 
             total_base_quality += pair_quality_total
 
@@ -374,6 +356,7 @@ def optimize_sa(
                         early_stop_rounds=mc_early_stop_rounds,
                         relative_tolerance=mc_relative_tolerance,
                     ),
+                    _heuristic_calc=HeuristicCalculator(),
                     _use_heuristic=use_heuristic,
                 )
             )
