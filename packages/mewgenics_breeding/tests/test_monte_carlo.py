@@ -7,8 +7,17 @@ from mewgenics_parser.cat import Cat, CatBodySlot, CatGender, CatStatus, Stats
 from mewgenics_breeding.monte_carlo import (
     calc_combined_fertility,
     calc_compatibility,
+    clear_breeding_caches,
     simulate_room_breeding,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_caches():
+    """Clear breeding caches before each test to ensure test isolation."""
+    clear_breeding_caches()
+    yield
+    clear_breeding_caches()
 
 
 def make_cat(

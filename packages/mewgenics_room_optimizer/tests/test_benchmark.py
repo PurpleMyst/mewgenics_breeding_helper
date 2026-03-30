@@ -165,29 +165,36 @@ class TestMonteCarloBenchmark:
 class TestOptimizerBenchmark:
     """Benchmarks for full optimizer."""
 
-    def test_optimize_sa_small(
-        self, benchmark, benchmark_save_data, benchmark_room_configs
-    ):
-        """Benchmark SA on small cat set."""
-        from mewgenics_room_optimizer import optimize_sa
+    def test_optimize_sa_small(self, benchmark, benchmark_save_data):
+        """Benchmark SA with 1 breeding room using heuristic."""
+        from mewgenics_room_optimizer import optimize_sa, RoomConfig, RoomType
+
+        configs = [RoomConfig("Floor1_Small", RoomType.BREEDING, 6, 50.0, 5.0)]
 
         result = benchmark(
             optimize_sa,
             benchmark_save_data,
-            benchmark_room_configs[:1],  # Single breeding room
+            configs,
+            use_heuristic=True,
+            post_process_mc_iterations=0,
         )
         assert result.rooms is not None
 
-    def test_optimize_sa_multi_room(
-        self, benchmark, benchmark_save_data, benchmark_room_configs
-    ):
-        """Benchmark SA with 2 breeding rooms."""
-        from mewgenics_room_optimizer import optimize_sa
+    def test_optimize_sa_multi_room(self, benchmark, benchmark_save_data):
+        """Benchmark SA with 2 breeding rooms using heuristic."""
+        from mewgenics_room_optimizer import optimize_sa, RoomConfig, RoomType
+
+        configs = [
+            RoomConfig("Floor1_Small", RoomType.BREEDING, 6, 50.0, 5.0),
+            RoomConfig("Floor2_Small", RoomType.BREEDING, 4, 30.0, 3.0),
+        ]
 
         result = benchmark(
             optimize_sa,
             benchmark_save_data,
-            benchmark_room_configs[:2],
+            configs,
+            use_heuristic=True,
+            post_process_mc_iterations=0,
         )
         assert result.rooms is not None
 

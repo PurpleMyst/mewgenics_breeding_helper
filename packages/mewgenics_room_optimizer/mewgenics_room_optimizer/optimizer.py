@@ -7,7 +7,7 @@ import random
 from collections import defaultdict
 from dataclasses import replace, dataclass
 
-from mewgenics_breeding import RoomSimulator
+from mewgenics_breeding import RoomSimulator, approximate_expected_kittens
 from mewgenics_breeding.pairs import (
     filter_hater_conflicts,
     filter_lover_exclusivity,
@@ -41,6 +41,7 @@ class _AnnealingWorker:
     _allocator: RoomAllocator
     _scorer: CachingScorer
     _room_simulator: RoomSimulator
+    _use_heuristic: bool = False
 
     def _evaluate_state(
         self,
@@ -82,10 +83,13 @@ class _AnnealingWorker:
             pairs = filter_lover_exclusivity(pairs, cats_in_room)
             pairs = filter_hater_conflicts(pairs, cats_in_room)
 
-            # Get expected kittens per pair from Monte Carlo simulation
-            room_kittens = self._room_simulator.get_expected_kittens(
-                cats_in_room, room.comfort
-            )
+            # Get expected kittens per pair - use heuristic for speed during SA, MC for final result
+            if self._use_heuristic:
+                room_kittens = approximate_expected_kittens(cats_in_room, room.comfort)
+            else:
+                room_kittens = self._room_simulator.get_expected_kittens(
+                    cats_in_room, room.comfort
+                )
 
             # Score each pair and aggregate expected value: sum(expected_kittens × theoretical_kitten_value)
             cats_by_id = {c.db_key: c for c in cats_in_room}
@@ -286,8 +290,27 @@ def optimize_sa(
     room_configs: list[RoomConfig],
     universals: list[TraitWeight] | None = None,
     target_builds: list[TargetBuild] | None = None,
+    mc_iterations: int = 10_000,
+    mc_early_stop_rounds: int = 500,
+    mc_relative_tolerance: float = 0.01,
+    use_heuristic: bool = True,
+    post_process_mc_iterations: int = 10_000,
 ) -> OptimizationResult:
-    """Optimize using Parallel Simulated Annealing."""
+    """Optimize using Parallel Simulated Annealing.
+
+    Args:
+        save_data: Save data containing cats.
+        room_configs: Room configurations.
+        universals: Optional trait weights for universals.
+        target_builds: Optional target builds to optimize for.
+        mc_iterations: Iterations for Monte Carlo simulation (lower = faster).
+        mc_early_stop_rounds: Early stop rounds for MC convergence.
+        mc_relative_tolerance: Relative tolerance for MC early stopping.
+        use_heuristic: If True, use fast deterministic heuristic during SA search
+            (recommended for performance). If False, use full MC for each evaluation.
+        post_process_mc_iterations: After SA finds best state, run full MC with this
+            many iterations to get accurate expected values. Set to 0 to skip.
+    """
     import concurrent.futures
     import multiprocessing
 
@@ -347,10 +370,11 @@ def optimize_sa(
                         target_builds=target_builds,
                     ),
                     _room_simulator=RoomSimulator(
-                        iterations=10_000,
-                        early_stop_rounds=500,
-                        relative_tolerance=0.01,
+                        iterations=mc_iterations,
+                        early_stop_rounds=mc_early_stop_rounds,
+                        relative_tolerance=mc_relative_tolerance,
                     ),
+                    _use_heuristic=use_heuristic,
                 )
             )
             for state in initial_states
@@ -365,5 +389,24 @@ def optimize_sa(
 
     if best_overall_state is None:
         raise RuntimeError("SA optimization failed to produce any valid states.")
+
+    if use_heuristic and post_process_mc_iterations > 0:
+        validator = RoomSimulator(
+            iterations=post_process_mc_iterations,
+            early_stop_rounds=mc_early_stop_rounds,
+            relative_tolerance=mc_relative_tolerance,
+        )
+
+        for room_assignment in best_overall_state.rooms:
+            if room_assignment.room.room_type != RoomType.BREEDING:
+                continue
+            if not room_assignment.cats:
+                continue
+
+            accurate_kittens = validator.get_expected_kittens(
+                room_assignment.cats, room_assignment.room.comfort
+            )
+
+            room_assignment.accurate_kittens = accurate_kittens
 
     return best_overall_state

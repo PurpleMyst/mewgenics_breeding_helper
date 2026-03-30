@@ -8,6 +8,41 @@ from dataclasses import dataclass
 from mewgenics_parser import Cat
 from mewgenics_parser.cat import CatGender, CatStatus
 
+_COMPAT_CACHE: dict[tuple[int, int], float] = {}
+_FERTILITY_CACHE: dict[tuple[int, int], float] = {}
+
+
+def get_cached_compatibility(a: Cat, b: Cat) -> float:
+    """Get compatibility between two cats with caching.
+
+    Uses deterministic cache key based on sorted db_keys.
+    """
+    key = (min(a.db_key, b.db_key), max(a.db_key, b.db_key))
+    if key not in _COMPAT_CACHE:
+        _COMPAT_CACHE[key] = calc_compatibility(a, b)
+    return _COMPAT_CACHE[key]
+
+
+def get_cached_fertility(a: Cat, b: Cat) -> float:
+    """Get combined fertility between two cats with caching.
+
+    Uses deterministic cache key based on sorted db_keys.
+    """
+    key = (min(a.db_key, b.db_key), max(a.db_key, b.db_key))
+    if key not in _FERTILITY_CACHE:
+        _FERTILITY_CACHE[key] = calc_combined_fertility(a, b)
+    return _FERTILITY_CACHE[key]
+
+
+def clear_breeding_caches() -> None:
+    """Clear all breeding caches (compatibility and fertility).
+
+    Call this between processing different save files to ensure
+    cache independence.
+    """
+    _COMPAT_CACHE.clear()
+    _FERTILITY_CACHE.clear()
+
 
 def _calc_directional_compatibility(father: Cat, mother: Cat) -> float:
     """Calculate one-way compatibility assuming father/mother roles."""
@@ -201,8 +236,8 @@ def simulate_room_breeding(
         for j in range(i + 1, n):
             a, b = cats[i], cats[j]
             pair_key = (min(a.db_key, b.db_key), max(a.db_key, b.db_key))
-            compat_matrix[pair_key] = calc_compatibility(a, b)
-            fertility_matrix[pair_key] = calc_combined_fertility(a, b)
+            compat_matrix[pair_key] = get_cached_compatibility(a, b)
+            fertility_matrix[pair_key] = get_cached_fertility(a, b)
 
     pair_totals: dict[tuple[int, int], float] = defaultdict(float)
     pair_counts: dict[tuple[int, int], int] = defaultdict(int)

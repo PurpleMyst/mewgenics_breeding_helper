@@ -56,6 +56,9 @@ class RoomAssignment:
     cats: list[Cat]
     pairs: list[ScoredPair]
     eternal_youth_cats: list[Cat] = field(default_factory=list)
+    accurate_kittens: dict[tuple[int, int], float] = field(
+        default_factory=dict, repr=False
+    )
 
 
 @dataclass
