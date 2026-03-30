@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from mewgenics_breeding import can_breed
 from mewgenics_parser import Cat, SaveData
 from mewgenics_scorer import (
     TargetBuild,
@@ -33,7 +32,11 @@ class CachingScorer:
         cat_b: Cat,
         stimulation: float,
     ) -> ScoredPair | None:
-        """Score a pair with memoization."""
+        """Score a pair with memoization.
+
+        Returns None if pair cannot be scored (e.g., missing trait data).
+        Breeding compatibility is handled at the room level via Monte Carlo.
+        """
         key = (
             min(cat_a.db_key, cat_b.db_key),
             max(cat_a.db_key, cat_b.db_key),
@@ -41,10 +44,6 @@ class CachingScorer:
         )
         if key in self._memo:
             return self._memo[key]
-
-        if not can_breed(cat_a, cat_b):
-            self._memo[key] = None
-            return None
 
         try:
             factors = calculate_pair_factors(

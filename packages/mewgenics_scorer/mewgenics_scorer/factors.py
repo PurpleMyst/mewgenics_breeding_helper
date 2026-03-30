@@ -27,8 +27,6 @@ class PairFactors:
     universal_ev: float
     build_yields: dict[str, float]
 
-    breeding_prob: float = field(default=1.0)
-
     omp: OffspringMarginalProbabilities | None = field(default=None)
 
 
@@ -169,7 +167,6 @@ def calculate_pair_factors(
         expected_defects=expected_defects,
         universal_ev=universal_ev,
         build_yields=build_yields,
-        breeding_prob=(1 - (a.sexuality or 0.0)) * (1 - (b.sexuality or 0.0)),
         omp=pmf,
     )
 
@@ -196,9 +193,9 @@ def evaluate_cat_ens(
 def calculate_pair_quality(factors: PairFactors) -> float:
     """Calculate baseline quality score from pair factors.
 
-    This is the baseline value of a kitten in a vacuum.
-    Build yields are handled exclusively by house-level diversity math.
+    This is the theoretical value of a single kitten from this pair.
+    Breeding probability is handled at the room level via Monte Carlo simulation.
     """
     malady = factors.expected_disorders * 5.0 + factors.expected_defects * 1.0
     base_quality = sum(factors.expected_stats) + factors.universal_ev - malady
-    return base_quality * factors.breeding_prob
+    return base_quality

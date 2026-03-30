@@ -7,13 +7,14 @@ import random
 from collections import defaultdict
 from dataclasses import replace, dataclass
 
+from mewgenics_breeding import RoomSimulator
 from mewgenics_breeding.pairs import (
     filter_hater_conflicts,
     filter_lover_exclusivity,
     generate_pairs,
 )
 from mewgenics_parser import Cat, SaveData
-from mewgenics_parser.cat import CatGender, CatStatus
+from mewgenics_parser.cat import CatStatus
 from mewgenics_scorer import (
     TargetBuild,
     TraitWeight,
@@ -39,6 +40,7 @@ class _AnnealingWorker:
     target_builds: list[TargetBuild] | None
     _allocator: RoomAllocator
     _scorer: CachingScorer
+    _room_simulator: RoomSimulator
 
     def _evaluate_state(
         self,
@@ -80,58 +82,42 @@ class _AnnealingWorker:
             pairs = filter_lover_exclusivity(pairs, cats_in_room)
             pairs = filter_hater_conflicts(pairs, cats_in_room)
 
-            # Score every possible pair and aggregate total quality and build yields.
-            # Also keep track of which cats are actually contributing to breeding.
-            total_pair_quality = 0.0
-            useful_pair_count = 0
-            build_yields = defaultdict(lambda: 0.0)
-            useful_cats = set()
-            for a, b in pairs:
+            # Get expected kittens per pair from Monte Carlo simulation
+            room_kittens = self._room_simulator.get_expected_kittens(
+                cats_in_room, room.comfort
+            )
+
+            # Score each pair and aggregate expected value: sum(expected_kittens × theoretical_kitten_value)
+            cats_by_id = {c.db_key: c for c in cats_in_room}
+            pair_quality_total = 0.0
+            for (a_key, b_key), expected_kittens in room_kittens.items():
+                if expected_kittens <= 0:
+                    continue
+                a = cats_by_id.get(a_key)
+                b = cats_by_id.get(b_key)
+                if a is None or b is None:
+                    continue
                 scored = self._scorer.score_pair(a, b, room.stimulation)
                 if scored is not None:
-                    total_pair_quality += scored.quality
-                    useful_pair_count += 1
-                    for build_name, yield_value in scored.factors.build_yields.items():
-                        build_yields[build_name] += yield_value
-                    useful_cats.add(a.db_key)
-                    useful_cats.add(b.db_key)
-            if not useful_pair_count:
+                    pair_quality_total += expected_kittens * scored.quality
+
+            if pair_quality_total == 0.0:
                 continue
 
-            # Calculate the total pairs possible in the room to correctly consider dilution of
-            # non-offspring-producing pairs when estimating the room's contribution to the overall
-            # score, which is important for steering towards comps where more cats are contributing
-            # to breeding.
-            total_pair_count = len(cats_in_room) * (len(cats_in_room) - 1) / 2
-
-            useful_males, useful_females, useful_dittos = 0, 0, 0
-            for c in cats_in_room:
-                if c.db_key not in useful_cats:
+            # Weight build yields by expected kitten contribution
+            for (a_key, b_key), expected_kittens in room_kittens.items():
+                if expected_kittens <= 0:
                     continue
-                match c.gender:
-                    case CatGender.MALE:
-                        useful_males += 1
-                    case CatGender.FEMALE:
-                        useful_females += 1
-                    case CatGender.DITTO:
-                        useful_dittos += 1
+                a = cats_by_id.get(a_key)
+                b = cats_by_id.get(b_key)
+                if a is None or b is None:
+                    continue
+                scored = self._scorer.score_pair(a, b, room.stimulation)
+                if scored is None:
+                    continue
+                for build_name, yield_value in scored.factors.build_yields.items():
+                    house_build_yields[build_name] += expected_kittens * yield_value
 
-            # Estimate the contribution of a room to the overall score by multiplying the average pair
-            # quality by the number of concurrent breeds that can happen in this room, i.e. avoid
-            # situations where a single stud contributes morbillion quality points but can only breed
-            # with one partner while the rest are just dead weight.
-            concurrent_breeds = min(
-                len(useful_cats) // 2,
-                useful_males + useful_dittos,
-                useful_females + useful_dittos,
-                room.max_cats // 2 if room.max_cats else float("inf"),
-            )
-            avg_pair_quality = total_pair_quality / total_pair_count
-            pair_quality_total = concurrent_breeds * avg_pair_quality
-            for build_name, total_yield in build_yields.items():
-                house_build_yields[build_name] += concurrent_breeds * (
-                    total_yield / total_pair_count
-                )
             total_base_quality += pair_quality_total
 
         # Apply a diversity bonus for builds present in the house to encourage solutions that produce a
@@ -359,6 +345,11 @@ def optimize_sa(
                         save_data=save_data,
                         universals=universals,
                         target_builds=target_builds,
+                    ),
+                    _room_simulator=RoomSimulator(
+                        iterations=10_000,
+                        early_stop_rounds=500,
+                        relative_tolerance=0.01,
                     ),
                 )
             )

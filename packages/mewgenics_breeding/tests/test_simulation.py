@@ -22,7 +22,7 @@ PARENT_A = Cat(
     age=14,
     aggression=0.5895825765272176,
     libido=0.4709680696721758,
-    fertility=0.5,
+    fertility=1.0,
     sexuality=0.062250739760339104,
     active_abilities=[
         "DefaultMove",
@@ -54,8 +54,8 @@ PARENT_A = Cat(
     level=7,
     collar="Fighter",
     coi=0.29661053677926974,
-    lover_coefficient=1.0,
-    hater_coefficient=1.0,
+    lover_affinity=1.0,
+    hater_affinity=1.0,
 )
 PARENT_B = Cat(
     db_key=1347,
@@ -69,7 +69,7 @@ PARENT_B = Cat(
     age=14,
     aggression=0.29696269433182465,
     libido=0.5763975568757957,
-    fertility=0.5,
+    fertility=1.0,
     sexuality=0.0993335265071858,
     active_abilities=[
         "DefaultMove",
@@ -101,8 +101,8 @@ PARENT_B = Cat(
     level=7,
     collar="Thief",
     coi=0.303021636682439,
-    lover_coefficient=1.0,
-    hater_coefficient=1.0,
+    lover_affinity=1.0,
+    hater_affinity=1.0,
 )
 
 COI = 0.3010
