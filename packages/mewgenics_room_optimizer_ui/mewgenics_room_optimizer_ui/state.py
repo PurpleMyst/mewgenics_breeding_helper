@@ -1,10 +1,10 @@
 """Application state for room optimizer UI."""
 
+import logging
 from typing import Any, Self
 from uuid import UUID, uuid4
 
 import platformdirs
-import traceback
 from mewgenics_parser import Cat, SaveData
 from mewgenics_parser.gpak import GameData
 from mewgenics_parser.traits import (
@@ -21,6 +21,8 @@ from mewgenics_room_optimizer import (
 from mewgenics_room_optimizer.types import ScoredPair
 from mewgenics_scorer.types import TargetBuild, TraitWeight
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+
+_logger = logging.getLogger(__name__)
 
 CONFIG_DIR = platformdirs.user_config_path(
     "mewgenics_breeding_helper", appauthor="PurpleMyst"
@@ -165,8 +167,7 @@ class ConfigModel(BaseModel):
             try:
                 return cls.model_validate_json(CONFIG_FILE.read_text())
             except (ValueError, OSError):
-                traceback.print_exc()
-                pass
+                _logger.warning("Failed to load config file", exc_info=True)
         return cls()
 
     def save(self) -> None:
