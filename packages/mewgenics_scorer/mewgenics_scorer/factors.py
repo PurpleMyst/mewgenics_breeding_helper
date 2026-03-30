@@ -118,18 +118,14 @@ def _evaluate_build(pmf: OffspringMarginalProbabilities, build: TargetBuild) -> 
                 body_parts_by_set.setdefault(representative_slot, []).append(tw)
 
     body_part_product = 1.0
-    for slot_tws in body_parts_by_set.values():
-        # Parts competing for the SAME set are mutually exclusive, so we sum
+    for representative_slot, slot_tws in body_parts_by_set.items():
         p_at_least_one = min(
             1.0,
             sum(
-                # Note: You may need a helper here to get the probability for THIS SPECIFIC SLOT
-                # rather than using _get_marginal_prob which searches across all sets.
                 pmf.body_parts.get(representative_slot, {}).get(tw.trait.part_id, 0.0)
                 for tw in slot_tws
             ),
         )
-        # Different sets are independent, so we multiply their probabilities
         body_part_product *= p_at_least_one
 
     synergy_prob = p_at_least_one_passive * p_at_least_one_active * body_part_product
