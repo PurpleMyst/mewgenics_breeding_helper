@@ -70,27 +70,29 @@ Sex sex @ $;
 Sex sex_dup @ $;
 
 bitfield StatusFlagsB0 {
-    cannot_adventure : 1;         // 0; went out before or senile
-    returned : 1;                 // 1
+    owned : 1;                    // 0; stayed in the house for at least one night, or donated
+    returned : 1;                 // 1; survived an adventure
     starving: 1;                  // 2
-    unknown_0 : 2;                // 4:3
+    unknown_3 : 1;                // 3
+    unknown_4 : 1;                // 4; not sure what this does, but can be 0 or 1
     dead : 1;                     // 5
-    unknown_1: 2;                 // 7:6
+    unknown_7_6: 2;               // 7:6
 };
 bitfield StatusFlagsB1 {
-    unknown_0 : 3;                // 10:8
+    unknown_9_8 : 2;              // 9:8
+    died_from_old_age : 1;        // 10
     donated_to_dr_beanies : 1;    // 11
-    dontated_to_butch : 1;        // 12
-    c : 1;                        // 13
+    donated_to_butch : 1;         // 12
+    donated_to_tink : 1;          // 13
     donated_to_tracy : 1;         // 14
     donated_to_organ_grinder : 1; // 15
 };
 bitfield StatusFlagsB2 {
     donated_to_frank : 1;         // 16
     donated_to_baby_jack : 1;     // 17
-    e : 1;                        // 18
+    died_in_battle : 1;           // 18
     on_adventure: 1;              // 19
-    unknown_1 : 4;                // 23:20
+    unknown_23_20 : 4;            // 23:20
 };
 bitfield StatusFlagsB3To7 {
     unknown_b3_0: 8;
@@ -101,8 +103,6 @@ bitfield StatusFlagsB3To7 {
 };
 
 // Various boolean bitfields
-// still need to trace individual bit positions
-// imprecisely and incompletely annotated by looking at single instances of cats
 StatusFlagsB0 flags0 @ $;
 StatusFlagsB1 flags1 @ $;
 StatusFlagsB2 flags2 @ $;
@@ -123,9 +123,10 @@ double sexuality @ $;
 // SQL key of loved cat
 u64 lover_sql_key @ $;
 
-// Nonzero with a valid lover cat (could be affinity?)
-// no references found in current decomp database
-double unknown_7 @ $;
+// Increases every time the cat mates with their lover
+// and decreases when they mate with another cat
+// Unsure how/if this affects cat picked for events
+double lover_affinity @ $;
 
 // Aggression
 double aggression @ $;
@@ -133,9 +134,10 @@ double aggression @ $;
 // SQL key of rival cat
 u64 hater_sql_key @ $;
 
-// Nonzero with a valid rival cat (could be affinity?)
-// no references found in current decomp database
-double unknown_9 @ $;
+// Increases every time the cat fights with their rival
+// and decreases when they fight with another cat
+// Unsure how/if this affects cat picked for events
+double hater_affinity @ $;
 
 // Numerically multipled with a partner's fertility number
 // to influence number of kittens during breeding
@@ -145,7 +147,7 @@ struct BodyPartDescriptor {
     // need to validate by twiddling these numbers
     s32 part_sprite_idx;
     s32 texture_sprite_idx;
-    s32 unknown_0; // scar_sprite_idx
+    s32 scar_sprite_idx;
     s32 unknown_1_nonzero_on_arms_and_legs;
     s32 unknown_2;
 };
@@ -208,7 +210,8 @@ String last_injury_debuffed_stat @ $;
 
 struct StatModifier {
     String expression;
-    u32 unknown_0; // likely a downcounter indicating how many rounds this effect will last
+    // Downcounter indicating how many battles this effect will last
+    u32 battles_remaining;
 };
 
 struct CampaignStats {
@@ -220,7 +223,7 @@ struct CampaignStats {
     Vector<u32, StatModifier> event_stat_modifiers;
 };
 
-// Possibly tracks adventure stats, or at least HP and other unknown fields
+// Tracks adventure stats and effects between battles
 CampaignStats campaign_stats @ $;
 
 // Movement and basic attack actives
@@ -251,13 +254,15 @@ struct Equipment {
     bool has_equipment;
     if(has_equipment) {
         String name;
-        String unknown_0; // set by str_aux_initialize
-        s32 unknown_1; // uses left
+        // Optional parameter string
+        // (e.g. the Champion's Mask stores its buffed stat in this string)
+        String aux_string;
+        s32 uses_left;
         s32 unknown_2;
         s32 unknown_3;
         s32 unknown_4;
         u8 unknown_5;
-        u8 unknown_6; // possibly times taken on adventure?
+        u8 times_taken_on_adventure;
     }
 };
 
@@ -291,13 +296,60 @@ s64 deathday_house @ $;
 // some byte array, possibly related to house boss kills
 Vector<u64, u8> unknown_17 @ $;
 
-// possibly some senility indicator, 2 for senile?
-u32 unknown_19 @ $;
+enum Lifestage: u32 {
+    // Kittens and younger adult cats
+    Young,
+    // Visually indistinguishable from young cats
+    Midage,
+    // Visibly old cats, next stage is death from old age
+    Old
+};
+// Lifestage
+// Cats perform a probability check each night to move through these stages.
+Lifestage lifestage @ $;
 
-u64 unknown_20 @ $; // changes whenever a cat enters a new zone in the campaign
+bitfield ClearedCampaignZonesB0 {
+    unknown_0 : 1;                // 0
+    path : 1 ;                    // 1; the tutorial
+    alley: 1;                     // 2
+    sewers : 1;                   // 3
+    junkyard : 1;                 // 4
+    caves : 1;                    // 5
+    boneyard: 1;                  // 6
+    throbbing_domain: 1;          // 7
+};
+bitfield ClearedCampaignZonesB1 {
+    desert : 1;                   // 8
+    crater : 1 ;                  // 9
+    bunker: 1;                    // 10
+    moon : 1;                     // 11
+    core : 1;                     // 12
+    unknown_13 : 1;               // 13; probably Rift, though haven't visited yet
+    lab: 1;                       // 14
+    unknown_15: 1;                // 15; probably one of Ice Age/Future
+};
+bitfield ClearedCampaignZonesB2 {
+    unknown_23_16 : 8;            // 23:16; probably rest of Act 3
+};
+bitfield ClearedCampaignZonesB3To7 {
+    unknown_b3_0: 8;
+    unknown_b4_0: 8;
+    unknown_b5_0: 8;
+    unknown_b6_0: 8;
+    unknown_b7_0: 8;
+};
+
+// Boolean bitfield of cleared zones
+ClearedCampaignZonesB0 cleared_zones0 @ $;
+ClearedCampaignZonesB1 cleared_zones1 @ $;
+ClearedCampaignZonesB2 cleared_zones2 @ $;
+ClearedCampaignZonesB3To7 cleared_zones37 @ $;
 
 u8 unknown_21 @ $;
-u8 unknown_22 @ $; // changes whenever a cat enters a new zone in the campaign
+
+// Number of visited zones in the campaign
+u8 num_visited_zones @ $;
+
 u8 unknown_23 @ $;
 
 // Fixed-sized array with indices corresponding to entries in injuries.gon
