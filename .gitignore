@@ -3,6 +3,7 @@
 
 ### Project Specific ###
 -p/
+.commit_msg.txt
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
