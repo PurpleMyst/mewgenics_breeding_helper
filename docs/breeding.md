@@ -1,5 +1,7 @@
 # Breeding
 
+> Content from [Mewgenics Wiki](https://mewgenics.wiki.gg/wiki/Breeding) is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+
 **Breeding** is a core gameplay pillar in _Mewgenics_.
 
 ## House Stats
