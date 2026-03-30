@@ -69,8 +69,10 @@ def make_cat(
         parent_a=parent_a,
         parent_b=parent_b,
         lover=None,
+        lover_affinity=1.0,
         hater=None,
-        fertility=0.5,
+        hater_affinity=1.0,
+        fertility=1.0,
         level=1,
         collar="",
         coi=0.0,
@@ -126,7 +128,7 @@ class TestUtilities:
 
 
 class TestEternalYouthPlacement:
-    @patch("mewgenics_room_optimizer.optimizer.calculate_pair_quality")
+    @patch("mewgenics_room_optimizer.scorer.calculate_pair_quality")
     def test_ey_cats_routed_to_best_breeding_room(self, mock_quality, basic_rooms):
         """EY cats should be placed in breeding room with highest stimulation."""
         mock_quality.return_value = 50.0
@@ -230,7 +232,7 @@ class TestSAEvaluator:
 
 class TestThroughputMaximization:
     @pytest.mark.skip(reason="TODO - needs better test design")
-    @patch("mewgenics_room_optimizer.optimizer.calculate_pair_quality")
+    @patch("mewgenics_room_optimizer.scorer.calculate_pair_quality")
     def test_maximize_throughput_prefers_more_pairs(self, mock_quality, basic_rooms):
         """Test that maximize_throughput actually prefers more pairs."""
         mock_quality.return_value = 50.0

@@ -63,6 +63,10 @@ from mewgenics_parser.cat import CatBodySlot
 from mewgenics_parser.trait_dictionary import is_class_active, is_class_passive
 
 from .compatibility import can_breed as can_breed
+from .monte_carlo import SimulationResult as SimulationResult
+from .monte_carlo import simulate_room_breeding as simulate_room_breeding
+from .heuristic import HeuristicCalculator as HeuristicCalculator
+from .room_simulator import RoomSimulator as RoomSimulator
 
 PART_SETS = [
     [CatBodySlot.TEXTURE],

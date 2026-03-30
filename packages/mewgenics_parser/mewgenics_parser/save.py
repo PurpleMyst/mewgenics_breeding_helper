@@ -87,7 +87,11 @@ def _get_adventure_keys(conn) -> set:
             if cat_key:
                 keys.add(cat_key)
     except Exception:
-        pass
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Failed to parse adventure keys", exc_info=True
+        )
     return keys
 
 

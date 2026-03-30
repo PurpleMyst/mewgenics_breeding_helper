@@ -27,8 +27,6 @@ class PairFactors:
     universal_ev: float
     build_yields: dict[str, float]
 
-    breeding_prob: float = field(default=1.0)
-
     omp: OffspringMarginalProbabilities | None = field(default=None)
 
 
@@ -118,18 +116,14 @@ def _evaluate_build(pmf: OffspringMarginalProbabilities, build: TargetBuild) -> 
                 body_parts_by_set.setdefault(representative_slot, []).append(tw)
 
     body_part_product = 1.0
-    for slot_tws in body_parts_by_set.values():
-        # Parts competing for the SAME set are mutually exclusive, so we sum
+    for representative_slot, slot_tws in body_parts_by_set.items():
         p_at_least_one = min(
             1.0,
             sum(
-                # Note: You may need a helper here to get the probability for THIS SPECIFIC SLOT
-                # rather than using _get_marginal_prob which searches across all sets.
                 pmf.body_parts.get(representative_slot, {}).get(tw.trait.part_id, 0.0)
                 for tw in slot_tws
             ),
         )
-        # Different sets are independent, so we multiply their probabilities
         body_part_product *= p_at_least_one
 
     synergy_prob = p_at_least_one_passive * p_at_least_one_active * body_part_product
@@ -173,7 +167,6 @@ def calculate_pair_factors(
         expected_defects=expected_defects,
         universal_ev=universal_ev,
         build_yields=build_yields,
-        breeding_prob=(1 - (a.sexuality or 0.0)) * (1 - (b.sexuality or 0.0)),
         omp=pmf,
     )
 
@@ -200,9 +193,9 @@ def evaluate_cat_ens(
 def calculate_pair_quality(factors: PairFactors) -> float:
     """Calculate baseline quality score from pair factors.
 
-    This is the baseline value of a kitten in a vacuum.
-    Build yields are handled exclusively by house-level diversity math.
+    This is the theoretical value of a single kitten from this pair.
+    Breeding probability is handled at the room level via Monte Carlo simulation.
     """
     malady = factors.expected_disorders * 5.0 + factors.expected_defects * 1.0
     base_quality = sum(factors.expected_stats) + factors.universal_ev - malady
-    return base_quality * factors.breeding_prob
+    return base_quality

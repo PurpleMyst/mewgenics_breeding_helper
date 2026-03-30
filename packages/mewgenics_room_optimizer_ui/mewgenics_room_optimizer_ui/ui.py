@@ -274,7 +274,9 @@ def on_save_selected(sender: int, app_data: str, user_data: AppState) -> None:
         update_all_cats_table(user_data)
         update_overview_table(user_data)
     except Exception as e:
-        print(f"Error loading save: {e}")
+        import logging
+
+        logging.getLogger(__name__).error("Failed to load save: %s", e, exc_info=True)
 
 
 def save_config_callback(sender: int, app_data: Any, user_data: AppState) -> None:

@@ -3,6 +3,8 @@
 
 ### Project Specific ###
 -p/
+.commit_msg.txt
+.desloppify/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

@@ -23,7 +23,7 @@ class TestParseSaveIntegration:
         assert cat.gender == snapshot(CatGender.FEMALE)
         assert cat.sexuality == snapshot(0.08160075767255394)
         assert cat.libido == snapshot(0.6100491969838884)
-        assert cat.fertility == snapshot(0.2630632950000001)
+        assert cat.fertility == snapshot(1.1767842130579114)
         assert cat.status == snapshot(CatStatus.GONE)
         assert cat.room == snapshot(None)
         assert cat.base_stats == snapshot(

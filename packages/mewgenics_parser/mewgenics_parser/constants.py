@@ -14,3 +14,7 @@ ROOM_DISPLAY = {
 }
 
 APPDATA_SAVE_DIR = Path(os.environ.get("APPDATA", "")) / "Glaiel Games" / "Mewgenics"
+
+MIN_BREEDING_COMPAT = 0.05
+COMFORT_BASE_CAPACITY = 4
+MAX_KITTEN_AGE = 1

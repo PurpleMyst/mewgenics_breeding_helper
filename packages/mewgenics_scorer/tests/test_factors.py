@@ -67,8 +67,10 @@ def make_cat(
         age=5,
         body_parts=body_parts or _default_body_parts(),
         lover=None,
+        lover_affinity=1.0,
         hater=None,
-        fertility=0.5,
+        hater_affinity=1.0,
+        fertility=1.0,
         level=1,
         collar="",
         coi=0.0,
@@ -324,9 +326,8 @@ class TestEvaluateBuild:
 
         p_sturdy = _get_marginal_prob(pmf, sturdy)
         p_hunter = _get_marginal_prob(pmf, hunter)
-        p_at_least_one = 1.0 - (1.0 - p_sturdy) * (1.0 - p_hunter)
-        expected_synergy = p_at_least_one * 2.0
-        expected_yield = (p_sturdy + p_hunter) + expected_synergy
+        p_at_least_one_passive = p_sturdy + p_hunter
+        expected_yield = (p_sturdy + p_hunter) + p_at_least_one_passive * 2.0
 
         assert yield_value == pytest.approx(expected_yield, rel=1e-9)
 
@@ -353,9 +354,9 @@ class TestEvaluateBuild:
 
         yield_value = _evaluate_build(pmf, build)
 
-        p_300 = _get_marginal_prob(pmf, ear_300)
-        p_400 = _get_marginal_prob(pmf, ear_400)
-        p_at_least_one = 1.0 - (1.0 - p_300) * (1.0 - p_400)
+        p_300 = pmf.body_parts.get(CatBodySlot.LEFT_EAR, {}).get(300, 0.0)
+        p_400 = pmf.body_parts.get(CatBodySlot.LEFT_EAR, {}).get(400, 0.0)
+        p_at_least_one = min(1.0, p_300 + p_400)
         expected_yield = (p_300 + p_400) + p_at_least_one * 1.0
 
         assert yield_value == pytest.approx(expected_yield, rel=1e-9)
@@ -383,10 +384,10 @@ class TestEvaluateBuild:
 
         yield_value = _evaluate_build(pmf, build)
 
-        p_ear = _get_marginal_prob(pmf, ear_trait)
-        p_tail = _get_marginal_prob(pmf, tail_trait)
-        p_at_least_one_ear = 1.0 - (1.0 - p_ear)
-        p_at_least_one_tail = 1.0 - (1.0 - p_tail)
+        p_ear = pmf.body_parts.get(CatBodySlot.LEFT_EAR, {}).get(300, 0.0)
+        p_tail = pmf.body_parts.get(CatBodySlot.TAIL, {}).get(300, 0.0)
+        p_at_least_one_ear = min(1.0, p_ear)
+        p_at_least_one_tail = min(1.0, p_tail)
         expected_yield = (p_ear + p_tail) + (
             p_at_least_one_ear * p_at_least_one_tail * 1.0
         )

@@ -137,6 +137,68 @@ def room_display(self) -> str:
 3. **Use uv for all package management** - never pip directly
 4. **Use uv run for all tools** - ruff, ty, pytest, etc.
 
+## Addendum: Shell Constraints (opencode / PowerShell)
+
+**CRITICAL INSTRUCTION FOR AGENTS:** The execution environment (`opencode`) uses **PowerShell (`pwsh.exe`)**, not `bash`, `zsh`, or `cmd.exe`. You must strictly adhere to the following PowerShell conventions when generating shell commands, passing arguments, or writing scripts.
+
+### 1. Use PowerShell Syntax
+PowerShell uses different syntax than `bash` or `cmd.exe`:
+* **Variables:** `$VAR` (not `%VAR%` like cmd.exe)
+* **String Grouping:** Both `"double"` and `'single'` quotes work for strings
+* **Command Separation:** Use `;` for multiple commands on one line
+* **Line Continuation:** Use backtick (`` ` ``) to continue long commands across lines```powershell
+uv run ruff check `
+  --fix `
+  packages/mewgenics_parser
+```
+
+### 2. Comparison Operators in PowerShell
+PowerShell uses different comparison operators than Python or bash:
+* **Equality:** `-eq` (not `==`)
+* **Inequality:** `-ne` (not `!=`)
+* **Greater/Less:** `-gt`, `-lt`, `-ge`, `-le`
+* **String matching:** `-like`, `-match`, `-contains`
+* **Boolean operators:** `-and`, `-or`, `-not` (or `!`)
+
+### 3. Pipe and Redirection
+PowerShell has powerful pipe capabilities:
+* **Pipe output:** `|` works like bash, but objects flow through, not just text
+* **To file:** `| Out-File -FilePath output.txt` or `> output.txt`
+* **Null output:** `| Out-Null` or `> $null`
+* **Append:** `>> output.txt` or `| Add-Content output.txt`
+
+### 4. Environment Variables
+* **Set inline:** `$env:VAR = "value"`
+* **Use in command:** `$env:VAR` or `${env:VAR}`
+* **Example:** `$env:PYTHONPATH = "src"; uv run pytest`
+
+### 5. Working Directory
+PowerShell uses `Set-Location` or `cd` for changing directories:
+* `cd packages/mewgenics_parser` - works like bash
+* `Push-Location` / `Pop-Location` - save/restore directory stack
+
+### 6. Command Substitution
+PowerShell supports command substitution with `$()`:
+```powershell
+$files = Get-ChildItem -Filter *.py
+uv run ruff check $files
+```
+
+### Quick Reference: Bash vs. PowerShell
+
+| Feature | Bash (Do Not Use) | PowerShell (Use This) |
+| :--- | :--- | :--- |
+| **Variables** | `$VAR` or `${VAR}` | `$VAR` or `${VAR}` |
+| **String Quotes** | `"double"` or `'single'` | `"double"` or `'single'` |
+| **Line Continuation** | `\` | `` ` `` (backtick) |
+| **Command Separation** | `;` or `&&` | `;` (use `;` for chaining) |
+| **Null Output** | `> /dev/null` | `| Out-Null` or `> $null` |
+| **Path Separators** | `/` preferred | Both `/` and `\` work |
+| **Environment Vars** | `$VAR` | `$env:VAR` |
+| **Array/List** | `arr=(a b c)` | `$arr = @('a', 'b', 'c')`|
+
+**Agent Directive Summary:** Use PowerShell syntax for all shell commands. When in doubt, prefer Python scripts (`uv run python ...`) for complex logic, file I/O, and string manipulation rather than complex shell scripting.
+
 ## Mewgenics Game Reference
 
 Reference: https://mewgenics.wiki.gg/
@@ -202,3 +264,24 @@ Fighter, Hunter, Mage, Tank, Cleric, Thief, Necromancer, Tinkerer, Butcher, Drui
 - Similar to passive abilities but don't count toward passive cap
 - Max 2 disorders per cat; some are contagious
 - Can be removed by high Health room or events
+
+### Breeding Ineligibility
+- Cats with `age <= 1` are kittens and cannot breed
+- Cats with Eternal Youth disorder cannot breed
+- Use `cat.can_breed()` to check eligibility (returns `True` for adults without EY)
+- Use `cat.is_kitten()` to check if cat is a kitten (default max_age=1)
+
+### Room Comfort Penalty
+- Comfort is reduced by 1 for each cat above 4 in a room
+- Formula: `effective_comfort = max(0, comfort - max(0, n_cats - 4))`
+- Use `_effective_comfort(base_comfort, n_cats)` from `mewgenics_breeding.monte_carlo` or `mewgenics_breeding.heuristic`
+
+### Minimum Compatibility Threshold
+- Breeding requires compatibility >= 0.05 (defined in `MIN_BREEDING_COMPAT`)
+- Pairs with compatibility below this threshold cannot produce kittens
+
+### NURSERY Room Type
+- Kittens (age <= 1) are assigned to NURSERY rooms
+- Assigned by descending ENS (Expected Net Score) value
+- Overflow kittens use adult placement logic (GENERAL/FIGHTING/etc.)
+- Use `RoomType.NURSERY` in room configurations

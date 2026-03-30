@@ -16,6 +16,7 @@ class RoomType(Enum):
     GENERAL = "general"
     HEALTH = "health"
     MUTATION = "mutation"
+    NURSERY = "nursery"
     NONE = "none"
 
 
@@ -27,6 +28,7 @@ class RoomConfig:
     room_type: RoomType
     max_cats: int | None
     stimulation: float
+    comfort: float = 5.0
 
     @property
     def display_name(self) -> str:
@@ -55,6 +57,7 @@ class RoomAssignment:
     cats: list[Cat]
     pairs: list[ScoredPair]
     eternal_youth_cats: list[Cat] = field(default_factory=list)
+    nursery_cats: list[Cat] = field(default_factory=list)
 
 
 @dataclass
@@ -65,9 +68,9 @@ class OptimizationResult:
 
 
 DEFAULT_ROOM_CONFIGS = [
-    RoomConfig("Floor1_Large", RoomType.FIGHTING, None, 50.0),
-    RoomConfig("Floor1_Small", RoomType.BREEDING, 6, 50.0),
-    RoomConfig("Attic", RoomType.GENERAL, 6, 50.0),
-    RoomConfig("Floor2_Large", RoomType.NONE, None, 50.0),
-    RoomConfig("Floor2_Small", RoomType.NONE, None, 50.0),
+    RoomConfig("Floor1_Large", RoomType.FIGHTING, None, 50.0, 5.0),
+    RoomConfig("Floor1_Small", RoomType.BREEDING, 6, 50.0, 5.0),
+    RoomConfig("Attic", RoomType.GENERAL, 6, 50.0, 5.0),
+    RoomConfig("Floor2_Large", RoomType.NONE, None, 50.0, 5.0),
+    RoomConfig("Floor2_Small", RoomType.NONE, None, 50.0, 5.0),
 ]

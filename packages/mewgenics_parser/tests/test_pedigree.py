@@ -33,7 +33,7 @@ def _make_test_cat(db_key: int) -> Cat:
         age=1,
         aggression=0.0,
         libido=0.5,
-        fertility=0.5,
+        fertility=1.0,
         sexuality=0.0,
         active_abilities=[],
         passive_abilities=[],
@@ -45,7 +45,9 @@ def _make_test_cat(db_key: int) -> Cat:
         parent_a=None,
         parent_b=None,
         lover=None,
+        lover_affinity=1.0,
         hater=None,
+        hater_affinity=1.0,
     )
 
 
