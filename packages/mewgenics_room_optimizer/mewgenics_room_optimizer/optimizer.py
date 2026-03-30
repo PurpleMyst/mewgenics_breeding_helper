@@ -23,7 +23,6 @@ from .types import (
     OptimizationResult,
     RoomConfig,
     RoomType,
-    ScoredPair,
 )
 from .allocator import RoomAllocator, CachingScorer, compute_ey_assignments
 

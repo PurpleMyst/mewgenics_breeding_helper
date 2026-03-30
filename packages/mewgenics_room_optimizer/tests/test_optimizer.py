@@ -70,6 +70,8 @@ def make_cat(
         parent_b=parent_b,
         lover=None,
         hater=None,
+        lover_coefficient=1.0,
+        hater_coefficient=1.0,
         fertility=0.5,
         level=1,
         collar="",

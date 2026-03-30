@@ -46,6 +46,8 @@ def _make_test_cat(db_key: int) -> Cat:
         parent_b=None,
         lover=None,
         hater=None,
+        lover_coefficient=1.0,
+        hater_coefficient=1.0,
     )
 
 

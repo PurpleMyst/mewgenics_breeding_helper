@@ -54,6 +54,8 @@ PARENT_A = Cat(
     level=7,
     collar="Fighter",
     coi=0.29661053677926974,
+    lover_coefficient=1.0,
+    hater_coefficient=1.0,
 )
 PARENT_B = Cat(
     db_key=1347,
@@ -99,6 +101,8 @@ PARENT_B = Cat(
     level=7,
     collar="Thief",
     coi=0.303021636682439,
+    lover_coefficient=1.0,
+    hater_coefficient=1.0,
 )
 
 COI = 0.3010
